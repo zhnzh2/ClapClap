@@ -246,7 +246,7 @@ def main() -> None:
     print_help()
     print_state(state)
 
-    command_set = {"help", "state", "history", "quit"}
+    command_set = {"help", "state", "history", "restart", "quit"}
 
     while state.winner is None:
         p1_input = ask_player_move("P1")

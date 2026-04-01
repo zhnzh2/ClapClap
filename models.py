@@ -40,6 +40,16 @@ class PlayerState:
     def can_use_flash(self) -> bool:
         return self.flash_used < MAX_FLASH_USE
 
+    def to_dict(self) -> dict:
+        return {
+            "hp": self.hp,
+            "qi": self.qi,
+            "shield": self.shield,
+            "spark": self.spark,
+            "battery": self.battery,
+            "pickaxe": self.pickaxe,
+            "flash_used": self.flash_used,
+        }
 
 @dataclass
 class RoundLog:
@@ -81,6 +91,40 @@ class RoundLog:
     # 2    -> P2 胜
     # 0    -> 双败 / 平局
 
+    def to_dict(self) -> dict:
+        return {
+            "round_num": self.round_num,
+            "p1_move": self.p1_move.name,
+            "p1_move_label": self.p1_move.value,
+            "p2_move": self.p2_move.name,
+            "p2_move_label": self.p2_move.value,
+            "p1_valid": self.p1_valid,
+            "p2_valid": self.p2_valid,
+            "p1_damage_taken": self.p1_damage_taken,
+            "p2_damage_taken": self.p2_damage_taken,
+            "p1_pickaxe_blocked": self.p1_pickaxe_blocked,
+            "p2_pickaxe_blocked": self.p2_pickaxe_blocked,
+            "p1_note": self.p1_note,
+            "p2_note": self.p2_note,
+            "summary": self.summary,
+            "p1_after": {
+                "hp": self.p1_hp_after,
+                "qi": self.p1_qi_after,
+                "shield": self.p1_shield_after,
+                "spark": self.p1_spark_after,
+                "battery": self.p1_battery_after,
+                "pickaxe": self.p1_pickaxe_after,
+            },
+            "p2_after": {
+                "hp": self.p2_hp_after,
+                "qi": self.p2_qi_after,
+                "shield": self.p2_shield_after,
+                "spark": self.p2_spark_after,
+                "battery": self.p2_battery_after,
+                "pickaxe": self.p2_pickaxe_after,
+            },
+            "winner_after_round": self.winner_after_round,
+        }
 
 @dataclass
 class GameState:
@@ -99,3 +143,16 @@ class GameState:
             winner=self.winner,
             history=list(self.history),
         )
+    
+    def to_dict(self, include_history: bool = True) -> dict:
+        data = {
+            "round_num": self.round_num,
+            "winner": self.winner,
+            "p1": self.p1.to_dict(),
+            "p2": self.p2.to_dict(),
+        }
+
+        if include_history:
+            data["history"] = [log.to_dict() for log in self.history]
+
+        return data

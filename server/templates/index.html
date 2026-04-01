@@ -1,0 +1,1529 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ClapClap 1.0</title>
+    <style>
+        :root {
+            --bg: #f4f6fb;
+            --card: #ffffff;
+            --text: #1f2937;
+            --muted: #6b7280;
+            --border: #e5e7eb;
+            --shadow: 0 3px 10px rgba(0, 0, 0, 0.06);
+            --blue: #2563eb;
+            --blue-bg: #dbeafe;
+            --danger: #ef4444;
+            --danger-dark: #991b1b;
+            --status-bg: #eef2ff;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, "Microsoft YaHei", sans-serif;
+            margin: 0;
+            padding: 10px;
+            background: var(--bg);
+            color: var(--text);
+            font-size: 14px;
+        }
+
+        .container {
+            max-width: 1040px;
+            margin: 0 auto;
+        }
+
+        .compact-mode .container {
+            max-width: 980px;
+        }
+
+        .top-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 8px;
+            flex-wrap: wrap;
+        }
+
+        .title-box h1 {
+            margin: 0 0 2px 0;
+            font-size: 23px;
+            line-height: 1.2;
+        }
+
+        .title-box .sub {
+            color: var(--muted);
+            font-size: 12px;
+        }
+
+        .compact-mode .title-box h1 {
+            font-size: 21px;
+        }
+
+        .top-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .card {
+            background: var(--card);
+            border-radius: 12px;
+            padding: 10px;
+            margin-bottom: 10px;
+            box-shadow: var(--shadow);
+        }
+
+        .card h2 {
+            margin: 0 0 8px 0;
+            font-size: 17px;
+        }
+
+        .compact-mode .card {
+            padding: 8px;
+            margin-bottom: 8px;
+        }
+
+        .compact-mode .card h2 {
+            font-size: 16px;
+            margin-bottom: 6px;
+        }
+
+        .status-card {
+            padding-top: 8px;
+            padding-bottom: 8px;
+        }
+
+        .status-line {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .status-badge,
+        .winner-badge,
+        .turn-badge {
+            display: inline-block;
+            padding: 4px 9px;
+            border-radius: 999px;
+            font-weight: bold;
+            font-size: 12px;
+        }
+
+        .status-badge {
+            background: var(--status-bg);
+            color: #3730a3;
+        }
+
+        .winner-badge {
+            background: #fee2e2;
+            color: var(--danger-dark);
+        }
+
+        .turn-badge {
+            background: linear-gradient(180deg, #ecfdf5 0%, #d1fae5 100%);
+            color: #166534;
+            box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.12);
+        }
+
+        .two-col {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .player-panel {
+            border-radius: 10px;
+            padding: 8px;
+        }
+
+        .player-panel.p1-theme {
+            background: linear-gradient(180deg, #eff6ff 0%, #f9fbff 100%);
+            border: 1px solid #dbeafe;
+        }
+
+        .player-panel.p2-theme {
+            background: linear-gradient(180deg, #fff1f2 0%, #fffafb 100%);
+            border: 1px solid #fecdd3;
+        }
+
+        .resource-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 7px;
+        }
+
+        .resource-item {
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 8px;
+            min-height: 62px;
+        }
+
+        .resource-label {
+            font-size: 11px;
+            color: var(--muted);
+            margin-bottom: 4px;
+        }
+
+        .resource-value {
+            font-size: 18px;
+            font-weight: bold;
+            line-height: 1.1;
+        }
+
+        .compact-mode .resource-item {
+            min-height: 56px;
+            padding: 7px;
+        }
+
+        .compact-mode .resource-value {
+            font-size: 17px;
+        }
+
+        .resource-item.theme-hp {
+            background: linear-gradient(180deg, #fff1f2 0%, #ffffff 100%);
+            border-color: #fecdd3;
+        }
+
+        .resource-item.theme-qi {
+            background: linear-gradient(180deg, #eff6ff 0%, #ffffff 100%);
+            border-color: #bfdbfe;
+        }
+
+        .resource-item.theme-shield {
+            background: linear-gradient(180deg, #eef2ff 0%, #ffffff 100%);
+            border-color: #c7d2fe;
+        }
+
+        .resource-item.theme-spark {
+            background: linear-gradient(180deg, #fff7ed 0%, #ffffff 100%);
+            border-color: #fdba74;
+        }
+
+        .resource-item.theme-battery {
+            background: linear-gradient(180deg, #ecfeff 0%, #ffffff 100%);
+            border-color: #a5f3fc;
+        }
+
+        .resource-item.theme-pickaxe {
+            background: linear-gradient(180deg, #f3f4f6 0%, #ffffff 100%);
+            border-color: #d1d5db;
+        }
+
+        .resource-item.theme-flash {
+            background: linear-gradient(180deg, #faf5ff 0%, #ffffff 100%);
+            border-color: #d8b4fe;
+        }
+
+        .selection-layout {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .move-side {
+            border-radius: 12px;
+            padding: 10px;
+            border: 1px solid #edf2ff;
+        }
+
+        .move-side.p1-side {
+            background: linear-gradient(180deg, #f7fbff 0%, #ffffff 100%);
+            border-color: #dbeafe;
+        }
+
+        .move-side.p2-side {
+            background: linear-gradient(180deg, #fff8f9 0%, #ffffff 100%);
+            border-color: #fecdd3;
+        }
+
+        .move-side h3 {
+            margin: 0 0 8px 0;
+            font-size: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .active-turn-tip {
+            font-size: 11px;
+            color: var(--muted);
+            font-weight: normal;
+        }
+
+        .move-group-title {
+            margin: 9px 0 5px 0;
+            font-size: 12px;
+            color: #4b5563;
+            font-weight: bold;
+        }
+
+        .move-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
+            gap: 7px;
+        }
+
+        .move-btn-wrap {
+            position: relative;
+        }
+
+        .move-btn {
+            width: 100%;
+            border: 1px solid #d1d5db;
+            background: white;
+            border-radius: 11px;
+            padding: 8px 6px;
+            cursor: pointer;
+            text-align: center;
+            transition: 0.15s ease;
+            font-size: 12px;
+            min-height: 58px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .move-btn::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(180deg, rgba(255,255,255,0.4), rgba(255,255,255,0));
+            pointer-events: none;
+        }
+
+        .move-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 3px 8px rgba(0, 0, 0, 0.08);
+        }
+
+        .move-btn.keyboard-focus {
+            box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.18);
+        }
+
+        .move-btn.disabled {
+            opacity: 0.38;
+            cursor: not-allowed;
+            background: #f3f4f6;
+        }
+
+        .move-label {
+            font-size: 14px;
+            font-weight: bold;
+            margin-bottom: 2px;
+            line-height: 1.2;
+        }
+
+        .move-name {
+            font-size: 10px;
+            color: var(--muted);
+            line-height: 1.2;
+        }
+
+        .move-hotkey {
+            position: absolute;
+            top: 5px;
+            right: 6px;
+            font-size: 10px;
+            color: rgba(31, 41, 55, 0.45);
+            font-weight: bold;
+            z-index: 2;
+            pointer-events: none;
+        }
+
+        .move-btn.selected.p1-selected {
+            border: 2px solid #2563eb;
+            background: linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%);
+            color: #1d4ed8;
+            font-weight: bold;
+            box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.10), 0 4px 10px rgba(37, 99, 235, 0.12);
+        }
+
+        .move-btn.selected.p2-selected {
+            border: 2px solid #dc2626;
+            background: linear-gradient(180deg, #fff1f2 0%, #ffe4e6 100%);
+            color: #b91c1c;
+            font-weight: bold;
+            box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.10), 0 4px 10px rgba(220, 38, 38, 0.12);
+        }
+
+        .tooltip {
+            position: absolute;
+            left: 50%;
+            bottom: calc(100% + 6px);
+            transform: translateX(-50%);
+            width: 220px;
+            background: #111827;
+            color: white;
+            border-radius: 10px;
+            padding: 10px;
+            font-size: 12px;
+            line-height: 1.6;
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18);
+            opacity: 0;
+            pointer-events: none;
+            transition: 0.12s ease;
+            z-index: 20;
+        }
+
+        .move-btn-wrap:hover .tooltip {
+            opacity: 1;
+        }
+
+        .submit-row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+            margin-top: 6px;
+        }
+
+        .selection-info-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .selection-box {
+            background: #f8fafc;
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            padding: 8px 10px;
+            font-size: 13px;
+        }
+
+        button.action-btn {
+            border: none;
+            border-radius: 10px;
+            padding: 9px 12px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: bold;
+            background: #e5e7eb;
+            color: #111827;
+        }
+
+        button.action-btn.primary {
+            background: var(--blue);
+            color: white;
+        }
+
+        button.action-btn.danger {
+            background: var(--danger);
+            color: white;
+        }
+
+        button.action-btn.secondary {
+            background: #6b7280;
+            color: white;
+        }
+
+        button.action-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .message-box {
+            margin-top: 8px;
+            color: #374151;
+            min-height: 18px;
+            font-size: 13px;
+        }
+
+        .bottom-layout {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .round-box {
+            background: #f9fafb;
+            border-radius: 10px;
+            padding: 10px;
+            line-height: 1.7;
+            font-size: 13px;
+            border: 1px solid #edf2f7;
+        }
+
+        .round-box.emphasized {
+            background: linear-gradient(180deg, #fff7ed 0%, #ffffff 100%);
+            border: 1px solid #fdba74;
+            box-shadow: 0 0 0 2px rgba(251, 146, 60, 0.12);
+        }
+
+        .history-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            max-height: 240px;
+            overflow-y: auto;
+        }
+
+        .history-item {
+            background: #f9fafb;
+            border-radius: 10px;
+            padding: 10px;
+            border: 1px solid var(--border);
+            font-size: 13px;
+            line-height: 1.7;
+        }
+
+        .muted {
+            color: var(--muted);
+        }
+
+        .danger-text {
+            color: #b91c1c;
+            font-weight: bold;
+        }
+
+        .good-text {
+            color: #15803d;
+            font-weight: bold;
+        }
+
+        .modal-mask {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.35);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+            z-index: 1000;
+        }
+
+        .modal-mask.show {
+            display: flex;
+        }
+
+        .modal {
+            width: min(720px, 100%);
+            max-height: 85vh;
+            overflow-y: auto;
+            background: white;
+            border-radius: 14px;
+            padding: 18px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+        }
+
+        .modal h2 {
+            margin-top: 0;
+        }
+
+        .modal-section {
+            margin-bottom: 16px;
+            line-height: 1.8;
+        }
+
+        .modal-close-row {
+            display: flex;
+            justify-content: flex-end;
+            margin-bottom: 8px;
+        }
+
+        .setting-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            padding: 8px 0;
+            border-bottom: 1px solid #f1f5f9;
+        }
+
+        .setting-item:last-child {
+            border-bottom: none;
+        }
+
+        input[type="checkbox"] {
+            transform: scale(1.12);
+        }
+
+        .end-modal-content {
+            text-align: center;
+            line-height: 1.9;
+            font-size: 15px;
+        }
+
+        .end-modal-content .big-result {
+            font-size: 22px;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+
+        @media (max-width: 900px) {
+            .two-col,
+            .selection-layout,
+            .bottom-layout,
+            .selection-info-row {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 720px) {
+            .resource-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .move-grid {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+            }
+
+            .history-list {
+                max-height: none;
+            }
+        }
+
+        @media (max-width: 520px) {
+            .move-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="top-bar">
+        <div class="title-box">
+            <h1>ClapClap 1.0 双人对战版</h1>
+            <div class="sub">网页原型版 · 双人同步出招</div>
+        </div>
+        <div class="top-actions">
+            <button class="action-btn secondary" id="settings-open-btn">设置</button>
+            <button class="action-btn secondary" id="help-open-btn">帮助</button>
+            <button class="action-btn" id="refresh-btn">刷新状态</button>
+            <button class="action-btn danger" id="reset-btn">重新开始</button>
+        </div>
+    </div>
+
+    <div class="two-col">
+        <div class="card">
+            <h2>P1 资源</h2>
+            <div class="player-panel p1-theme">
+                <div id="p1-state" class="resource-grid"></div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>P2 资源</h2>
+            <div class="player-panel p2-theme">
+                <div id="p2-state" class="resource-grid"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>本回合出招</h2>
+
+        <div class="selection-layout">
+            <div class="move-side p1-side">
+                <h3>
+                    <span>P1 选择区</span>
+                    <span class="active-turn-tip" id="p1-turn-tip"></span>
+                </h3>
+                <div id="p1-move-groups"></div>
+            </div>
+
+            <div class="move-side p2-side">
+                <h3>
+                    <span>P2 选择区</span>
+                    <span class="active-turn-tip" id="p2-turn-tip"></span>
+                </h3>
+                <div id="p2-move-groups"></div>
+            </div>
+        </div>
+
+        <div class="submit-row">
+            <button class="action-btn primary" id="step-btn">提交本回合</button>
+            <button class="action-btn" id="clear-selection-btn">清空本回合选择</button>
+        </div>
+
+        <div class="selection-info-row">
+            <div id="p1-selection-box" class="selection-box muted">P1 当前未选择动作。</div>
+            <div id="p2-selection-box" class="selection-box muted">P2 当前未选择动作。</div>
+        </div>
+
+        <div id="message" class="message-box muted">页面已加载。</div>
+    </div>
+
+    <div class="card status-card">
+        <div id="basic-info" class="status-line"></div>
+    </div>
+
+    <div class="bottom-layout">
+        <div class="card" id="latest-round-card">
+            <h2>最近一回合结果</h2>
+            <div id="latest-round" class="muted">当前还没有回合记录。</div>
+        </div>
+
+        <div class="card" id="history-card">
+            <h2>历史记录</h2>
+            <div id="history" class="history-list"></div>
+        </div>
+    </div>
+</div>
+
+<div id="help-modal-mask" class="modal-mask">
+    <div class="modal">
+        <div class="modal-close-row">
+            <button class="action-btn" id="help-close-btn">关闭</button>
+        </div>
+
+        <h2>帮助</h2>
+
+        <div class="modal-section">
+            <h3>基本操作</h3>
+            <div>1. 在左右两边分别为 P1 和 P2 选择动作。</div>
+            <div>2. 被选中的动作会高亮显示。</div>
+            <div>3. 点击“提交本回合”后，后端会统一结算。</div>
+            <div>4. 点击“重新开始”可以重置游戏。</div>
+        </div>
+
+        <div class="modal-section">
+            <h3>键盘快捷操作</h3>
+            <div>· 锦囊：1 / 2 / 3 / 4</div>
+            <div>· 资源与防御：Q / W / E / R</div>
+            <div>· 气系攻击：A / S / D / F / G</div>
+            <div>· 盾系攻击：Z / X / C / V</div>
+            <div>· 默认先给 P1 选，P1 选完自动轮到 P2。</div>
+            <div>· Enter：双方都选完后提交；若结束弹窗打开，则快速重新开始。</div>
+            <div>· Backspace：撤销最后一次选择；若有弹窗打开，则关闭所有弹窗。</div>
+        </div>
+
+        <div class="modal-section">
+            <h3>当前实现约定</h3>
+            <div>· 双方都非法动作：双败。</div>
+            <div>· 烈焰优先消耗火种，否则消耗 4 盾。</div>
+            <div>· Shining 优先消耗电池，否则消耗 6 盾。</div>
+            <div>· 黑洞、Shining、双吃当前版本不拆分。</div>
+            <div>· 闪会完全退出本回合结算。</div>
+            <div>· gi 抢镐只在对方本回合出镐时触发。</div>
+        </div>
+    </div>
+</div>
+
+<div id="settings-modal-mask" class="modal-mask">
+    <div class="modal">
+        <div class="modal-close-row">
+            <button class="action-btn" id="settings-close-btn">关闭</button>
+        </div>
+
+        <h2>设置</h2>
+
+        <div class="modal-section">
+            <div class="setting-item">
+                <div>
+                    <div><strong>紧凑模式</strong></div>
+                    <div class="muted">缩小间距，让更多内容显示在一个屏幕内。默认关闭。</div>
+                </div>
+                <input type="checkbox" id="setting-compact-mode" />
+            </div>
+
+            <div class="setting-item">
+                <div>
+                    <div><strong>显示动作悬停说明</strong></div>
+                    <div class="muted">鼠标放到动作按钮上时显示说明框。</div>
+                </div>
+                <input type="checkbox" id="setting-show-tooltips" />
+            </div>
+
+            <div class="setting-item">
+                <div>
+                    <div><strong>显示历史记录</strong></div>
+                    <div class="muted">关闭后将隐藏右侧历史记录区域。</div>
+                </div>
+                <input type="checkbox" id="setting-show-history" />
+            </div>
+
+            <div class="setting-item">
+                <div>
+                    <div><strong>显示最近一回合结果</strong></div>
+                    <div class="muted">关闭后将隐藏最近一回合结果区域。</div>
+                </div>
+                <input type="checkbox" id="setting-show-latest-round" />
+            </div>
+
+            <div class="setting-item">
+                <div>
+                    <div><strong>资源卡颜色区分</strong></div>
+                    <div class="muted">为不同资源显示不同主题色。默认关闭。</div>
+                </div>
+                <input type="checkbox" id="setting-colored-resources" />
+            </div>
+
+            <div class="setting-item">
+                <div>
+                    <div><strong>强调最近一回合结果</strong></div>
+                    <div class="muted">让最近一回合结果区域更醒目。默认关闭。</div>
+                </div>
+                <input type="checkbox" id="setting-emphasize-latest-round" />
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="end-modal-mask" class="modal-mask">
+    <div class="modal" style="max-width: 460px;">
+        <div class="modal-close-row">
+            <button class="action-btn" id="end-close-btn">关闭</button>
+        </div>
+
+        <div class="end-modal-content">
+            <div>游戏结束</div>
+            <div class="big-result" id="end-result-text">结果</div>
+            <div id="end-result-detail" class="muted"></div>
+            <div class="muted" style="margin-top: 6px;">按 Enter 可快速重新开始，按 Backspace 可关闭弹窗。</div>
+            <div style="margin-top: 14px;">
+                <button class="action-btn primary" id="end-reset-btn">重新开始一局</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let latestState = null;
+    let selectedP1Move = null;
+    let selectedP2Move = null;
+    let keyboardTarget = "p1";
+    let endModalShownForWinner = null;
+
+    const SETTINGS_STORAGE_KEY = "clapclap_ui_settings_v2";
+
+    const defaultSettings = {
+        compactMode: false,
+        showTooltips: true,
+        showHistory: true,
+        showLatestRound: true,
+        coloredResources: false,
+        emphasizeLatestRound: false
+    };
+
+    let settings = { ...defaultSettings };
+
+    const moveDescriptions = {
+        QI: "资源动作。获得 1 气。",
+        SHIELD: "资源动作。获得 1 盾。",
+        GI: "气系攻击。消耗 1 气，攻击力 1。可抢对方本回合出的镐。",
+        PO: "气系攻击。消耗 2 气，攻击力 2。会被你吃 / 双吃针对。",
+        LENG_FENG: "气系攻击。消耗 3 气，攻击力 3。",
+        RU_LAI: "气系攻击。消耗 5 气，攻击力 4，伤害 2。",
+        HEI_DONG: "气系攻击。消耗 8 气，攻击力 5，伤害 3。当前版本不拆分。",
+        FIRE: "盾系攻击。消耗 2 盾，攻击力 1.5，并获得 1 火种。",
+        SHAN_DIAN: "盾系攻击。消耗 3 盾，攻击力 2，并获得 1 电池。会被你吃 / 双吃针对。",
+        LIE_YAN: "盾系攻击。优先消耗 2 火种，否则消耗 4 盾。攻击力 3。",
+        SHINING: "盾系攻击。优先消耗 2 电池，否则消耗 6 盾。攻击力 4，伤害 2。会被双吃针对。",
+        SHI_ZI: "防御动作。消耗 2 气，防御力 3。",
+        BA_GUA: "防御动作。消耗 3 气，防御力 4。",
+        CHI: "锦囊动作。消耗 1 气。可针对破、闪电。",
+        SHUANG_CHI: "锦囊动作。消耗 2 气。可针对破、闪电、Shining。当前版本不拆分。",
+        SHAN: "锦囊动作。每局最多 2 次。使用后完全退出本回合结算。",
+        GAO: "锦囊动作。消耗 2 气，获得 1 镐。镐可抵挡伤害，2 个及以上会爆镐。"
+    };
+
+    const fixedKeyMap = {
+        CHI: "1",
+        SHUANG_CHI: "2",
+        SHAN: "3",
+        GAO: "4",
+
+        QI: "Q",
+        SHIELD: "W",
+        SHI_ZI: "E",
+        BA_GUA: "R",
+
+        GI: "A",
+        PO: "S",
+        LENG_FENG: "D",
+        RU_LAI: "F",
+        HEI_DONG: "G",
+
+        FIRE: "Z",
+        SHAN_DIAN: "X",
+        LIE_YAN: "C",
+        SHINING: "V"
+    };
+
+    function loadSettings() {
+        try {
+            const raw = localStorage.getItem(SETTINGS_STORAGE_KEY);
+            if (!raw) {
+                settings = { ...defaultSettings };
+                return;
+            }
+
+            const parsed = JSON.parse(raw);
+            settings = {
+                ...defaultSettings,
+                ...parsed
+            };
+        } catch (error) {
+            settings = { ...defaultSettings };
+        }
+    }
+
+    function saveSettings() {
+        localStorage.setItem(
+            SETTINGS_STORAGE_KEY,
+            JSON.stringify(settings)
+        );
+    }
+
+    function applyCompactMode() {
+        if (settings.compactMode) {
+            document.body.classList.add("compact-mode");
+        } else {
+            document.body.classList.remove("compact-mode");
+        }
+    }
+
+    function winnerText(winner) {
+        if (winner === null) return "未结束";
+        if (winner === 0) return "双败 / 平局";
+        if (winner === 1) return "P1 获胜";
+        if (winner === 2) return "P2 获胜";
+        return "未知";
+    }
+
+    function resourceThemeClass(key) {
+        if (!settings.coloredResources) return "";
+        if (key === "hp") return "theme-hp";
+        if (key === "qi") return "theme-qi";
+        if (key === "shield") return "theme-shield";
+        if (key === "spark") return "theme-spark";
+        if (key === "battery") return "theme-battery";
+        if (key === "pickaxe") return "theme-pickaxe";
+        if (key === "flash_used") return "theme-flash";
+        return "";
+    }
+
+    function resourceItem(label, value, key) {
+        return `
+            <div class="resource-item ${resourceThemeClass(key)}">
+                <div class="resource-label">${label}</div>
+                <div class="resource-value">${value}</div>
+            </div>
+        `;
+    }
+
+    function renderPlayerState(player) {
+        return `
+            ${resourceItem("生命", player.hp, "hp")}
+            ${resourceItem("气", player.qi, "qi")}
+            ${resourceItem("盾", player.shield, "shield")}
+            ${resourceItem("火种", player.spark, "spark")}
+            ${resourceItem("电池", player.battery, "battery")}
+            ${resourceItem("镐", player.pickaxe, "pickaxe")}
+            ${resourceItem("闪次数", player.flash_used, "flash_used")}
+        `;
+    }
+
+    function moveCategoryTitle(category) {
+        if (category === "resource") return "资源";
+        if (category === "attack_qi") return "气系攻击";
+        if (category === "attack_shield") return "盾系攻击";
+        if (category === "defense") return "防御";
+        if (category === "trick") return "锦囊";
+        return "其他";
+    }
+
+    function getMoveGroups(catalog) {
+        const groups = {
+            resource: [],
+            attack_qi: [],
+            attack_shield: [],
+            defense: [],
+            trick: []
+        };
+
+        for (const item of catalog) {
+            if (item.name === "QI" || item.name === "SHIELD") {
+                groups.resource.push(item);
+            } else if (
+                ["GI", "PO", "LENG_FENG", "RU_LAI", "HEI_DONG"].includes(item.name)
+            ) {
+                groups.attack_qi.push(item);
+            } else if (
+                ["FIRE", "SHAN_DIAN", "LIE_YAN", "SHINING"].includes(item.name)
+            ) {
+                groups.attack_shield.push(item);
+            } else if (
+                ["SHI_ZI", "BA_GUA"].includes(item.name)
+            ) {
+                groups.defense.push(item);
+            } else {
+                groups.trick.push(item);
+            }
+        }
+
+        return groups;
+    }
+
+    function handleKeyboardMoveSelection(keyText) {
+        if (!latestState || latestState.winner !== null) return;
+        if (document.getElementById("help-modal-mask").classList.contains("show")) return;
+        if (document.getElementById("settings-modal-mask").classList.contains("show")) return;
+        if (document.getElementById("end-modal-mask").classList.contains("show")) return;
+
+        const upperKey = keyText.toUpperCase();
+
+        let matchedMove = null;
+        for (const [moveName, hotkey] of Object.entries(fixedKeyMap)) {
+            if (hotkey === upperKey) {
+                matchedMove = moveName;
+                break;
+            }
+        }
+
+        if (!matchedMove) return;
+
+        if (keyboardTarget === "p1") {
+            const legal = latestState.legal_moves?.p1 || [];
+            if (legal.includes(matchedMove)) {
+                selectedP1Move = matchedMove;
+                if (!selectedP2Move) {
+                    keyboardTarget = "p2";
+                }
+                renderState(latestState);
+                document.getElementById("message").textContent =
+                    `已为 P1 选择 ${matchedMove}，现在请为 P2 选择。`;
+            }
+        } else {
+            const legal = latestState.legal_moves?.p2 || [];
+            if (legal.includes(matchedMove)) {
+                selectedP2Move = matchedMove;
+                renderState(latestState);
+                document.getElementById("message").textContent =
+                    `已为 P2 选择 ${matchedMove}。可以提交本回合。`;
+            }
+        }
+    }
+
+    function renderMoveGroups(containerId, legalMoves, catalog, selectedMove, onSelect, targetSide) {
+        const container = document.getElementById(containerId);
+        container.innerHTML = "";
+
+        const groups = getMoveGroups(catalog);
+
+        for (const [groupKey, items] of Object.entries(groups)) {
+            if (items.length === 0) continue;
+
+            const title = document.createElement("div");
+            title.className = "move-group-title";
+            title.textContent = moveCategoryTitle(groupKey);
+            container.appendChild(title);
+
+            const grid = document.createElement("div");
+            grid.className = "move-grid";
+
+            for (const item of items) {
+                const wrap = document.createElement("div");
+                wrap.className = "move-btn-wrap";
+
+                const btn = document.createElement("button");
+                btn.className = "move-btn";
+                btn.type = "button";
+
+                const legal = legalMoves.includes(item.name);
+                if (!legal) {
+                    btn.classList.add("disabled");
+                }
+                if (selectedMove === item.name) {
+                    btn.classList.add("selected");
+                    btn.classList.add(targetSide === "p1" ? "p1-selected" : "p2-selected");
+                }
+                if (keyboardTarget === targetSide && legal) {
+                    btn.classList.add("keyboard-focus");
+                }
+
+                const hotkey = fixedKeyMap[item.name] || "";
+
+                btn.innerHTML = `
+                    ${hotkey ? `<div class="move-hotkey">${hotkey}</div>` : ""}
+                    <div class="move-label">${item.label}</div>
+                    <div class="move-name">${item.name}</div>
+                `;
+
+                btn.addEventListener("click", () => {
+                    if (!legal) return;
+                    onSelect(item.name);
+                });
+
+                wrap.appendChild(btn);
+
+                if (settings.showTooltips) {
+                    const tooltip = document.createElement("div");
+                    tooltip.className = "tooltip";
+                    tooltip.innerHTML = `
+                        <div><strong>${item.label} (${item.name})</strong></div>
+                        <div>类别：${moveCategoryTitle(groupKey)}</div>
+                        <div>${moveDescriptions[item.name] || "暂无说明。"}</div>
+                        ${hotkey ? `<div>快捷键：${hotkey}</div>` : ""}
+                    `;
+                    wrap.appendChild(tooltip);
+                }
+
+                grid.appendChild(wrap);
+            }
+
+            container.appendChild(grid);
+        }
+    }
+
+    function updateSelectionBoxes(catalog) {
+        function findLabel(moveName) {
+            const item = catalog.find(x => x.name === moveName);
+            if (!item) return moveName;
+            return `${item.label} (${item.name})`;
+        }
+
+        document.getElementById("p1-selection-box").textContent =
+            selectedP1Move ? `P1 当前选择：${findLabel(selectedP1Move)}` : "P1 当前未选择动作。";
+
+        document.getElementById("p2-selection-box").textContent =
+            selectedP2Move ? `P2 当前选择：${findLabel(selectedP2Move)}` : "P2 当前未选择动作。";
+    }
+
+    function updateTurnTips() {
+        if (latestState && latestState.winner !== null) {
+            document.getElementById("p1-turn-tip").textContent = "";
+            document.getElementById("p2-turn-tip").textContent = "";
+            return;
+        }
+
+        if (!selectedP1Move) {
+            document.getElementById("p1-turn-tip").textContent = "正在输入";
+            document.getElementById("p2-turn-tip").textContent = "";
+            keyboardTarget = "p1";
+        } else if (!selectedP2Move) {
+            document.getElementById("p1-turn-tip").textContent = "";
+            document.getElementById("p2-turn-tip").textContent = "正在输入";
+            keyboardTarget = "p2";
+        } else {
+            document.getElementById("p1-turn-tip").textContent = "";
+            document.getElementById("p2-turn-tip").textContent = "";
+        }
+    }
+
+    function renderLatestRound(log) {
+        if (!log) {
+            return "<div class='muted'>当前还没有回合记录。</div>";
+        }
+
+        let finalResultLine = "";
+        if (log.winner_after_round === 0) {
+            finalResultLine = `<div><strong>本局结果：</strong><span class="danger-text">双败 / 平局</span></div>`;
+        } else if (log.winner_after_round === 1) {
+            finalResultLine = `<div><strong>本局结果：</strong><span class="good-text">P1 获胜</span></div>`;
+        } else if (log.winner_after_round === 2) {
+            finalResultLine = `<div><strong>本局结果：</strong><span class="good-text">P2 获胜</span></div>`;
+        }
+
+        return `
+            <div class="round-box ${settings.emphasizeLatestRound ? "emphasized" : ""}">
+                <div><strong>第 ${log.round_num} 回合</strong></div>
+                <div>P1 动作：${log.p1_move_label} (${log.p1_move})</div>
+                <div>P2 动作：${log.p2_move_label} (${log.p2_move})</div>
+                <div>P1 受到伤害：<span class="${log.p1_damage_taken > 0 ? "danger-text" : "good-text"}">${log.p1_damage_taken}</span></div>
+                <div>P2 受到伤害：<span class="${log.p2_damage_taken > 0 ? "danger-text" : "good-text"}">${log.p2_damage_taken}</span></div>
+                <div>P1 说明：${log.p1_note || "无"}</div>
+                <div>P2 说明：${log.p2_note || "无"}</div>
+                <div><strong>总结：</strong>${log.summary}</div>
+                ${finalResultLine}
+            </div>
+        `;
+    }
+
+    function renderHistory(logs) {
+        const historyEl = document.getElementById("history");
+        historyEl.innerHTML = "";
+
+        if (!settings.showHistory) {
+            historyEl.innerHTML = "<div class='muted'>历史记录已在设置中隐藏。</div>";
+            return;
+        }
+
+        if (logs.length === 0) {
+            historyEl.innerHTML = "<div class='muted'>当前还没有历史记录。</div>";
+            return;
+        }
+
+        for (const log of logs.slice().reverse()) {
+            const item = document.createElement("div");
+            item.className = "history-item";
+            item.innerHTML = `
+                <div><strong>第 ${log.round_num} 回合</strong></div>
+                <div>P1：${log.p1_move_label} (${log.p1_move}) | 合法：${log.p1_valid}</div>
+                <div>P2：${log.p2_move_label} (${log.p2_move}) | 合法：${log.p2_valid}</div>
+                <div>P1 伤害：${log.p1_damage_taken} | P2 伤害：${log.p2_damage_taken}</div>
+                <div>P1 说明：${log.p1_note || "无"}</div>
+                <div>P2 说明：${log.p2_note || "无"}</div>
+                <div><strong>总结：</strong>${log.summary}</div>
+            `;
+            historyEl.appendChild(item);
+        }
+        historyEl.scrollTop = 0;
+    }
+
+    function applySettingsVisibility() {
+        document.getElementById("latest-round-card").style.display =
+            settings.showLatestRound ? "" : "none";
+
+        document.getElementById("history-card").style.display =
+            settings.showHistory ? "" : "none";
+
+        applyCompactMode();
+    }
+
+    function maybeShowEndModal(state) {
+        if (state.winner === null) {
+            endModalShownForWinner = null;
+            return;
+        }
+
+        if (endModalShownForWinner === state.winner) {
+            return;
+        }
+
+        endModalShownForWinner = state.winner;
+        document.getElementById("end-result-text").textContent = winnerText(state.winner);
+        document.getElementById("end-result-detail").textContent =
+            `最终回合数：${state.round_num}`;
+        document.getElementById("end-modal-mask").classList.add("show");
+    }
+
+    function closeEndModal() {
+        document.getElementById("end-modal-mask").classList.remove("show");
+    }
+
+    function renderState(state) {
+        latestState = state;
+
+        const catalog = state.move_catalog || [];
+        const logs = state.history || [];
+
+        updateTurnTips();
+
+        document.getElementById("basic-info").innerHTML = `
+            <span class="status-badge">回合：${state.round_num}</span>
+            <span class="winner-badge">胜负：${winnerText(state.winner)}</span>
+            <span class="turn-badge">当前输入：${keyboardTarget === "p1" ? "P1" : "P2"}</span>
+        `;
+
+        document.getElementById("p1-state").innerHTML = renderPlayerState(state.p1);
+        document.getElementById("p2-state").innerHTML = renderPlayerState(state.p2);
+
+        renderMoveGroups(
+            "p1-move-groups",
+            state.legal_moves?.p1 || [],
+            catalog,
+            selectedP1Move,
+            (moveName) => {
+                selectedP1Move = moveName;
+                if (!selectedP2Move) keyboardTarget = "p2";
+                renderState(latestState);
+            },
+            "p1"
+        );
+
+        renderMoveGroups(
+            "p2-move-groups",
+            state.legal_moves?.p2 || [],
+            catalog,
+            selectedP2Move,
+            (moveName) => {
+                selectedP2Move = moveName;
+                renderState(latestState);
+            },
+            "p2"
+        );
+
+        updateSelectionBoxes(catalog);
+        updateTurnTips();
+
+        document.getElementById("latest-round").innerHTML =
+            renderLatestRound(logs.length > 0 ? logs[logs.length - 1] : null);
+
+        renderHistory(logs);
+        applySettingsVisibility();
+
+        const stepBtn = document.getElementById("step-btn");
+        if (state.winner === null) {
+            stepBtn.disabled = false;
+            stepBtn.textContent = "提交本回合";
+        } else {
+            stepBtn.disabled = true;
+            stepBtn.textContent = "游戏已结束";
+        }
+
+        maybeShowEndModal(state);
+    }
+
+    async function fetchState() {
+        try {
+            const res = await fetch("/state");
+            const data = await res.json();
+            renderState(data);
+            document.getElementById("message").textContent = "状态已刷新。";
+        } catch (error) {
+            document.getElementById("message").textContent =
+                "获取状态失败：" + error;
+        }
+    }
+
+    async function resetGame() {
+        try {
+            const res = await fetch("/reset", {
+                method: "POST"
+            });
+            const data = await res.json();
+
+            selectedP1Move = null;
+            selectedP2Move = null;
+            keyboardTarget = "p1";
+            endModalShownForWinner = null;
+            closeEndModal();
+
+            renderState(data.state);
+            document.getElementById("message").textContent =
+                data.message || "游戏已重置。";
+        } catch (error) {
+            document.getElementById("message").textContent =
+                "重置失败：" + error;
+        }
+    }
+
+    async function stepGame() {
+        if (!selectedP1Move || !selectedP2Move) {
+            document.getElementById("message").textContent =
+                "请先为 P1 和 P2 都选择动作。";
+            return;
+        }
+
+        try {
+            const res = await fetch("/step", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    p1_move: selectedP1Move,
+                    p2_move: selectedP2Move
+                })
+            });
+
+            const data = await res.json();
+
+            if (!res.ok || !data.ok) {
+                document.getElementById("message").textContent =
+                    data.error || "提交失败。";
+                return;
+            }
+
+            selectedP1Move = null;
+            selectedP2Move = null;
+            keyboardTarget = "p1";
+
+            renderState(data.state);
+            document.getElementById("message").textContent =
+                data.message || "本回合已结算。";
+        } catch (error) {
+            document.getElementById("message").textContent =
+                "提交失败：" + error;
+        }
+    }
+
+    function undoLastSelection() {
+        if (selectedP2Move) {
+            selectedP2Move = null;
+            keyboardTarget = "p2";
+            if (latestState) {
+                renderState(latestState);
+            }
+            document.getElementById("message").textContent = "已撤销 P2 的选择。";
+            return;
+        }
+
+        if (selectedP1Move) {
+            selectedP1Move = null;
+            keyboardTarget = "p1";
+            if (latestState) {
+                renderState(latestState);
+            }
+            document.getElementById("message").textContent = "已撤销 P1 的选择。";
+        }
+    }
+
+    function clearSelection() {
+        selectedP1Move = null;
+        selectedP2Move = null;
+        keyboardTarget = "p1";
+        if (latestState) {
+            renderState(latestState);
+        }
+        document.getElementById("message").textContent = "本回合选择已清空。";
+    }
+
+    function openHelp() {
+        document.getElementById("help-modal-mask").classList.add("show");
+    }
+
+    function closeHelp() {
+        document.getElementById("help-modal-mask").classList.remove("show");
+    }
+
+    function openSettings() {
+        syncSettingsUI();
+        document.getElementById("settings-modal-mask").classList.add("show");
+    }
+
+    function closeSettings() {
+        document.getElementById("settings-modal-mask").classList.remove("show");
+    }
+
+    function syncSettingsUI() {
+        document.getElementById("setting-compact-mode").checked = settings.compactMode;
+        document.getElementById("setting-show-tooltips").checked = settings.showTooltips;
+        document.getElementById("setting-show-history").checked = settings.showHistory;
+        document.getElementById("setting-show-latest-round").checked = settings.showLatestRound;
+        document.getElementById("setting-colored-resources").checked = settings.coloredResources;
+        document.getElementById("setting-emphasize-latest-round").checked = settings.emphasizeLatestRound;
+    }
+
+    function applySettingAndRerender(key, value) {
+        settings[key] = value;
+        saveSettings();
+        if (latestState) {
+            renderState(latestState);
+        } else {
+            applySettingsVisibility();
+        }
+    }
+
+    function bindSettings() {
+        document.getElementById("setting-compact-mode").addEventListener("change", (event) => {
+            applySettingAndRerender("compactMode", event.target.checked);
+        });
+
+        document.getElementById("setting-show-tooltips").addEventListener("change", (event) => {
+            applySettingAndRerender("showTooltips", event.target.checked);
+        });
+
+        document.getElementById("setting-show-history").addEventListener("change", (event) => {
+            applySettingAndRerender("showHistory", event.target.checked);
+        });
+
+        document.getElementById("setting-show-latest-round").addEventListener("change", (event) => {
+            applySettingAndRerender("showLatestRound", event.target.checked);
+        });
+
+        document.getElementById("setting-colored-resources").addEventListener("change", (event) => {
+            applySettingAndRerender("coloredResources", event.target.checked);
+        });
+
+        document.getElementById("setting-emphasize-latest-round").addEventListener("change", (event) => {
+            applySettingAndRerender("emphasizeLatestRound", event.target.checked);
+        });
+    }
+
+    document.addEventListener("keydown", (event) => {
+        if (event.target && ["INPUT", "TEXTAREA", "SELECT"].includes(event.target.tagName)) {
+            return;
+        }
+
+        const key = event.key;
+
+        if (/^[1-4]$/.test(key) || /^[qwerasdfgzxcv]$/i.test(key)) {
+            handleKeyboardMoveSelection(key);
+            return;
+        }
+
+        if (key === "Enter") {
+            if (document.getElementById("end-modal-mask").classList.contains("show")) {
+                closeEndModal();
+                resetGame();
+                return;
+            }
+
+            if (selectedP1Move && selectedP2Move && latestState && latestState.winner === null) {
+                stepGame();
+            }
+            return;
+        }
+
+        if (key === "Backspace") {
+            event.preventDefault();
+
+            if (document.getElementById("help-modal-mask").classList.contains("show") ||
+                document.getElementById("settings-modal-mask").classList.contains("show") ||
+                document.getElementById("end-modal-mask").classList.contains("show")) {
+                closeHelp();
+                closeSettings();
+                closeEndModal();
+                return;
+            }
+
+            undoLastSelection();
+            return;
+        }
+
+        if (key === "Escape") {
+            closeHelp();
+            closeSettings();
+            closeEndModal();
+        }
+    });
+
+    document.getElementById("refresh-btn").addEventListener("click", fetchState);
+    document.getElementById("reset-btn").addEventListener("click", resetGame);
+    document.getElementById("step-btn").addEventListener("click", stepGame);
+    document.getElementById("clear-selection-btn").addEventListener("click", clearSelection);
+
+    document.getElementById("help-open-btn").addEventListener("click", openHelp);
+    document.getElementById("help-close-btn").addEventListener("click", closeHelp);
+
+    document.getElementById("settings-open-btn").addEventListener("click", openSettings);
+    document.getElementById("settings-close-btn").addEventListener("click", closeSettings);
+
+    document.getElementById("end-close-btn").addEventListener("click", closeEndModal);
+    document.getElementById("end-reset-btn").addEventListener("click", async () => {
+        closeEndModal();
+        await resetGame();
+    });
+
+    document.getElementById("help-modal-mask").addEventListener("click", (event) => {
+        if (event.target.id === "help-modal-mask") {
+            closeHelp();
+        }
+    });
+
+    document.getElementById("settings-modal-mask").addEventListener("click", (event) => {
+        if (event.target.id === "settings-modal-mask") {
+            closeSettings();
+        }
+    });
+
+    document.getElementById("end-modal-mask").addEventListener("click", (event) => {
+        if (event.target.id === "end-modal-mask") {
+            closeEndModal();
+        }
+    });
+
+    loadSettings();
+    applyCompactMode();
+    syncSettingsUI();
+    bindSettings();
+    fetchState();
+</script>
+</body>
+</html>
