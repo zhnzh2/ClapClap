@@ -454,8 +454,33 @@
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
     <script>
         const roomId = "{{ room_id }}";
-        const urlParams = new URLSearchParams(window.location.search);
-        const mySeat = urlParams.get("seat");
+
+        function loadRoomIdentity(roomId) {
+            const raw = localStorage.getItem(`clapclap_room_${roomId}`);
+            if (!raw) {
+                return {
+                    player_token: "",
+                    seat: null
+                };
+            }
+
+            try {
+                const parsed = JSON.parse(raw);
+                return {
+                    player_token: parsed.player_token || "",
+                    seat: parsed.seat || null
+                };
+            } catch (error) {
+                return {
+                    player_token: "",
+                    seat: null
+                };
+            }
+        }
+
+        const roomIdentity = loadRoomIdentity(roomId);
+        let mySeat = roomIdentity.seat;
+        let myPlayerToken = roomIdentity.player_token;
 
         let latestRoom = null;
         const socket = io();
@@ -725,12 +750,18 @@
 
         async function fetchRoomState() {
             try {
-                const res = await fetch(`/api/rooms/${roomId}`);
+                const res = await fetch(
+                    `/api/rooms/${roomId}?player_token=${encodeURIComponent(myPlayerToken)}`
+                );
                 const data = await res.json();
 
                 if (!res.ok || !data.ok) {
                     setRoomMessage(data.error || "房间状态获取失败。", "error");
                     return;
+                }
+
+                if (data.room.requester_seat) {
+                    mySeat = data.room.requester_seat;
                 }
 
                 renderRoom(data.room);
@@ -747,7 +778,7 @@
                         "Content-Type": "application/json"
                     },
                     body: JSON.stringify({
-                        seat: seat,
+                        player_token: myPlayerToken,
                         move_name: moveName
                     })
                 });
@@ -777,7 +808,13 @@
         async function resetRoomGame() {
             try {
                 const res = await fetch(`/api/rooms/${roomId}/reset`, {
-                    method: "POST"
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        player_token: myPlayerToken
+                    })
                 });
 
                 const data = await res.json();

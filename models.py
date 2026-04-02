@@ -50,6 +50,16 @@ class PlayerState:
             "pickaxe": self.pickaxe,
             "flash_used": self.flash_used,
         }
+    
+    @classmethod
+    def from_dict(cls, data: dict) -> "GameState":
+        state = cls()
+        state.round_num = data["round_num"]
+        state.winner = data["winner"]
+        state.p1 = PlayerState.from_dict(data["p1"])
+        state.p2 = PlayerState.from_dict(data["p2"])
+        state.history = [RoundLog.from_dict(item) for item in data.get("history", [])]
+        return state
 
 @dataclass
 class RoundLog:
@@ -125,6 +135,10 @@ class RoundLog:
             },
             "winner_after_round": self.winner_after_round,
         }
+    
+    @classmethod
+    def from_dict(cls, data: dict) -> "RoundLog":
+        return cls(**data)
 
 @dataclass
 class GameState:
@@ -156,3 +170,15 @@ class GameState:
             data["history"] = [log.to_dict() for log in self.history]
 
         return data
+    
+    @classmethod
+    def from_dict(cls, data: dict) -> "PlayerState":
+        return cls(
+            hp=data["hp"],
+            qi=data["qi"],
+            shield=data["shield"],
+            spark=data["spark"],
+            battery=data["battery"],
+            pickaxe=data["pickaxe"],
+            flash_used=data["flash_used"],
+        )

@@ -125,6 +125,41 @@
         let joinedQueue = false;
         let matchedRoomId = null;
         let currentPlayerName = "";
+        let currentPlayerToken = "";
+
+        function ensureMatchIdentity(playerName) {
+            const raw = localStorage.getItem("clapclap_match_identity");
+            if (raw) {
+                try {
+                    const parsed = JSON.parse(raw);
+                    if (parsed.player_name === playerName && parsed.player_token) {
+                        return parsed.player_token;
+                    }
+                } catch (error) {
+                    console.error(error);
+                }
+            }
+
+            const token = crypto.randomUUID().replaceAll("-", "");
+            localStorage.setItem(
+                "clapclap_match_identity",
+                JSON.stringify({
+                    player_name: playerName,
+                    player_token: token
+                })
+            );
+            return token;
+        }
+
+        function saveRoomIdentity(roomId, playerToken, seat) {
+            localStorage.setItem(
+                `clapclap_room_${roomId}`,
+                JSON.stringify({
+                    player_token: playerToken,
+                    seat: seat
+                })
+            );
+        }
 
         async function joinMatchQueue() {
             const playerName = document.getElementById("player-name").value.trim();
@@ -135,7 +170,7 @@
                 msg.textContent = "请先输入昵称。";
                 return;
             }
-            currentPlayerName = playerName;
+            currentPlayerToken = ensureMatchIdentity(playerName);
 
             try {
                 const res = await fetch("/api/match/join", {
@@ -144,7 +179,8 @@
                         "Content-Type": "application/json"
                     },
                     body: JSON.stringify({
-                        player_name: playerName
+                        player_name: playerName,
+                        player_token: currentPlayerToken
                     })
                 });
 
@@ -157,8 +193,9 @@
 
                 if (data.matched) {
                     matchedRoomId = data.room_id;
+                    saveRoomIdentity(data.room_id, data.player_token, data.seat);
                     msg.textContent = "匹配成功，正在跳转房间……";
-                    window.location.href = `/room/${data.room_id}?seat=${data.seat}`;
+                    window.location.href = `/room/${data.room_id}`;
                     return;
                 }
 
@@ -206,7 +243,7 @@
 
             try {
                 const res = await fetch(
-                    `/api/match/result?player_name=${encodeURIComponent(currentPlayerName)}`
+                    `/api/match/result?player_token=${encodeURIComponent(currentPlayerToken)}`
                 );
                 const data = await res.json();
 
@@ -216,9 +253,10 @@
 
                 if (data.matched && data.room_id) {
                     matchedRoomId = data.room_id;
+                    saveRoomIdentity(data.room_id, data.player_token, data.seat);
                     document.getElementById("match-message").textContent =
                         "匹配成功，正在跳转房间……";
-                    window.location.href = `/room/${data.room_id}?seat=${data.seat || "p2"}`;
+                    window.location.href = `/room/${data.room_id}`;
                 }
             } catch (error) {
                 console.error("fetchMyMatchResult error:", error);

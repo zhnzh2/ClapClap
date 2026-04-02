@@ -132,6 +132,26 @@
     </div>
 
     <script>
+        function saveRoomIdentity(roomId, playerToken, seat) {
+            localStorage.setItem(
+                `clapclap_room_${roomId}`,
+                JSON.stringify({
+                    player_token: playerToken,
+                    seat: seat
+                })
+            );
+        }
+
+        function saveMatchIdentity(playerName, playerToken) {
+            localStorage.setItem(
+                "clapclap_match_identity",
+                JSON.stringify({
+                    player_name: playerName,
+                    player_token: playerToken
+                })
+            );
+        }
+
         async function createRoom() {
             const playerName = document.getElementById("create-name").value.trim();
             const msg = document.getElementById("create-message");
@@ -160,7 +180,8 @@
                 }
 
                 msg.textContent = `房间创建成功，房间号：${data.room.room_id}`;
-                window.location.href = `/room/${data.room.room_id}?seat=p1`;
+                saveRoomIdentity(data.room.room_id, data.player_token, data.seat);
+                window.location.href = `/room/${data.room.room_id}`;
             } catch (error) {
                 msg.textContent = "创建房间失败：" + error;
             }
@@ -195,7 +216,8 @@
                 }
 
                 msg.textContent = `加入成功，你的位置是 ${data.seat}`;
-                window.location.href = `/room/${roomId}?seat=${data.seat}`;
+                saveRoomIdentity(roomId, data.player_token, data.seat);
+                window.location.href = `/room/${roomId}`;
             } catch (error) {
                 msg.textContent = "加入房间失败：" + error;
             }
