@@ -236,6 +236,8 @@ def cancel_match(player_token: str) -> dict:
             "player_name": state.get("player_name"),
             "room_id": None,
             "seat": None,
+            "room_player_token": None,
+            "updated_at": datetime.utcnow().isoformat(),
         }
         persist_match_state()
 

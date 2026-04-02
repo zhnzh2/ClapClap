@@ -324,28 +324,42 @@
 
         .status-panel {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-            gap: 12px;
-            margin-bottom: 18px;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 10px;
+            margin-bottom: 0;
         }
 
         .status-item {
             background: var(--panel);
             border: 1px solid var(--border);
-            border-radius: 14px;
-            padding: 12px 14px;
+            border-radius: 12px;
+            padding: 10px 12px;
+            min-height: 72px;
         }
 
         .status-item .title {
             font-size: 12px;
             color: var(--muted);
-            margin-bottom: 6px;
+            margin-bottom: 4px;
         }
 
         .status-item .content {
-            font-size: 15px;
+            font-size: 14px;
             font-weight: bold;
             color: var(--text);
+            line-height: 1.5;
+        }
+
+        @media (max-width: 980px) {
+            .status-panel {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+
+        @media (max-width: 640px) {
+            .status-panel {
+                grid-template-columns: 1fr;
+            }
         }
 
         .online-dot {
@@ -368,22 +382,22 @@
         }
 
         .invite-panel {
-            margin-top: 18px;
+            margin-top: 0;
             background: var(--panel);
             border: 1px solid var(--border);
             border-radius: 14px;
-            padding: 14px;
+            padding: 12px;
         }
 
         .invite-actions {
             display: flex;
             flex-wrap: wrap;
             gap: 10px;
-            margin-top: 10px;
+            margin-top: 8px;
         }
 
         .invite-preview {
-            margin-top: 10px;
+            margin-top: 8px;
             padding: 10px 12px;
             border-radius: 10px;
             background: white;
@@ -459,6 +473,51 @@
             color: var(--muted);
         }
 
+        .section-block {
+            margin-bottom: 18px;
+        }
+
+        .section-title {
+            font-size: 16px;
+            font-weight: bold;
+            color: var(--text);
+            margin-bottom: 10px;
+        }
+
+        .info-row-compact {
+            display: grid;
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+            gap: 10px;
+        }
+
+        .info-box.compact {
+            padding: 10px 12px;
+            border-radius: 12px;
+        }
+
+        .info-box.compact .label {
+            font-size: 12px;
+            margin-bottom: 4px;
+        }
+
+        .info-box.compact .value {
+            font-size: 14px;
+            font-weight: bold;
+            word-break: break-word;
+        }
+
+        @media (max-width: 980px) {
+            .info-row-compact {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+
+        @media (max-width: 640px) {
+            .info-row-compact {
+                grid-template-columns: 1fr;
+            }
+        }
+
         .player-box.active-seat {
             border-width: 2px;
         }
@@ -491,6 +550,154 @@
                 grid-template-columns: repeat(2, minmax(0, 1fr));
             }
         }
+
+        .round-result-banner {
+            display: none;
+            margin-bottom: 18px;
+            padding: 14px 16px;
+            border-radius: 14px;
+            border: 1px solid var(--blue-border);
+            background: linear-gradient(to right, #eff6ff, #f8fbff);
+        }
+
+        .round-result-banner.show {
+            display: block;
+        }
+
+        .round-result-title {
+            font-size: 15px;
+            font-weight: bold;
+            color: #1d4ed8;
+            margin-bottom: 6px;
+        }
+
+        .round-result-body {
+            color: var(--text);
+            line-height: 1.7;
+            font-size: 14px;
+        }
+
+        .turn-alert {
+            display: none;
+            margin-bottom: 18px;
+            padding: 12px 14px;
+            border-radius: 14px;
+            font-weight: bold;
+            border: 1px solid transparent;
+        }
+
+        .turn-alert.show {
+            display: block;
+        }
+
+        .turn-alert.waiting-self {
+            background: var(--yellow-soft);
+            border-color: var(--yellow-border);
+            color: #92400e;
+        }
+
+        .turn-alert.waiting-opponent {
+            background: var(--blue-soft);
+            border-color: var(--blue-border);
+            color: #1d4ed8;
+        }
+
+        .turn-alert.resolving {
+            background: #eef2ff;
+            border-color: #c7d2fe;
+            color: #4338ca;
+        }
+
+        .move-btn.locked {
+            opacity: 0.45;
+            cursor: not-allowed;
+            background: #f3f4f6;
+            box-shadow: none;
+            transform: none;
+            pointer-events: none;
+        }
+
+        .move-btn.keyboard-focus {
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.18);
+        }
+
+        .move-shortcut {
+            display: inline-block;
+            margin-top: 4px;
+            padding: 2px 6px;
+            border-radius: 999px;
+            background: #f3f4f6;
+            color: #6b7280;
+            font-size: 11px;
+            font-weight: bold;
+        }
+
+        .result-chip-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .result-chip {
+            display: inline-block;
+            padding: 5px 10px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: bold;
+            background: #f3f4f6;
+            color: #374151;
+        }
+
+        .game-finish-mask {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.34);
+            z-index: 1001;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .game-finish-mask.show {
+            display: flex;
+        }
+
+        .game-finish-card {
+            width: min(460px, calc(100vw - 32px));
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: 22px;
+            box-shadow: 0 24px 60px rgba(15, 23, 42, 0.20);
+            padding: 26px 22px;
+            text-align: center;
+        }
+
+        .game-finish-title {
+            font-size: 24px;
+            font-weight: bold;
+            color: var(--text);
+            margin-bottom: 8px;
+        }
+
+        .game-finish-subtitle {
+            color: var(--muted);
+            line-height: 1.7;
+            margin-bottom: 14px;
+        }
+
+        .game-finish-actions {
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 14px;
+        }
+
+        .game-finish-actions button {
+            min-width: 120px;
+        }
+
     </style>
 </head>
 <body>
@@ -504,29 +711,31 @@
         </div>
 
         <div class="card">
-            <h2>房间信息</h2>
-            <div class="info-grid">
-                <div class="info-box">
-                    <div class="label">房间号</div>
-                    <div class="value" id="room-id">{{ room_id }}</div>
-                </div>
-                <div class="info-box">
-                    <div class="label">座位</div>
-                    <div class="value" id="my-seat">加载中</div>
-                </div>
-                <div class="info-box">
-                    <div class="label">房间状态</div>
-                    <div class="value">
-                        <span class="status-badge" id="room-status">加载中</span>
+            <div class="section-block">
+                <div class="section-title">房间信息</div>
+                <div class="info-row-compact">
+                    <div class="info-box compact">
+                        <div class="label">房间号</div>
+                        <div class="value" id="room-id">加载中</div>
                     </div>
-                </div>
-                <div class="info-box" id="p1-name-box">
-                    <div class="label">P1</div>
-                    <div class="value" id="p1-name">加载中</div>
-                </div>
-                <div class="info-box" id="p2-name-box">
-                    <div class="label">P2</div>
-                    <div class="value" id="p2-name">加载中</div>
+                    <div class="info-box compact">
+                        <div class="label">房间状态</div>
+                        <div class="value">
+                            <span class="status-badge" id="room-status">加载中</span>
+                        </div>
+                    </div>
+                    <div class="info-box compact" id="p1-name-box">
+                        <div class="label">P1</div>
+                        <div class="value" id="p1-name">加载中</div>
+                    </div>
+                    <div class="info-box compact" id="p2-name-box">
+                        <div class="label">P2</div>
+                        <div class="value" id="p2-name">加载中</div>
+                    </div>
+                    <div class="info-box compact">
+                        <div class="label">我的身份</div>
+                        <div class="value" id="my-seat-text">加载中</div>
+                    </div>
                 </div>
             </div>
 
@@ -534,39 +743,46 @@
                 你当前没有有效座位身份，已按观战模式进入：可以查看状态与历史，但不能提交动作或重置对局。
             </div>
 
-            <div class="status-panel">
-                <div class="status-item">
-                    <div class="title">我的当前状态</div>
-                    <div class="content" id="self-phase-text">加载中</div>
+            <div class="section-block">
+                <div class="section-title">房间状态</div>
+                <div id="turn-alert" class="turn-alert"></div>
+
+                <div class="status-panel">
+                    <div class="status-item">
+                        <div class="title">我的当前状态</div>
+                        <div class="content" id="self-phase-text">加载中</div>
+                    </div>
+                    <div class="status-item">
+                        <div class="title">对方状态</div>
+                        <div class="content" id="opponent-phase-text">加载中</div>
+                    </div>
+                    <div class="status-item">
+                        <div class="title">对方在线情况</div>
+                        <div class="content" id="opponent-online-text">加载中</div>
+                    </div>
+                    <div class="status-item">
+                        <div class="title">本回合状态</div>
+                        <div class="content" id="round-phase-text">加载中</div>
+                    </div>
                 </div>
-                <div class="status-item">
-                    <div class="title">对方状态</div>
-                    <div class="content" id="opponent-phase-text">加载中</div>
-                </div>
-                <div class="status-item">
-                    <div class="title">对方在线情况</div>
-                    <div class="content" id="opponent-online-text">加载中</div>
-                </div>
-                <div class="status-item">
-                    <div class="title">本回合状态</div>
-                    <div class="content" id="round-phase-text">加载中</div>
+            </div>
+
+            <div class="section-block">
+                <div class="section-title">邀请好友</div>
+                <div class="invite-panel">
+                    <div class="section-note">
+                        可以复制房间号或邀请链接。邀请链接会自动使用当前访问域名，正式上线后会自动兼容正式域名。
+                    </div>
+
+                    <div class="invite-actions">
+                        <button type="button" id="copy-room-id-btn">复制房间号</button>
+                        <button type="button" id="copy-room-link-btn">复制邀请链接</button>
+                    </div>
+
+                    <div class="invite-preview" id="invite-link-preview">加载中</div>
                 </div>
             </div>
         </div>
-
-            <div class="invite-panel">
-                <div class="label">邀请好友</div>
-                <div class="section-note">
-                    可以复制房间号或邀请链接。邀请链接会自动使用当前访问域名，正式上线后会自动兼容正式域名。
-                </div>
-
-                <div class="invite-actions">
-                    <button type="button" id="copy-room-id-btn">复制房间号</button>
-                    <button type="button" id="copy-room-link-btn">复制邀请链接</button>
-                </div>
-
-                <div class="invite-preview" id="invite-link-preview">加载中</div>
-            </div>
 
         <div class="card">
             <h2>当前对局状态</h2>
@@ -583,6 +799,12 @@
                 </div>
             </div>
         </div>
+
+            <div class="round-result-banner" id="round-result-banner">
+                <div class="round-result-title" id="round-result-title">本回合结果</div>
+                <div class="round-result-body" id="round-result-body">加载中</div>
+                <div class="result-chip-row" id="round-result-chips"></div>
+            </div>
 
         <div class="card">
             <h2>提交动作</h2>
@@ -663,7 +885,10 @@
             console.warn("当前没有找到本地房间身份，后续将按观战/未知身份处理。");
         }
 
-        let latestRoom = null;
+        let currentSelectedMoveName = null;
+        let currentSelectedSeat = null;
+        let lastRenderedRoundCount = -1;
+
         const socket = io();
 
         socket.on("connect", () => {
@@ -722,6 +947,57 @@
 
         function isSpectatorMode() {
             return mySeat !== "p1" && mySeat !== "p2";
+        }
+
+        const MOVE_SHORTCUTS = {
+            "qi": "1",
+            "shield": "2",
+            "spark": "3",
+            "battery": "4",
+            "pickaxe": "Q",
+            "flash": "W",
+            "blackhole": "E",
+            "gi": "A",
+            "cannon": "S",
+            "crossbow": "D",
+            "eight_trigrams": "F"
+        };
+
+        const KEY_TO_MOVE_NAME = {
+            "1": "qi",
+            "2": "shield",
+            "3": "spark",
+            "4": "battery",
+            "q": "pickaxe",
+            "w": "flash",
+            "e": "blackhole",
+            "a": "gi",
+            "s": "cannon",
+            "d": "crossbow",
+            "f": "eight_trigrams"
+        };
+
+        function normalizeMoveName(moveName) {
+            return String(moveName || "").trim().toLowerCase();
+        }
+
+        function getMyPendingMove(room) {
+            if (mySeat === "p1") return room.pending_p1_move;
+            if (mySeat === "p2") return room.pending_p2_move;
+            return null;
+        }
+
+        function getOpponentPendingMove(room) {
+            if (mySeat === "p1") return room.pending_p2_move;
+            if (mySeat === "p2") return room.pending_p1_move;
+            return null;
+        }
+
+        function isMyActionLocked(room) {
+            if (!room) return true;
+            if (isSpectatorMode()) return true;
+            if (room.status !== "playing") return true;
+            return !!getMyPendingMove(room);
         }
 
         function phaseTextForSelf(room) {
@@ -887,6 +1163,147 @@
             } else {
                 opponentOnlineEl.textContent = opponentText;
             }
+        }
+
+        function renderTurnAlert(room) {
+            const el = document.getElementById("turn-alert");
+            el.className = "turn-alert";
+            el.textContent = "";
+
+            if (room.status === "waiting") {
+                el.classList.add("show", "waiting-opponent");
+                el.textContent = "当前处于准备阶段，等待双方进入并开始。";
+                return;
+            }
+
+            if (room.status === "finished") {
+                el.classList.add("show", "resolving");
+                el.textContent = "本局已结束，可以查看结果并选择是否再来一局。";
+                return;
+            }
+
+            const myPending = getMyPendingMove(room);
+            const opponentPending = getOpponentPendingMove(room);
+
+            if (myPending && opponentPending) {
+                el.classList.add("show", "resolving");
+                el.textContent = "双方都已提交动作，正在结算本回合……";
+                return;
+            }
+
+            if (myPending && !opponentPending) {
+                el.classList.add("show", "waiting-opponent");
+                el.textContent = "你已提交动作，正在等待对方选择。";
+                return;
+            }
+
+            if (!myPending && opponentPending) {
+                el.classList.add("show", "waiting-self");
+                el.textContent = "对方已提交动作，现在轮到你选择。";
+                return;
+            }
+
+            el.classList.add("show", "waiting-self");
+            el.textContent = "请先选择你的本回合动作。";
+        }
+
+        function renderRoundResultBanner(room) {
+            const banner = document.getElementById("round-result-banner");
+            const titleEl = document.getElementById("round-result-title");
+            const bodyEl = document.getElementById("round-result-body");
+            const chipsEl = document.getElementById("round-result-chips");
+
+            if (!banner || !titleEl || !bodyEl || !chipsEl) {
+                return;
+            }
+
+            chipsEl.innerHTML = "";
+
+            const history = room.game?.history || [];
+            if (!Array.isArray(history) || history.length === 0) {
+                banner.classList.remove("show");
+                return;
+            }
+
+            const lastLog = history[history.length - 1];
+            const roundIndex = history.length;
+
+            if (lastRenderedRoundCount === roundIndex && room.status !== "finished") {
+                return;
+            }
+
+            banner.classList.add("show");
+            lastRenderedRoundCount = roundIndex;
+
+            titleEl.textContent = `本回合结果 · 第 ${roundIndex} 回合`;
+
+            const p1Move = lastLog.p1_move_label || lastLog.p1_move || "未知";
+            const p2Move = lastLog.p2_move_label || lastLog.p2_move || "未知";
+            const summaryText = lastLog.summary || "本回合已完成结算。";
+
+            bodyEl.textContent = `P1：${p1Move}　|　P2：${p2Move}　|　${summaryText}`;
+
+            const chips = [
+                `P1 动作：${p1Move}`,
+                `P2 动作：${p2Move}`
+            ];
+
+            if (room.game?.winner === 1) {
+                chips.push("当前胜者：P1");
+            } else if (room.game?.winner === 2) {
+                chips.push("当前胜者：P2");
+            }
+
+            chips.forEach((text) => {
+                const chip = document.createElement("span");
+                chip.className = "result-chip";
+                chip.textContent = text;
+                chipsEl.appendChild(chip);
+            });
+        }
+
+        function renderFinishModal(room) {
+            const mask = document.getElementById("game-finish-mask");
+            const titleEl = document.getElementById("game-finish-title");
+            const subtitleEl = document.getElementById("game-finish-subtitle");
+            const chipRow = document.getElementById("game-finish-chip-row");
+
+            chipRow.innerHTML = "";
+
+            if (room.status !== "finished") {
+                mask.classList.remove("show");
+                return;
+            }
+
+            let finishTitle = "对局结束";
+            if (room.game?.winner === 1) {
+                finishTitle = mySeat === "p1" ? "你赢了" : "P1 获胜";
+            } else if (room.game?.winner === 2) {
+                finishTitle = mySeat === "p2" ? "你赢了" : "P2 获胜";
+            }else {
+                finishTitle = "对局结束";
+            }
+
+            titleEl.textContent = finishTitle;
+            subtitleEl.textContent = "本局已经结束。你可以选择重新开始一局，或返回大厅。";
+
+            const chipTexts = [
+                `P1：${room.p1_name || "暂无"}`,
+                `P2：${room.p2_name || "暂无"}`
+            ];
+
+            chipTexts.forEach((text) => {
+                const chip = document.createElement("span");
+                chip.className = "result-chip";
+                chip.textContent = text;
+                chipRow.appendChild(chip);
+            });
+
+            mask.classList.add("show");
+        }
+
+        function closeFinishModal() {
+            document.getElementById("game-finish-mask").classList.remove("show");
         }
 
         function renderResetHint(room) {
@@ -1062,12 +1479,35 @@
                         <div class="move-name">${moveName}</div>
                     `;
 
+                    const normalizedMoveName = normalizeMoveName(moveName);
+                    const shortcutKey = MOVE_SHORTCUTS[normalizedMoveName];
+
+                    if (shortcutKey) {
+                        const shortcutEl = document.createElement("div");
+                        shortcutEl.className = "move-shortcut";
+                        shortcutEl.textContent = shortcutKey;
+                        btn.appendChild(shortcutEl);
+                    }
+
+                    const actionLocked = isMyActionLocked(latestRoom);
+                    if (!legal || actionLocked) {
+                        btn.classList.add("locked");
+                    }
+
+                    btn.dataset.moveName = normalizedMoveName;
+                    btn.dataset.seat = seat;
+
                     btn.addEventListener("click", () => {
                         if (!legal) return;
+                        if (isMyActionLocked(latestRoom)) return;
+                        if (isSpectatorMode()) return;
 
                         container.querySelectorAll(".move-btn").forEach((node) => {
-                            node.classList.remove("selected-p1", "selected-p2");
+                            node.classList.remove("selected-p1", "selected-p2", "keyboard-focus");
                         });
+
+                        currentSelectedMoveName = normalizedMoveName;
+                        currentSelectedSeat = seat;
 
                         if (seat === "p1") {
                             btn.classList.add("selected-p1");
@@ -1125,6 +1565,54 @@
             await copyTextWithFeedback(getInviteLink(), "邀请链接已复制。");
         }
 
+        function findMoveButtonByMoveName(moveName) {
+            const normalized = normalizeMoveName(moveName);
+            return document.querySelector(`.move-btn[data-move-name="${normalized}"]`);
+        }
+
+        function handleMoveKeyboardSelect(event) {
+            if (isSpectatorMode()) return;
+            if (!latestRoom) return;
+            if (isMyActionLocked(latestRoom)) return;
+            if (latestRoom.status !== "playing") return;
+
+            const key = String(event.key || "").toLowerCase();
+            const moveName = KEY_TO_MOVE_NAME[key];
+
+            if (!moveName) return;
+
+            const btn = findMoveButtonByMoveName(moveName);
+            if (!btn) return;
+            if (btn.classList.contains("locked") || btn.classList.contains("disabled")) return;
+
+            event.preventDefault();
+
+            document.querySelectorAll(".move-btn").forEach((node) => {
+                node.classList.remove("keyboard-focus");
+            });
+
+            btn.classList.add("keyboard-focus");
+            btn.click();
+        }
+
+        function handleGlobalKeyboard(event) {
+            if (event.key === "Escape") {
+                closeFinishModal();
+                return;
+            }
+
+            if (event.key === "Enter") {
+                const finishMask = document.getElementById("game-finish-mask");
+                if (finishMask.classList.contains("show")) {
+                    event.preventDefault();
+                    resetRoomGame();
+                    return;
+                }
+            }
+
+            handleMoveKeyboardSelect(event);
+        }
+
         function setRoomMessage(text, type = "info") {
             const el = document.getElementById("room-message");
             el.textContent = text;
@@ -1132,44 +1620,57 @@
         }
 
         function renderRoom(room) {
-            latestRoom = room;
+            try {
+                latestRoom = room;
 
-            document.getElementById("room-id").textContent = room.room_id;
-            applyRoomStatusBadge(room.status);
-            document.getElementById("p1-name").textContent = room.p1_name || "暂无";
-            document.getElementById("p2-name").textContent = room.p2_name || "暂无";
+                document.getElementById("room-id").textContent = room.room_id;
+                applyRoomStatusBadge(room.status);
+                document.getElementById("p1-name").textContent = room.p1_name || "暂无";
+                document.getElementById("p2-name").textContent = room.p2_name || "暂无";
 
-            applySeatVisibility();
-            applySeatHighlights();
+                applySeatVisibility();
+                applySeatHighlights();
 
-            document.getElementById("pending-p1").textContent = room.pending_p1_move || "暂无";
-            document.getElementById("pending-p2").textContent = room.pending_p2_move || "暂无";
-            applyPendingHighlights(room);
+                document.getElementById("pending-p1").textContent = room.pending_p1_move || "暂无";
+                document.getElementById("pending-p2").textContent = room.pending_p2_move || "暂无";
+                applyPendingHighlights(room);
 
-            renderSpectatorBanner();
-            renderStatusSummary(room);
-            renderInvitePanel();
-            setSettlingMask(room.pending_p1_move && room.pending_p2_move && room.status === "playing");
-            renderResetHint(room);
+                const mySeatTextEl = document.getElementById("my-seat-text");
+                if (mySeatTextEl) {
+                    mySeatTextEl.textContent = getSeatLabel(mySeat);
+                }
 
-            document.getElementById("p1-state").innerHTML = renderPlayerState(room.game.p1);
-            document.getElementById("p2-state").innerHTML = renderPlayerState(room.game.p2);
+                renderSpectatorBanner();
+                renderStatusSummary(room);
+                renderTurnAlert(room);
+                renderRoundResultBanner(room);
+                renderInvitePanel();
+                setSettlingMask(room.pending_p1_move && room.pending_p2_move && room.status === "playing");
+                renderResetHint(room);
+                renderFinishModal(room);
 
-            renderMoveGroups(
-                "p1-move-groups",
-                mySeat === "p1" ? (room.game.legal_moves?.p1 || []) : [],
-                room.game.move_catalog || [],
-                "p1"
-            );
+                document.getElementById("p1-state").innerHTML = renderPlayerState(room.game.p1);
+                document.getElementById("p2-state").innerHTML = renderPlayerState(room.game.p2);
 
-            renderMoveGroups(
-                "p2-move-groups",
-                mySeat === "p2" ? (room.game.legal_moves?.p2 || []) : [],
-                room.game.move_catalog || [],
-                "p2"
-            );
+                renderMoveGroups(
+                    "p1-move-groups",
+                    mySeat === "p1" ? (room.game.legal_moves?.p1 || []) : [],
+                    room.game.move_catalog || [],
+                    "p1"
+                );
 
-            renderHistory(room.game.history || []);
+                renderMoveGroups(
+                    "p2-move-groups",
+                    mySeat === "p2" ? (room.game.legal_moves?.p2 || []) : [],
+                    room.game.move_catalog || [],
+                    "p2"
+                );
+
+                renderHistory(room.game.history || []);
+            } catch (error) {
+                console.error("renderRoom error:", error, room);
+                setRoomMessage("房间页面渲染失败：" + error, "error");
+            }
         }
 
         async function fetchRoomState() {
@@ -1229,7 +1730,7 @@
                 if (data.resolved) {
                     setRoomMessage(data.message || "本回合已结算。", "success");
                 } else {
-                    setRoomMessage(data.message || "已提交动作，等待另一方。", "waiting");
+                    setRoomMessage(data.message || "你已提交动作，当前操作已锁定，正在等待对方。", "waiting");
                 }
 
                 const msgEl = document.getElementById(`${seat}-submit-msg`);
@@ -1283,6 +1784,20 @@
         document.getElementById("copy-room-id-btn").addEventListener("click", copyRoomId);
         document.getElementById("copy-room-link-btn").addEventListener("click", copyRoomLink);
 
+        const finishResetBtn = document.getElementById("finish-reset-btn");
+        if (finishResetBtn) {
+            finishResetBtn.addEventListener("click", resetRoomGame);
+        }
+
+        const finishBackBtn = document.getElementById("finish-back-btn");
+        if (finishBackBtn) {
+            finishBackBtn.addEventListener("click", () => {
+                window.location.href = "/rooms";
+            });
+        }
+
+        document.addEventListener("keydown", handleGlobalKeyboard);
+
         applySeatVisibility();
         applySeatHighlights();
         renderInvitePanel();
@@ -1297,6 +1812,20 @@
             <div class="spinner"></div>
             <div style="font-size: 18px; font-weight: bold; margin-bottom: 6px;">正在结算</div>
             <div class="muted">双方动作已提交，正在同步本回合结果……</div>
+        </div>
+    </div>
+
+    <div class="game-finish-mask" id="game-finish-mask">
+        <div class="game-finish-card">
+            <div class="game-finish-title" id="game-finish-title">对局结束</div>
+            <div class="game-finish-subtitle" id="game-finish-subtitle">
+                本局已经结束。
+            </div>
+            <div class="result-chip-row" id="game-finish-chip-row"></div>
+            <div class="game-finish-actions">
+                <button type="button" id="finish-reset-btn">再来一局</button>
+                <button type="button" id="finish-back-btn">返回大厅</button>
+            </div>
         </div>
     </div>
 
