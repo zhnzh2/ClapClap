@@ -541,7 +541,7 @@
             }
 
             .resource-grid {
-                grid-template-columns: repeat(2, minmax(0, 1fr));
+                grid-template-columns: repeat(4, minmax(0, 1fr));
             }
         }
 
@@ -551,7 +551,7 @@
             }
         }
 
-        .round-result-banner {
+        .round-result-section {
             display: none;
             margin-bottom: 18px;
             padding: 14px 16px;
@@ -560,7 +560,7 @@
             background: linear-gradient(to right, #eff6ff, #f8fbff);
         }
 
-        .round-result-banner.show {
+        .round-result-section.show {
             display: block;
         }
 
@@ -698,20 +698,136 @@
             min-width: 120px;
         }
 
+        .player-list-compact {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .player-row-full {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 12px 14px;
+        }
+
+        .player-row-title {
+            font-size: 15px;
+            font-weight: bold;
+            margin-bottom: 8px;
+            color: var(--text);
+        }
+
+        .player-row-grid {
+            display: grid;
+            grid-template-columns: repeat(7, minmax(0, 1fr));
+            gap: 8px;
+        }
+
+        .compact-resource-grid {
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+        }
+
+        .settings-mask {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.34);
+            z-index: 1002;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .settings-mask.show {
+            display: flex;
+        }
+
+        .settings-card {
+            width: min(460px, calc(100vw - 32px));
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: 22px;
+            box-shadow: 0 24px 60px rgba(15, 23, 42, 0.20);
+            padding: 22px 20px;
+        }
+
+        .settings-title {
+            font-size: 22px;
+            font-weight: bold;
+            margin-bottom: 12px;
+            color: var(--text);
+        }
+
+        .settings-group {
+            margin-bottom: 14px;
+            padding: 12px;
+            border-radius: 14px;
+            background: var(--panel);
+            border: 1px solid var(--border);
+        }
+
+        .settings-group-title {
+            font-size: 14px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: var(--text);
+        }
+
+        .settings-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            padding: 8px 0;
+        }
+
+        .settings-item label {
+            font-size: 14px;
+            color: var(--text);
+        }
+
+        .settings-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .settings-select {
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 8px 10px;
+            font-size: 14px;
+            background: white;
+        }
+
+        @media (max-width: 980px) {
+            .player-row-grid {
+                grid-template-columns: repeat(4, minmax(0, 1fr));
+            }
+        }
+
+        @media (max-width: 640px) {
+            .player-row-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+
     </style>
 </head>
 <body>
     <div class="container">
         <div class="top-row">
             <h1>房间对战</h1>
-            <div class="top-actions">
-                <a class="btn secondary" href="/rooms">返回房间大厅</a>
-                <button class="danger" id="reset-room-btn">重置对局</button>
-            </div>
+                <div class="top-actions">
+                    <button class="secondary" id="open-settings-btn" type="button">设置</button>
+                    <a class="btn secondary" href="/rooms">返回房间大厅</a>
+                    <button class="danger" id="reset-room-btn">重置对局</button>
+                </div>
         </div>
 
         <div class="card">
-            <div class="section-block">
+            <div class="section-block" id="room-info-section">
                 <div class="section-title">房间信息</div>
                 <div class="info-row-compact">
                     <div class="info-box compact">
@@ -743,7 +859,7 @@
                 你当前没有有效座位身份，已按观战模式进入：可以查看状态与历史，但不能提交动作或重置对局。
             </div>
 
-            <div class="section-block">
+            <div class="section-block" id="room-status-section">
                 <div class="section-title">房间状态</div>
                 <div id="turn-alert" class="turn-alert"></div>
 
@@ -767,7 +883,7 @@
                 </div>
             </div>
 
-            <div class="section-block">
+            <div class="section-block" id="invite-section">
                 <div class="section-title">邀请好友</div>
                 <div class="invite-panel">
                     <div class="section-note">
@@ -786,27 +902,43 @@
 
         <div class="card">
             <h2>当前对局状态</h2>
-            <div class="player-grid">
-                <div class="player-box" id="p1-player-box">
-                    <h3>P1 状态</h3>
-                    <div id="p1-state" class="resource-grid"></div>
-                    <div class="section-note" id="p1-seat-note"></div>
+                <div id="player-state-mode-full" style="display: none;">
+                    <div class="player-list-compact">
+                        <div class="player-row-full" id="p1-row-full">
+                            <div class="player-row-title">P1 状态</div>
+                            <div class="player-row-grid" id="p1-state-full"></div>
+                            <div class="section-note" id="p1-seat-note"></div>
+                        </div>
+
+                        <div class="player-row-full" id="p2-row-full">
+                            <div class="player-row-title">P2 状态</div>
+                            <div class="player-row-grid" id="p2-state-full"></div>
+                            <div class="section-note" id="p2-seat-note"></div>
+                        </div>
+                    </div>
                 </div>
-                <div class="player-box" id="p2-player-box">
-                    <h3>P2 状态</h3>
-                    <div id="p2-state" class="resource-grid"></div>
-                    <div class="section-note" id="p2-seat-note"></div>
+
+                <div id="player-state-mode-compact">
+                    <div class="player-grid">
+                        <div class="player-box" id="p1-player-box">
+                            <h3>P1 状态</h3>
+                            <div id="p1-state-compact" class="resource-grid compact-resource-grid"></div>
+                        </div>
+                        <div class="player-box" id="p2-player-box">
+                            <h3>P2 状态</h3>
+                            <div id="p2-state-compact" class="resource-grid compact-resource-grid"></div>
+                        </div>
+                    </div>
                 </div>
-            </div>
         </div>
 
-            <div class="round-result-banner" id="round-result-banner">
+            <div class="round-result-section" id="round-result-section">
                 <div class="round-result-title" id="round-result-title">本回合结果</div>
                 <div class="round-result-body" id="round-result-body">加载中</div>
                 <div class="result-chip-row" id="round-result-chips"></div>
             </div>
 
-        <div class="card">
+        <div class="card" id="player-state-section">
             <h2>提交动作</h2>
             <div class="selection-grid">
                 <div class="selection-box" id="p1-submit-box">
@@ -890,6 +1022,16 @@
         let lastRenderedRoundCount = -1;
 
         const socket = io();
+
+        const DEFAULT_ROOM_UI_SETTINGS = {
+            showRoomInfo: true,
+            showRoomStatus: false,
+            showInvite: false,
+            showRoundResult: false,
+            playerStateMode: "compact"
+        };
+
+        let roomUiSettings = { ...DEFAULT_ROOM_UI_SETTINGS };
 
         socket.on("connect", () => {
             socket.emit("join_room", { room_id: roomId });
@@ -979,6 +1121,87 @@
 
         function normalizeMoveName(moveName) {
             return String(moveName || "").trim().toLowerCase();
+        }
+
+        function getRoomSettingsStorageKey() {
+            return `clapclap_room_ui_settings_${roomId}`;
+        }
+
+        function loadRoomUiSettings() {
+            try {
+                const raw = localStorage.getItem(getRoomSettingsStorageKey());
+                if (!raw) {
+                    roomUiSettings = { ...DEFAULT_ROOM_UI_SETTINGS };
+                    return;
+                }
+
+                const parsed = JSON.parse(raw);
+                roomUiSettings = {
+                    ...DEFAULT_ROOM_UI_SETTINGS,
+                    ...parsed
+                };
+            } catch (error) {
+                console.error("loadRoomUiSettings error:", error);
+                roomUiSettings = { ...DEFAULT_ROOM_UI_SETTINGS };
+            }
+        }
+
+        function saveRoomUiSettings() {
+            localStorage.setItem(
+                getRoomSettingsStorageKey(),
+                JSON.stringify(roomUiSettings)
+            );
+        }
+
+        function syncSettingsControls() {
+            document.getElementById("toggle-room-info").checked = !!roomUiSettings.showRoomInfo;
+            document.getElementById("toggle-room-status").checked = !!roomUiSettings.showRoomStatus;
+            document.getElementById("toggle-invite-section").checked = !!roomUiSettings.showInvite;
+            document.getElementById("toggle-round-result").checked = !!roomUiSettings.showRoundResult;
+            document.getElementById("player-state-mode-select").value = roomUiSettings.playerStateMode || "compact";
+        }
+
+        function applyRoomUiSettings() {
+            const roomInfoSection = document.getElementById("room-info-section");
+            const roomStatusSection = document.getElementById("room-status-section");
+            const inviteSection = document.getElementById("invite-section");
+            const roundResultSection = document.getElementById("round-result-section");
+            const playerStateModeFull = document.getElementById("player-state-mode-full");
+            const playerStateModeCompact = document.getElementById("player-state-mode-compact");
+
+            if (roomInfoSection) {
+                roomInfoSection.style.display = roomUiSettings.showRoomInfo ? "" : "none";
+            }
+
+            if (roomStatusSection) {
+                roomStatusSection.style.display = roomUiSettings.showRoomStatus ? "" : "none";
+            }
+
+            if (inviteSection) {
+                inviteSection.style.display = roomUiSettings.showInvite ? "" : "none";
+            }
+
+            if (roundResultSection) {
+                roundResultSection.style.display = roomUiSettings.showRoundResult ? "" : "none";
+            }
+
+            if (playerStateModeFull && playerStateModeCompact) {
+                if (roomUiSettings.playerStateMode === "full") {
+                    playerStateModeFull.style.display = "";
+                    playerStateModeCompact.style.display = "none";
+                } else {
+                    playerStateModeFull.style.display = "none";
+                    playerStateModeCompact.style.display = "";
+                }
+            }
+        }
+
+        function openSettingsModal() {
+            document.getElementById("settings-mask").classList.add("show");
+        }
+
+        function closeSettingsModal() {
+            document.getElementById("settings-mask").classList.remove("show");
         }
 
         function getMyPendingMove(room) {
@@ -1208,7 +1431,7 @@
         }
 
         function renderRoundResultBanner(room) {
-            const banner = document.getElementById("round-result-banner");
+            const banner = document.getElementById("round-result-section");
             const titleEl = document.getElementById("round-result-title");
             const bodyEl = document.getElementById("round-result-body");
             const chipsEl = document.getElementById("round-result-chips");
@@ -1356,22 +1579,28 @@
             const p2NameBox = document.getElementById("p2-name-box");
             const p1PlayerBox = document.getElementById("p1-player-box");
             const p2PlayerBox = document.getElementById("p2-player-box");
+            const p1RowFull = document.getElementById("p1-row-full");
+            const p2RowFull = document.getElementById("p2-row-full");
 
             p1NameBox.classList.remove("seat-p1");
             p2NameBox.classList.remove("seat-p2");
             p1PlayerBox.classList.remove("active-seat", "active-seat-p1");
             p2PlayerBox.classList.remove("active-seat", "active-seat-p2");
+            p1RowFull.classList.remove("seat-p1", "seat-p2");
+            p2RowFull.classList.remove("seat-p1", "seat-p2");
 
             if (mySeat === "p1") {
                 p1NameBox.classList.add("seat-p1");
                 p1PlayerBox.classList.add("active-seat", "active-seat-p1");
                 document.getElementById("p1-seat-note").textContent = "这是你当前操作的一侧。";
                 document.getElementById("p2-seat-note").textContent = "这是对方当前状态。";
+                p1RowFull.classList.add("seat-p1");
             } else if (mySeat === "p2") {
                 p2NameBox.classList.add("seat-p2");
                 p2PlayerBox.classList.add("active-seat", "active-seat-p2");
                 document.getElementById("p1-seat-note").textContent = "这是对方当前状态。";
                 document.getElementById("p2-seat-note").textContent = "这是你当前操作的一侧。";
+                p2RowFull.classList.add("seat-p2");
             } else {
                 document.getElementById("p1-seat-note").textContent = "当前为观战或未知身份。";
                 document.getElementById("p2-seat-note").textContent = "当前为观战或未知身份。";
@@ -1444,6 +1673,59 @@
                 ${resourceItem("镐", player.pickaxe)}
                 ${resourceItem("闪次数", player.flash_used)}
             `;
+        }
+
+        function renderPlayerStateFull(player) {
+            return `
+                ${resourceItem("生命", player.hp)}
+                ${resourceItem("气", player.qi)}
+                ${resourceItem("盾", player.shield)}
+                ${resourceItem("火种", player.spark)}
+                ${resourceItem("电池", player.battery)}
+                ${resourceItem("镐", player.pickaxe)}
+                ${resourceItem("闪次数", player.flash_used)}
+            `;
+        }
+
+        function renderPlayerStateCompact(player) {
+            return `
+                ${resourceItem("生命", player.hp)}
+                ${resourceItem("镐", player.pickaxe)}
+                ${resourceItem("气", player.qi)}
+                ${resourceItem("盾", player.shield)}
+            `;
+        }
+
+        function bindSettingsEvents() {
+            document.getElementById("toggle-room-info").addEventListener("change", (event) => {
+                roomUiSettings.showRoomInfo = event.target.checked;
+                saveRoomUiSettings();
+                applyRoomUiSettings();
+            });
+
+            document.getElementById("toggle-room-status").addEventListener("change", (event) => {
+                roomUiSettings.showRoomStatus = event.target.checked;
+                saveRoomUiSettings();
+                applyRoomUiSettings();
+            });
+
+            document.getElementById("toggle-invite-section").addEventListener("change", (event) => {
+                roomUiSettings.showInvite = event.target.checked;
+                saveRoomUiSettings();
+                applyRoomUiSettings();
+            });
+
+            document.getElementById("toggle-round-result").addEventListener("change", (event) => {
+                roomUiSettings.showRoundResult = event.target.checked;
+                saveRoomUiSettings();
+                applyRoomUiSettings();
+            });
+
+            document.getElementById("player-state-mode-select").addEventListener("change", (event) => {
+                roomUiSettings.playerStateMode = event.target.value;
+                saveRoomUiSettings();
+                applyRoomUiSettings();
+            });
         }
 
         function moveLabel(moveName, catalog) {
@@ -1649,8 +1931,11 @@
                 renderResetHint(room);
                 renderFinishModal(room);
 
-                document.getElementById("p1-state").innerHTML = renderPlayerState(room.game.p1);
-                document.getElementById("p2-state").innerHTML = renderPlayerState(room.game.p2);
+                document.getElementById("p1-state-full").innerHTML = renderPlayerStateFull(room.game.p1);
+                document.getElementById("p2-state-full").innerHTML = renderPlayerStateFull(room.game.p2);
+
+                document.getElementById("p1-state-compact").innerHTML = renderPlayerStateCompact(room.game.p1);
+                document.getElementById("p2-state-compact").innerHTML = renderPlayerStateCompact(room.game.p2);
 
                 renderMoveGroups(
                     "p1-move-groups",
@@ -1779,32 +2064,68 @@
             }
         }
 
-        document.getElementById("reset-room-btn").addEventListener("click", resetRoomGame);
+        window.addEventListener("load", () => {
+            const resetRoomBtn = document.getElementById("reset-room-btn");
+            if (resetRoomBtn) {
+                resetRoomBtn.addEventListener("click", resetRoomGame);
+            }
 
-        document.getElementById("copy-room-id-btn").addEventListener("click", copyRoomId);
-        document.getElementById("copy-room-link-btn").addEventListener("click", copyRoomLink);
+            const openSettingsBtn = document.getElementById("open-settings-btn");
+            if (openSettingsBtn) {
+                openSettingsBtn.addEventListener("click", openSettingsModal);
+            }
 
-        const finishResetBtn = document.getElementById("finish-reset-btn");
-        if (finishResetBtn) {
-            finishResetBtn.addEventListener("click", resetRoomGame);
-        }
+            const closeSettingsBtn = document.getElementById("close-settings-btn");
+            if (closeSettingsBtn) {
+                closeSettingsBtn.addEventListener("click", closeSettingsModal);
+            }
 
-        const finishBackBtn = document.getElementById("finish-back-btn");
-        if (finishBackBtn) {
-            finishBackBtn.addEventListener("click", () => {
-                window.location.href = "/rooms";
-            });
-        }
+            const settingsMask = document.getElementById("settings-mask");
+            if (settingsMask) {
+                settingsMask.addEventListener("click", (event) => {
+                    if (event.target.id === "settings-mask") {
+                        closeSettingsModal();
+                    }
+                });
+            }
 
-        document.addEventListener("keydown", handleGlobalKeyboard);
+            const copyRoomIdBtn = document.getElementById("copy-room-id-btn");
+            if (copyRoomIdBtn) {
+                copyRoomIdBtn.addEventListener("click", copyRoomId);
+            }
 
-        applySeatVisibility();
-        applySeatHighlights();
-        renderInvitePanel();
-        renderSpectatorBanner();
-        setRoomMessage("正在连接房间并同步状态……", "info");
-        fetchRoomState();
-        setInterval(fetchRoomState, 15000);
+            const copyRoomLinkBtn = document.getElementById("copy-room-link-btn");
+            if (copyRoomLinkBtn) {
+                copyRoomLinkBtn.addEventListener("click", copyRoomLink);
+            }
+
+            const finishResetBtn = document.getElementById("finish-reset-btn");
+            if (finishResetBtn) {
+                finishResetBtn.addEventListener("click", resetRoomGame);
+            }
+
+            const finishBackBtn = document.getElementById("finish-back-btn");
+            if (finishBackBtn) {
+                finishBackBtn.addEventListener("click", () => {
+                    window.location.href = "/rooms";
+                });
+            }
+
+            document.addEventListener("keydown", handleGlobalKeyboard);
+
+            loadRoomUiSettings();
+            syncSettingsControls();
+            bindSettingsEvents();
+            applyRoomUiSettings();
+
+            applySeatVisibility();
+            applySeatHighlights();
+            renderInvitePanel();
+            renderSpectatorBanner();
+            setRoomMessage("正在连接房间并同步状态……", "info");
+            fetchRoomState();
+            setInterval(fetchRoomState, 15000);
+        });
     </script>
 
     <div class="settling-mask" id="settling-mask">
@@ -1825,6 +2146,52 @@
             <div class="game-finish-actions">
                 <button type="button" id="finish-reset-btn">再来一局</button>
                 <button type="button" id="finish-back-btn">返回大厅</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="settings-mask" id="settings-mask">
+        <div class="settings-card">
+            <div class="settings-title">房间设置</div>
+
+            <div class="settings-group">
+                <div class="settings-group-title">界面显示</div>
+
+                <div class="settings-item">
+                    <label for="toggle-room-info">显示房间信息</label>
+                    <input type="checkbox" id="toggle-room-info" checked />
+                </div>
+
+                <div class="settings-item">
+                    <label for="toggle-room-status">显示房间状态</label>
+                    <input type="checkbox" id="toggle-room-status" />
+                </div>
+
+                <div class="settings-item">
+                    <label for="toggle-invite-section">显示邀请好友</label>
+                    <input type="checkbox" id="toggle-invite-section" />
+                </div>
+
+                <div class="settings-item">
+                    <label for="toggle-round-result">显示本回合结果</label>
+                    <input type="checkbox" id="toggle-round-result" />
+                </div>
+            </div>
+
+            <div class="settings-group">
+                <div class="settings-group-title">当前状态显示方式</div>
+
+                <div class="settings-item">
+                    <label for="player-state-mode-select">状态显示模式</label>
+                    <select id="player-state-mode-select" class="settings-select">
+                        <option value="compact" selected>精简模式（左右显示）</option>
+                        <option value="full">完整模式（每人一整行）</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="settings-actions">
+                <button type="button" class="secondary" id="close-settings-btn">关闭</button>
             </div>
         </div>
     </div>

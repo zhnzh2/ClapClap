@@ -238,6 +238,33 @@
             return token;
         }
 
+        async function readJsonSafely(res) {
+            const contentType = res.headers.get("content-type") || "";
+            const text = await res.text();
+
+            if (contentType.includes("application/json")) {
+                try {
+                    return {
+                        ok: true,
+                        data: JSON.parse(text),
+                        rawText: text
+                    };
+                } catch (error) {
+                    return {
+                        ok: false,
+                        error: `JSON 解析失败：${error}`,
+                        rawText: text
+                    };
+                }
+            }
+
+            return {
+                ok: false,
+                error: `服务端返回的不是 JSON，而是：${contentType || "未知类型"}`,
+                rawText: text
+            };
+        }
+
         function saveRoomIdentity(roomId, playerToken, seat) {
             localStorage.setItem(
                 `clapclap_room_${roomId}`,
@@ -330,7 +357,16 @@
                     })
                 });
 
-                const data = await res.json();
+                const parsed = await readJsonSafely(res);
+
+                if (!parsed.ok) {
+                    console.error("join /api/match/join 非 JSON 响应：", parsed.rawText);
+                    msg.textContent =
+                        `加入匹配失败：${parsed.error}；HTTP ${res.status}`;
+                    return;
+                }
+
+                const data = parsed.data;
 
                 if (!res.ok || !data.ok) {
                     msg.textContent = data.error || "加入匹配失败。";
@@ -379,7 +415,12 @@
 
             try {
                 const res = await fetch("/api/match/status");
-                const data = await res.json();
+                const parsed = await readJsonSafely(res);
+                if (!parsed.ok) {
+                    // 按各自函数场景处理
+                    return;
+                }
+                const data = parsed.data;
 
                 if (!res.ok || !data.ok) {
                     document.getElementById("queue-status").textContent = "匹配状态获取失败。";
@@ -410,7 +451,12 @@
                 const res = await fetch(
                     `/api/match/me?player_token=${encodeURIComponent(currentMatchToken)}`
                 );
-                const data = await res.json();
+                const parsed = await readJsonSafely(res);
+                if (!parsed.ok) {
+                    // 按各自函数场景处理
+                    return;
+                }
+                const data = parsed.data;
 
                 if (!res.ok || !data.ok) {
                     return;
@@ -461,7 +507,7 @@
         }
 
         async function cancelMyMatch() {
-            if (!currentPlayerToken) {
+            if (!currentMatchToken) {
                 return;
             }
 
@@ -472,11 +518,16 @@
                         "Content-Type": "application/json"
                     },
                     body: JSON.stringify({
-                        player_token: currentPlayerToken
+                        player_token: currentMatchToken
                     })
                 });
 
-                const data = await res.json();
+                const parsed = await readJsonSafely(res);
+                if (!parsed.ok) {
+                    // 按各自函数场景处理
+                    return;
+                }
+                const data = parsed.data;
 
                 if (!res.ok || !data.ok) {
                     document.getElementById("match-message").textContent =
@@ -508,9 +559,14 @@
 
             try {
                 const res = await fetch(
-                    `/api/match/result?player_token=${encodeURIComponent(currentPlayerToken)}`
+                    `/api/match/result?player_token=${encodeURIComponent(currentMatchToken)}`
                 );
-                const data = await res.json();
+                const parsed = await readJsonSafely(res);
+                if (!parsed.ok) {
+                    // 按各自函数场景处理
+                    return;
+                }
+                const data = parsed.data;
 
                 if (!res.ok || !data.ok) {
                     return;

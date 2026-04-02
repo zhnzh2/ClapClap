@@ -275,41 +275,50 @@ def api_room_reset(room_id: str):
 
 @app.post("/api/match/join")
 def api_match_join():
-    run_periodic_cleanup()
-    data = request.get_json(silent=True)
-    if data is None:
-        return jsonify({"ok": False, "error": "请求体必须是 JSON。"}), 400
+    try:
+        run_periodic_cleanup()
 
-    player_name = data.get("player_name")
-    player_token = data.get("player_token")
+        data = request.get_json(silent=True)
+        if data is None:
+            return jsonify({"ok": False, "error": "请求体必须是 JSON。"}), 400
 
-    if not isinstance(player_name, str) or not player_name.strip():
-        return jsonify({"ok": False, "error": "player_name 不能为空。"}), 400
+        player_name = data.get("player_name")
+        player_token = data.get("player_token")
 
-    if not isinstance(player_token, str) or not player_token.strip():
-        return jsonify({"ok": False, "error": "player_token 不能为空。"}), 400
+        if not isinstance(player_name, str) or not player_name.strip():
+            return jsonify({"ok": False, "error": "player_name 不能为空。"}), 400
 
-    result = enqueue_or_match(player_name.strip(), player_token.strip())
+        if not isinstance(player_token, str) or not player_token.strip():
+            return jsonify({"ok": False, "error": "player_token 不能为空。"}), 400
 
-    if result["matched"]:
+        result = enqueue_or_match(player_name.strip(), player_token.strip())
+
+        if result["matched"]:
+            return jsonify({
+                "ok": True,
+                "matched": True,
+                "message": "匹配成功，已进入房间。" if not result.get("already_in_room") else "你已经在房间中，正在返回。",
+                "room_id": result["room_id"],
+                "p1_name": result["p1_name"],
+                "p2_name": result["p2_name"],
+                "seat": result["seat"],
+                "room_player_token": result.get("room_player_token"),
+                "already_in_room": result.get("already_in_room", False),
+            })
+
         return jsonify({
             "ok": True,
-            "matched": True,
-            "message": "匹配成功，已进入房间。" if not result.get("already_in_room") else "你已经在房间中，正在返回。",
-            "room_id": result["room_id"],
-            "p1_name": result["p1_name"],
-            "p2_name": result["p2_name"],
-            "seat": result["seat"],
-            "room_player_token": result.get("room_player_token"),
-            "already_in_room": result.get("already_in_room", False),
+            "matched": False,
+            "message": "已进入匹配队列，等待另一位玩家。",
+            "waiting_player": result["waiting_player"],
         })
-
-    return jsonify({
-        "ok": True,
-        "matched": False,
-        "message": "已进入匹配队列，等待另一位玩家。",
-        "waiting_player": result["waiting_player"],
-    })
+    except Exception as exc:
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            "ok": False,
+            "error": f"匹配接口内部报错：{exc}",
+        }), 500
 
 @app.get("/api/match/status")
 def api_match_status():
