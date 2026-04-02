@@ -85,6 +85,17 @@ def load_all_rooms() -> dict[str, dict]:
         finally:
             conn.close()
 
+def delete_room(room_id: str) -> None:
+    with DB_LOCK:
+        conn = get_conn()
+        try:
+            conn.execute(
+                "DELETE FROM rooms WHERE room_id = ?",
+                (room_id,),
+            )
+            conn.commit()
+        finally:
+            conn.close()
 
 def save_kv(key: str, value: dict) -> None:
     with DB_LOCK:
@@ -114,5 +125,17 @@ def load_kv(key: str) -> dict | None:
             if row is None:
                 return None
             return json.loads(row["value_json"])
+        finally:
+            conn.close()
+
+def delete_kv(key: str) -> None:
+    with DB_LOCK:
+        conn = get_conn()
+        try:
+            conn.execute(
+                "DELETE FROM kv_store WHERE key = ?",
+                (key,),
+            )
+            conn.commit()
         finally:
             conn.close()

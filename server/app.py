@@ -13,6 +13,7 @@ from room_manager import (
     join_room as room_join_room,
     load_rooms_from_storage,
     get_room_runtime_lock,
+    cleanup_expired_rooms,
 )
 from state_api import get_game_state_payload, get_room_payload, parse_move_name
 from matchmaking import (
@@ -22,6 +23,7 @@ from matchmaking import (
     load_match_state,
     get_player_match_state,
     cancel_match,
+    cleanup_expired_match_state,
 )
 from storage import init_storage
 
@@ -33,6 +35,16 @@ load_rooms_from_storage()
 load_match_state()
 
 CURRENT_STATE = GameState()
+
+def run_periodic_cleanup() -> None:
+    deleted_rooms = cleanup_expired_rooms()
+    match_cleanup = cleanup_expired_match_state()
+
+    if deleted_rooms:
+        print("[cleanup] deleted rooms:", deleted_rooms)
+
+    if match_cleanup["removed_tokens"]:
+        print("[cleanup] cleaned match tokens:", match_cleanup["removed_tokens"])
 
 @app.get("/")
 def home():
@@ -115,6 +127,7 @@ def api_join_room(room_id: str):
 
 @app.get("/api/rooms/<room_id>")
 def api_get_room(room_id: str):
+    run_periodic_cleanup()
     room = get_room(room_id)
     if room is None:
         return jsonify({"ok": False, "error": "房间不存在。"}), 404
@@ -123,6 +136,8 @@ def api_get_room(room_id: str):
     requester_seat = None
     if player_token:
         requester_seat = room.get_seat_by_token(player_token.strip())
+        if requester_seat in ("p1", "p2"):
+            room.mark_seen(requester_seat)
 
     payload = get_room_payload(room)
     payload["requester_seat"] = requester_seat
@@ -161,6 +176,7 @@ def api_room_step(room_id: str):
                 "p2_token=", room.p2_token,
             )
             return jsonify({"ok": False, "error": "身份无效，不能提交动作。"}), 403
+        room.mark_seen(seat)
 
         if not isinstance(move_name, str):
             return jsonify({"ok": False, "error": "move_name 必须是字符串。"}), 400
@@ -222,8 +238,9 @@ def api_room_step(room_id: str):
         })
 
 @app.post("/api/rooms/<room_id>/reset")
-@app.post("/api/rooms/<room_id>/reset")
 def api_room_reset(room_id: str):
+    run_periodic_cleanup()
+
     room = get_room(room_id)
     if room is None:
         return jsonify({"ok": False, "error": "房间不存在。"}), 404
@@ -243,17 +260,22 @@ def api_room_reset(room_id: str):
         if seat not in ("p1", "p2"):
             return jsonify({"ok": False, "error": "身份无效，不能重置房间。"}), 403
 
-        room.reset_game()
+        room.mark_seen(seat)
+
+        did_reset, message = room.request_reset(seat)
+
         emit_room_state(room_id)
 
         return jsonify({
             "ok": True,
-            "message": "房间对局已重置。",
+            "did_reset": did_reset,
+            "message": message,
             "room": get_room_payload(room),
         })
 
 @app.post("/api/match/join")
 def api_match_join():
+    run_periodic_cleanup()
     data = request.get_json(silent=True)
     if data is None:
         return jsonify({"ok": False, "error": "请求体必须是 JSON。"}), 400
@@ -291,6 +313,7 @@ def api_match_join():
 
 @app.get("/api/match/status")
 def api_match_status():
+    run_periodic_cleanup()
     status = get_match_status()
     return jsonify({
         "ok": True,
@@ -299,6 +322,7 @@ def api_match_status():
 
 @app.get("/api/match/me")
 def api_match_me():
+    run_periodic_cleanup()
     player_token = request.args.get("player_token", type=str)
     if player_token is None or not player_token.strip():
         return jsonify({"ok": False, "error": "player_token 不能为空。"}), 400
@@ -312,6 +336,7 @@ def api_match_me():
 
 @app.post("/api/match/cancel")
 def api_match_cancel():
+    run_periodic_cleanup()
     data = request.get_json(silent=True)
     if data is None:
         return jsonify({"ok": False, "error": "请求体必须是 JSON。"}), 400

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 import random
 import string
 from threading import RLock
@@ -9,8 +9,7 @@ from uuid import uuid4
 import traceback
 
 from models import GameState
-from storage import load_all_rooms, save_room
-
+from storage import load_all_rooms, save_room, delete_room
 
 @dataclass
 class Room:
@@ -23,6 +22,9 @@ class Room:
     status: str = "waiting"
     pending_p1_move: str | None = None
     pending_p2_move: str | None = None
+    reset_requested_by: str | None = None
+    p1_last_seen_at: datetime | None = None
+    p2_last_seen_at: datetime | None = None
     created_at: datetime = field(default_factory=datetime.utcnow)
     updated_at: datetime = field(default_factory=datetime.utcnow)
 
@@ -37,6 +39,9 @@ class Room:
             "status": self.status,
             "pending_p1_move": self.pending_p1_move,
             "pending_p2_move": self.pending_p2_move,
+            "reset_requested_by": self.reset_requested_by,
+            "p1_last_seen_at": self.p1_last_seen_at.isoformat() if self.p1_last_seen_at else None,
+            "p2_last_seen_at": self.p2_last_seen_at.isoformat() if self.p2_last_seen_at else None,
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),
         }
@@ -52,6 +57,9 @@ class Room:
             status=data.get("status", "waiting"),
             pending_p1_move=data.get("pending_p1_move"),
             pending_p2_move=data.get("pending_p2_move"),
+            reset_requested_by=data.get("reset_requested_by"),
+            p1_last_seen_at=datetime.fromisoformat(data["p1_last_seen_at"]) if data.get("p1_last_seen_at") else None,
+            p2_last_seen_at=datetime.fromisoformat(data["p2_last_seen_at"]) if data.get("p2_last_seen_at") else None,
             created_at=datetime.fromisoformat(data["created_at"]),
             updated_at=datetime.fromisoformat(data["updated_at"]),
         )
@@ -65,6 +73,7 @@ class Room:
         if self.p1_name is None:
             self.p1_name = player_name
             self.p1_token = uuid4().hex
+            self.p1_last_seen_at = datetime.utcnow()
             self.updated_at = datetime.utcnow()
             if self.is_full():
                 self.status = "playing"
@@ -73,6 +82,7 @@ class Room:
         if self.p2_name is None:
             self.p2_name = player_name
             self.p2_token = uuid4().hex
+            self.p2_last_seen_at = datetime.utcnow()
             self.updated_at = datetime.utcnow()
             if self.is_full():
                 self.status = "playing"
@@ -87,10 +97,80 @@ class Room:
             return "p2"
         return None
 
+    def mark_seen(self, seat: str) -> None:
+        now = datetime.utcnow()
+
+        if seat == "p1":
+            self.p1_last_seen_at = now
+        elif seat == "p2":
+            self.p2_last_seen_at = now
+
+        self.updated_at = now
+        self.persist()
+
+    def is_seat_online(self, seat: str, *, ttl_seconds: int = 20) -> bool:
+        now = datetime.utcnow()
+
+        if seat == "p1":
+            last_seen = self.p1_last_seen_at
+        elif seat == "p2":
+            last_seen = self.p2_last_seen_at
+        else:
+            return False
+
+        if last_seen is None:
+            return False
+
+        return (now - last_seen).total_seconds() <= ttl_seconds
+
+    def get_online_status_payload(self) -> dict:
+        return {
+            "p1_online": self.is_seat_online("p1"),
+            "p2_online": self.is_seat_online("p2"),
+        }
+
+    def request_reset(self, seat: str) -> tuple[bool, str]:
+        if self.reset_requested_by is None:
+            self.reset_requested_by = seat
+            self.updated_at = datetime.utcnow()
+            self.persist()
+            return False, f"{seat} 已发起重置请求，等待另一方确认。"
+
+        if self.reset_requested_by == seat:
+            return False, "你已经发起过重置请求，正在等待另一方确认。"
+
+        self.state = GameState()
+        self.pending_p1_move = None
+        self.pending_p2_move = None
+        self.reset_requested_by = None
+        self.updated_at = datetime.utcnow()
+        self.status = "playing" if self.is_full() else "waiting"
+        self.persist()
+        return True, "双方已确认，房间对局已重置。"
+
+    def clear_reset_request(self) -> None:
+        self.reset_requested_by = None
+        self.updated_at = datetime.utcnow()
+        self.persist()
+
+    def is_expired(self, *, waiting_minutes: int = 180, finished_minutes: int = 360) -> bool:
+        now = datetime.utcnow()
+
+        if self.status == "finished":
+            return self.updated_at < now - timedelta(minutes=finished_minutes)
+
+        if self.status == "waiting":
+            return self.updated_at < now - timedelta(minutes=waiting_minutes)
+
+        no_one_online = (not self.is_seat_online("p1", ttl_seconds=120)) and (not self.is_seat_online("p2", ttl_seconds=120))
+        very_old = self.updated_at < now - timedelta(hours=12)
+        return no_one_online and very_old
+
     def reset_game(self) -> None:
         self.state = GameState()
         self.pending_p1_move = None
         self.pending_p2_move = None
+        self.reset_requested_by = None
         self.updated_at = datetime.utcnow()
         self.status = "playing" if self.is_full() else "waiting"
         self.persist()
@@ -103,6 +183,7 @@ class Room:
         else:
             raise ValueError("未知座位。")
 
+        self.reset_requested_by = None
         self.updated_at = datetime.utcnow()
         self.persist()
 
@@ -159,6 +240,27 @@ def get_room_runtime_lock(room_id: str) -> RLock:
         if room_id not in ROOM_RUNTIME_LOCKS:
             ROOM_RUNTIME_LOCKS[room_id] = RLock()
         return ROOM_RUNTIME_LOCKS[room_id]
+    
+def cleanup_expired_rooms() -> list[str]:
+    deleted_room_ids: list[str] = []
+
+    with ROOMS_LOCK:
+        room_ids = list(ROOMS.keys())
+
+        for room_id in room_ids:
+            room = ROOMS.get(room_id)
+            if room is None:
+                continue
+
+            if not room.is_expired():
+                continue
+
+            ROOMS.pop(room_id, None)
+            ROOM_RUNTIME_LOCKS.pop(room_id, None)
+            delete_room(room_id)
+            deleted_room_ids.append(room_id)
+
+    return deleted_room_ids
 
 def join_room(room_id: str, player_name: str) -> tuple[Room, str, str]:
     with ROOMS_LOCK:

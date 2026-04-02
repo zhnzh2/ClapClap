@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from threading import RLock
 from typing import Optional
 import traceback
 
 from room_manager import create_room, join_room
-from storage import load_kv, save_kv
+from storage import load_kv, save_kv, delete_kv
 
 @dataclass
 class WaitingPlayer:
@@ -80,6 +80,7 @@ def set_player_match_state(
         "room_id": room_id,
         "seat": seat,
         "room_player_token": room_player_token,
+        "updated_at": datetime.utcnow().isoformat(),
     }
 
 def enqueue_or_match(player_name: str, player_token: str) -> dict:
@@ -178,7 +179,26 @@ def get_player_match_state(player_token: str) -> dict:
                 "room_id": None,
                 "seat": None,
                 "room_player_token": None,
+                "opponent_name": None,
             }
+
+        opponent_name = None
+        if state.get("status") == "matched" and state.get("room_id") and state.get("seat"):
+            room_id = state.get("room_id")
+            my_seat = state.get("seat")
+
+            for other_token, other_state in PLAYER_MATCH_STATE.items():
+                if other_token == player_token:
+                    continue
+                if other_state.get("status") != "matched":
+                    continue
+                if other_state.get("room_id") != room_id:
+                    continue
+                if other_state.get("seat") == my_seat:
+                    continue
+
+                opponent_name = other_state.get("player_name")
+                break
 
         return {
             "status": state["status"],
@@ -186,6 +206,7 @@ def get_player_match_state(player_token: str) -> dict:
             "room_id": state.get("room_id"),
             "seat": state.get("seat"),
             "room_player_token": state.get("room_player_token"),
+            "opponent_name": opponent_name,
         }
     
 def cancel_match(player_token: str) -> dict:
@@ -224,6 +245,69 @@ def cancel_match(player_token: str) -> dict:
             "message": "已退出匹配队列。",
         }
     
+def cleanup_expired_match_state(
+    *,
+    queued_minutes: int = 30,
+    matched_hours: int = 12,
+) -> dict:
+    global MATCH_WAITING
+
+    now = datetime.utcnow()
+    removed_tokens: list[str] = []
+
+    with MATCH_LOCK:
+        if MATCH_WAITING is not None:
+            if MATCH_WAITING.joined_at < now - timedelta(minutes=queued_minutes):
+                waiting_token = MATCH_WAITING.player_token
+                MATCH_WAITING = None
+
+                state = PLAYER_MATCH_STATE.get(waiting_token)
+                if state is not None:
+                    PLAYER_MATCH_STATE[waiting_token] = {
+                        "status": "idle",
+                        "player_name": state.get("player_name"),
+                        "room_id": None,
+                        "seat": None,
+                        "room_player_token": None,
+                    }
+                    removed_tokens.append(waiting_token)
+
+        to_delete: list[str] = []
+
+        for player_token, state in PLAYER_MATCH_STATE.items():
+            if state.get("status") == "idle":
+                continue
+
+            if state.get("status") == "queued":
+                continue
+
+            room_id = state.get("room_id")
+            if not room_id:
+                to_delete.append(player_token)
+                continue
+
+            created_at_str = state.get("updated_at")
+            if created_at_str:
+                try:
+                    updated_at = datetime.fromisoformat(created_at_str)
+                    if updated_at < now - timedelta(hours=matched_hours):
+                        to_delete.append(player_token)
+                except Exception:
+                    to_delete.append(player_token)
+
+        for player_token in to_delete:
+            PLAYER_MATCH_STATE.pop(player_token, None)
+            removed_tokens.append(player_token)
+
+        if MATCH_WAITING is None and not PLAYER_MATCH_STATE:
+            delete_kv("match_state")
+        else:
+            persist_match_state()
+
+    return {
+        "removed_tokens": removed_tokens,
+    }
+
 def get_match_status() -> dict:
     with MATCH_LOCK:
         if MATCH_WAITING is None:

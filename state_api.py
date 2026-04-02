@@ -72,4 +72,6 @@ def get_room_payload(room) -> dict:
         "pending_p1_move": room.pending_p1_move,
         "pending_p2_move": room.pending_p2_move,
         "game": get_game_state_payload(room.state, include_history=True),
+        "reset_requested_by": room.reset_requested_by,
+        "online_status": room.get_online_status_payload(),
     }

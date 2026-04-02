@@ -95,6 +95,89 @@
         .muted {
             color: #6b7280;
         }
+
+        .match-success-mask {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.30);
+            z-index: 999;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .match-success-mask.show {
+            display: flex;
+        }
+
+        .match-success-card {
+            width: min(420px, calc(100vw - 32px));
+            background: white;
+            border-radius: 22px;
+            padding: 28px 24px;
+            border: 1px solid #dbe2ea;
+            box-shadow: 0 24px 60px rgba(15, 23, 42, 0.20);
+            text-align: center;
+            animation: pop-in 0.28s ease;
+        }
+
+        .match-success-icon {
+            width: 68px;
+            height: 68px;
+            margin: 0 auto 14px;
+            border-radius: 999px;
+            background: linear-gradient(135deg, #dbeafe, #dcfce7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 30px;
+        }
+
+        .match-success-title {
+            font-size: 24px;
+            font-weight: bold;
+            color: #111827;
+            margin-bottom: 8px;
+        }
+
+        .match-success-subtitle {
+            color: #4b5563;
+            line-height: 1.7;
+            margin-bottom: 14px;
+        }
+
+        .match-success-meta {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 12px;
+        }
+
+        .match-meta-chip {
+            padding: 6px 10px;
+            border-radius: 999px;
+            background: #f3f4f6;
+            color: #374151;
+            font-size: 13px;
+            font-weight: bold;
+        }
+
+        .match-success-countdown {
+            color: #2563eb;
+            font-weight: bold;
+        }
+
+        @keyframes pop-in {
+            from {
+                opacity: 0;
+                transform: scale(0.94) translateY(8px);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1) translateY(0);
+            }
+        }
     </style>
 </head>
 <body>
@@ -186,6 +269,44 @@
             window.location.href = `/room/${matchedRoomId}`;
         }
 
+        function showMatchedTransition(opponentName, seat) {
+            document.getElementById("matched-opponent-chip").textContent =
+                `对手：${opponentName || "已匹配玩家"}`;
+            document.getElementById("matched-seat-chip").textContent =
+                `座位：${(seat || "").toUpperCase()}`;
+            document.getElementById("match-success-subtitle").textContent =
+                "已完成匹配，正在同步房间身份、恢复座位并连接对局……";
+            document.getElementById("match-success-countdown").textContent =
+                "1 秒后自动进入房间……";
+            document.getElementById("match-success-mask").classList.add("show");
+        }
+
+        function hideMatchedTransition() {
+            document.getElementById("match-success-mask").classList.remove("show");
+        }
+
+        function getOpponentNameFromMatchedData(data) {
+            if (data.seat === "p1") {
+                return data.p2_name || "";
+            }
+            if (data.seat === "p2") {
+                return data.p1_name || "";
+            }
+            return "";
+        }
+
+        function getOpponentNameFromState(state) {
+            return state.opponent_name || "";
+        }
+
+        function delayedGoToMatchedRoom(opponentName, seat) {
+            showMatchedTransition(opponentName, seat);
+
+            window.setTimeout(() => {
+                goToMatchedRoom();
+            }, 1000);
+        }
+
         async function joinMatchQueue() {
             const playerName = document.getElementById("player-name").value.trim();
             const msg = document.getElementById("match-message");
@@ -227,11 +348,15 @@
                     }
 
                     saveRoomIdentity(data.room_id, currentRoomPlayerToken, currentSeat);
-                    msg.textContent = data.message || "匹配成功，正在跳转房间……";
-                    selfStatus.textContent = "你已经匹配成功，可以直接进入房间。";
+
+                    const opponentName = getOpponentNameFromMatchedData(data);
+
+                    msg.textContent = data.message || "匹配成功，正在进入房间……";
+                    selfStatus.textContent = "你已匹配成功，正在准备进入房间。";
                     setQueuedUi(false);
                     setResumeUi(true);
-                    goToMatchedRoom();
+
+                    delayedGoToMatchedRoom(opponentName, currentSeat);
                     return;
                 }
 
@@ -315,7 +440,7 @@
                     setQueuedUi(false);
                     setResumeUi(true);
 
-                    goToMatchedRoom();
+                    delayedGoToMatchedRoom(getOpponentNameFromState(state), state.seat);
                     return;
                 }
 
@@ -429,5 +554,23 @@
             syncMyMatchState();
         }, 3000);
     </script>
+
+    <div class="match-success-mask" id="match-success-mask">
+        <div class="match-success-card">
+            <div class="match-success-icon">✓</div>
+            <div class="match-success-title">匹配成功</div>
+            <div class="match-success-subtitle" id="match-success-subtitle">
+                正在为你连接房间……
+            </div>
+            <div class="match-success-meta">
+                <span class="match-meta-chip" id="matched-opponent-chip">对手：加载中</span>
+                <span class="match-meta-chip" id="matched-seat-chip">座位：加载中</span>
+            </div>
+            <div class="match-success-countdown" id="match-success-countdown">
+                1 秒后自动进入房间……
+            </div>
+        </div>
+    </div>
+
 </body>
 </html>

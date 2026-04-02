@@ -322,6 +322,137 @@
             font-weight: bold;
         }
 
+        .status-panel {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 12px;
+            margin-bottom: 18px;
+        }
+
+        .status-item {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 12px 14px;
+        }
+
+        .status-item .title {
+            font-size: 12px;
+            color: var(--muted);
+            margin-bottom: 6px;
+        }
+
+        .status-item .content {
+            font-size: 15px;
+            font-weight: bold;
+            color: var(--text);
+        }
+
+        .online-dot {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 999px;
+            margin-right: 6px;
+            vertical-align: middle;
+        }
+
+        .online-dot.online {
+            background: var(--green);
+            box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.15);
+        }
+
+        .online-dot.offline {
+            background: #9ca3af;
+            box-shadow: 0 0 0 3px rgba(156, 163, 175, 0.16);
+        }
+
+        .invite-panel {
+            margin-top: 18px;
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 14px;
+        }
+
+        .invite-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .invite-preview {
+            margin-top: 10px;
+            padding: 10px 12px;
+            border-radius: 10px;
+            background: white;
+            border: 1px solid var(--border);
+            color: var(--text);
+            font-size: 14px;
+            word-break: break-all;
+        }
+
+        .spectator-banner {
+            margin-bottom: 18px;
+            padding: 12px 14px;
+            border-radius: 14px;
+            border: 1px solid var(--yellow-border);
+            background: var(--yellow-soft);
+            color: #92400e;
+            font-weight: bold;
+        }
+
+        .settling-mask {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.22);
+            z-index: 999;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .settling-mask.show {
+            display: flex;
+        }
+
+        .settling-card {
+            background: white;
+            border-radius: 18px;
+            padding: 22px 26px;
+            box-shadow: 0 20px 50px rgba(15, 23, 42, 0.18);
+            border: 1px solid var(--border);
+            text-align: center;
+            min-width: 240px;
+        }
+
+        .spinner {
+            width: 26px;
+            height: 26px;
+            border-radius: 999px;
+            border: 3px solid #dbeafe;
+            border-top-color: var(--blue);
+            margin: 0 auto 12px;
+            animation: spin 0.9s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .subtle-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: bold;
+            background: #eef2ff;
+            color: #4338ca;
+        }
+
         .section-note {
             margin-top: 8px;
             font-size: 13px;
@@ -398,7 +529,44 @@
                     <div class="value" id="p2-name">加载中</div>
                 </div>
             </div>
+
+            <div id="spectator-banner" class="spectator-banner" style="display: none;">
+                你当前没有有效座位身份，已按观战模式进入：可以查看状态与历史，但不能提交动作或重置对局。
+            </div>
+
+            <div class="status-panel">
+                <div class="status-item">
+                    <div class="title">我的当前状态</div>
+                    <div class="content" id="self-phase-text">加载中</div>
+                </div>
+                <div class="status-item">
+                    <div class="title">对方状态</div>
+                    <div class="content" id="opponent-phase-text">加载中</div>
+                </div>
+                <div class="status-item">
+                    <div class="title">对方在线情况</div>
+                    <div class="content" id="opponent-online-text">加载中</div>
+                </div>
+                <div class="status-item">
+                    <div class="title">本回合状态</div>
+                    <div class="content" id="round-phase-text">加载中</div>
+                </div>
+            </div>
         </div>
+
+            <div class="invite-panel">
+                <div class="label">邀请好友</div>
+                <div class="section-note">
+                    可以复制房间号或邀请链接。邀请链接会自动使用当前访问域名，正式上线后会自动兼容正式域名。
+                </div>
+
+                <div class="invite-actions">
+                    <button type="button" id="copy-room-id-btn">复制房间号</button>
+                    <button type="button" id="copy-room-link-btn">复制邀请链接</button>
+                </div>
+
+                <div class="invite-preview" id="invite-link-preview">加载中</div>
+            </div>
 
         <div class="card">
             <h2>当前对局状态</h2>
@@ -536,6 +704,222 @@
             return status || "未知";
         }
 
+        function getInviteLink() {
+            return `${window.location.origin}/room/${roomId}`;
+        }
+
+        function getSeatLabel(seat) {
+            if (seat === "p1") return "P1";
+            if (seat === "p2") return "P2";
+            return "观战";
+        }
+
+        function getOpponentSeat() {
+            if (mySeat === "p1") return "p2";
+            if (mySeat === "p2") return "p1";
+            return null;
+        }
+
+        function isSpectatorMode() {
+            return mySeat !== "p1" && mySeat !== "p2";
+        }
+
+        function phaseTextForSelf(room) {
+            if (isSpectatorMode()) {
+                return "当前为观战中";
+            }
+
+            if (room.status === "waiting") {
+                if (!room.p1_name || !room.p2_name) {
+                    return "等待另一位玩家进入";
+                }
+                return "已就绪，等待开始";
+            }
+
+            if (room.status === "finished") {
+                return "本局已结束";
+            }
+
+            const myPending = mySeat === "p1" ? room.pending_p1_move : room.pending_p2_move;
+            const opponentPending = mySeat === "p1" ? room.pending_p2_move : room.pending_p1_move;
+
+            if (myPending && opponentPending) {
+                return "正在结算";
+            }
+
+            if (myPending && !opponentPending) {
+                return "已选择动作，等待对方";
+            }
+
+            if (!myPending && opponentPending) {
+                return "正在等待你选择";
+            }
+
+            return "正在等待你选择";
+        }
+
+        function phaseTextForOpponent(room) {
+            const opponentSeat = getOpponentSeat();
+
+            if (isSpectatorMode()) {
+                if (!room.p1_name && !room.p2_name) {
+                    return "房间暂无玩家";
+                }
+                if (room.p1_name && room.p2_name) {
+                    if (room.pending_p1_move && room.pending_p2_move) {
+                        return "双方都已选择动作";
+                    }
+                    if (room.pending_p1_move || room.pending_p2_move) {
+                        return "其中一方已选择动作";
+                    }
+                    return "双方正在等待选择";
+                }
+                return "等待另一位玩家进入";
+            }
+
+            if (!opponentSeat) {
+                return "未知";
+            }
+
+            const opponentPending = opponentSeat === "p1" ? room.pending_p1_move : room.pending_p2_move;
+
+            if (room.status === "waiting") {
+                return room[`${opponentSeat}_name`] ? "对方已进入房间" : "对方尚未进入房间";
+            }
+
+            if (room.status === "finished") {
+                return "本局已结束";
+            }
+
+            if (room.pending_p1_move && room.pending_p2_move) {
+                return "对方已选择动作";
+            }
+
+            if (opponentPending) {
+                return "对方已选择动作";
+            }
+
+            return "对方正在选择动作";
+        }
+
+        function roundPhaseText(room) {
+            if (room.status === "waiting") {
+                return "准备阶段";
+            }
+
+            if (room.status === "finished") {
+                return "本回合已结束";
+            }
+
+            if (room.pending_p1_move && room.pending_p2_move) {
+                return "正在结算";
+            }
+
+            if (room.pending_p1_move || room.pending_p2_move) {
+                return "等待另一方选择";
+            }
+
+            return "等待双方选择";
+        }
+
+        function opponentOnlineText(room) {
+            const onlineStatus = room.online_status || {};
+            const opponentSeat = getOpponentSeat();
+
+            if (isSpectatorMode()) {
+                const p1Online = !!onlineStatus.p1_online;
+                const p2Online = !!onlineStatus.p2_online;
+
+                if (p1Online && p2Online) {
+                    return "两位玩家在线";
+                }
+                if (p1Online || p2Online) {
+                    return "仅有一位玩家在线";
+                }
+
+                const joinedCount = (room.p1_name ? 1 : 0) + (room.p2_name ? 1 : 0);
+                if (joinedCount === 2) {
+                    return "两位玩家均已进入，但当前离线";
+                }
+                if (joinedCount === 1) {
+                    return "仅有一位玩家进入";
+                }
+                return "房间暂无玩家";
+            }
+
+            if (!opponentSeat) {
+                return "未知";
+            }
+
+            const opponentJoined = !!room[`${opponentSeat}_name`];
+            const opponentOnline = opponentSeat === "p1"
+                ? !!onlineStatus.p1_online
+                : !!onlineStatus.p2_online;
+
+            if (!opponentJoined) {
+                return "未进入房间";
+            }
+
+            if (opponentOnline) {
+                return "在线";
+            }
+
+            return "离线";
+        }
+
+        function renderInvitePanel() {
+            const inviteLink = getInviteLink();
+            document.getElementById("invite-link-preview").textContent = inviteLink;
+        }
+
+        function renderStatusSummary(room) {
+            document.getElementById("self-phase-text").textContent = phaseTextForSelf(room);
+            document.getElementById("opponent-phase-text").textContent = phaseTextForOpponent(room);
+            document.getElementById("round-phase-text").textContent = roundPhaseText(room);
+
+            const opponentText = opponentOnlineText(room);
+            const opponentOnlineEl = document.getElementById("opponent-online-text");
+
+            if (opponentText === "在线" || opponentText.includes("两位玩家在线")) {
+                opponentOnlineEl.innerHTML = `<span class="online-dot online"></span>${opponentText}`;
+            } else if (opponentText === "离线" || opponentText.includes("离线")) {
+                opponentOnlineEl.innerHTML = `<span class="online-dot offline"></span>${opponentText}`;
+            } else {
+                opponentOnlineEl.textContent = opponentText;
+            }
+        }
+
+        function renderResetHint(room) {
+            if (!room.reset_requested_by) {
+                return;
+            }
+
+            if (isSpectatorMode()) {
+                setRoomMessage(`${room.reset_requested_by.toUpperCase()} 已发起重置请求，等待另一方确认。`, "waiting");
+                return;
+            }
+
+            if (room.reset_requested_by === mySeat) {
+                setRoomMessage("你已发起重置请求，等待对方确认。", "waiting");
+            } else {
+                setRoomMessage("对方已发起重置请求；你再点击一次“重置对局”即可确认。", "waiting");
+            }
+        }
+
+        function renderSpectatorBanner() {
+            const banner = document.getElementById("spectator-banner");
+            banner.style.display = isSpectatorMode() ? "" : "none";
+        }
+
+        function setSettlingMask(show) {
+            const mask = document.getElementById("settling-mask");
+            if (show) {
+                mask.classList.add("show");
+            } else {
+                mask.classList.remove("show");
+            }
+        }
+
         function applyRoomStatusBadge(status) {
             const el = document.getElementById("room-status");
             el.textContent = roomStatusText(status);
@@ -594,21 +978,25 @@
         }
 
         function applySeatVisibility() {
-            const p1Box = document.getElementById("p1-submit-box");
-            const p2Box = document.getElementById("p2-submit-box");
+            const actionSection = document.getElementById("action-section");
+            const resetBtn = document.getElementById("reset-room-btn");
 
-            if (mySeat === "p1") {
-                p1Box.style.display = "";
-                p2Box.style.display = "none";
-            } else if (mySeat === "p2") {
-                p1Box.style.display = "none";
-                p2Box.style.display = "";
-            } else {
-                p1Box.style.display = "";
-                p2Box.style.display = "";
+            if (mySeat === "p1" || mySeat === "p2") {
+                if (actionSection) {
+                    actionSection.style.display = "";
+                }
+                if (resetBtn) {
+                    resetBtn.disabled = false;
+                }
+                return;
             }
 
-            document.getElementById("my-seat").textContent = seatDisplayText(mySeat);
+            if (actionSection) {
+                actionSection.style.display = "none";
+            }
+            if (resetBtn) {
+                resetBtn.disabled = true;
+            }
         }
 
         function moveCategoryTitle(key) {
@@ -720,6 +1108,23 @@
             }
         }
 
+        async function copyTextWithFeedback(text, successText) {
+            try {
+                await navigator.clipboard.writeText(text);
+                setRoomMessage(successText, "success");
+            } catch (error) {
+                setRoomMessage("复制失败，请手动复制。", "error");
+            }
+        }
+
+        async function copyRoomId() {
+            await copyTextWithFeedback(roomId, "房间号已复制。");
+        }
+
+        async function copyRoomLink() {
+            await copyTextWithFeedback(getInviteLink(), "邀请链接已复制。");
+        }
+
         function setRoomMessage(text, type = "info") {
             const el = document.getElementById("room-message");
             el.textContent = text;
@@ -740,6 +1145,12 @@
             document.getElementById("pending-p1").textContent = room.pending_p1_move || "暂无";
             document.getElementById("pending-p2").textContent = room.pending_p2_move || "暂无";
             applyPendingHighlights(room);
+
+            renderSpectatorBanner();
+            renderStatusSummary(room);
+            renderInvitePanel();
+            setSettlingMask(room.pending_p1_move && room.pending_p2_move && room.status === "playing");
+            renderResetHint(room);
 
             document.getElementById("p1-state").innerHTML = renderPlayerState(room.game.p1);
             document.getElementById("p2-state").innerHTML = renderPlayerState(room.game.p2);
@@ -788,6 +1199,11 @@
         }
 
         async function submitMove(seat, moveName) {
+            if (isSpectatorMode()) {
+                setRoomMessage("观战模式下不能提交动作。", "error");
+                return;
+            }
+
             try {
                 console.log("submitMove:", seat, moveName, myPlayerToken);
                 const res = await fetch(`/api/rooms/${roomId}/step`, {
@@ -824,6 +1240,11 @@
         }
 
         async function resetRoomGame() {
+            if (isSpectatorMode()) {
+                setRoomMessage("观战模式下不能重置对局。", "error");
+                return;
+            }
+
             try {
                 const res = await fetch(`/api/rooms/${roomId}/reset`, {
                     method: "POST",
@@ -843,7 +1264,12 @@
                 }
 
                 renderRoom(data.room);
-                setRoomMessage(data.message || "房间对局已重置。", "success");
+
+                if (data.did_reset) {
+                    setRoomMessage(data.message || "双方已确认，房间对局已重置。", "success");
+                } else {
+                    setRoomMessage(data.message || "已发起重置请求，等待另一方确认。", "waiting");
+                }
 
                 document.getElementById("p1-submit-msg").textContent = "";
                 document.getElementById("p2-submit-msg").textContent = "";
@@ -854,11 +1280,25 @@
 
         document.getElementById("reset-room-btn").addEventListener("click", resetRoomGame);
 
+        document.getElementById("copy-room-id-btn").addEventListener("click", copyRoomId);
+        document.getElementById("copy-room-link-btn").addEventListener("click", copyRoomLink);
+
         applySeatVisibility();
         applySeatHighlights();
+        renderInvitePanel();
+        renderSpectatorBanner();
         setRoomMessage("正在连接房间并同步状态……", "info");
         fetchRoomState();
         setInterval(fetchRoomState, 15000);
     </script>
+
+    <div class="settling-mask" id="settling-mask">
+        <div class="settling-card">
+            <div class="spinner"></div>
+            <div style="font-size: 18px; font-weight: bold; margin-bottom: 6px;">正在结算</div>
+            <div class="muted">双方动作已提交，正在同步本回合结果……</div>
+        </div>
+    </div>
+
 </body>
 </html>
