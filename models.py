@@ -52,14 +52,16 @@ class PlayerState:
         }
     
     @classmethod
-    def from_dict(cls, data: dict) -> "GameState":
-        state = cls()
-        state.round_num = data["round_num"]
-        state.winner = data["winner"]
-        state.p1 = PlayerState.from_dict(data["p1"])
-        state.p2 = PlayerState.from_dict(data["p2"])
-        state.history = [RoundLog.from_dict(item) for item in data.get("history", [])]
-        return state
+    def from_dict(cls, data: dict) -> "PlayerState":
+        return cls(
+            hp=data["hp"],
+            qi=data["qi"],
+            shield=data["shield"],
+            spark=data["spark"],
+            battery=data["battery"],
+            pickaxe=data["pickaxe"],
+            flash_used=data["flash_used"],
+        )
 
 @dataclass
 class RoundLog:
@@ -172,13 +174,26 @@ class GameState:
         return data
     
     @classmethod
-    def from_dict(cls, data: dict) -> "PlayerState":
-        return cls(
-            hp=data["hp"],
-            qi=data["qi"],
-            shield=data["shield"],
-            spark=data["spark"],
-            battery=data["battery"],
-            pickaxe=data["pickaxe"],
-            flash_used=data["flash_used"],
-        )
+    def from_dict(cls, data: dict) -> "GameState":
+        state = cls()
+        state.round_num = data.get("round_num", 1)
+        state.winner = data.get("winner")
+
+        p1_data = data.get("p1", {})
+        p2_data = data.get("p2", {})
+
+        if not isinstance(p1_data, dict):
+            p1_data = {}
+        if not isinstance(p2_data, dict):
+            p2_data = {}
+
+        state.p1 = PlayerState.from_dict(p1_data)
+        state.p2 = PlayerState.from_dict(p2_data)
+
+        raw_history = data.get("history", [])
+        if isinstance(raw_history, list):
+            state.history = [RoundLog.from_dict(item) for item in raw_history]
+        else:
+            state.history = []
+
+        return state

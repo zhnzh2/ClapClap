@@ -110,6 +110,8 @@
 
             <input id="player-name" type="text" placeholder="输入你的昵称" />
             <button id="join-match-btn">开始匹配</button>
+            <button id="cancel-match-btn" style="display: none; margin-left: 8px; background: #ef4444;">取消匹配</button>
+            <button id="resume-room-btn" style="display: none; margin-left: 8px; background: #16a34a;">回到房间</button>
 
             <div class="message" id="match-message"></div>
 
@@ -125,7 +127,9 @@
         let joinedQueue = false;
         let matchedRoomId = null;
         let currentPlayerName = "";
-        let currentPlayerToken = "";
+        let currentMatchToken = "";
+        let currentRoomPlayerToken = "";
+        let currentSeat = null;
 
         function ensureMatchIdentity(playerName) {
             const raw = localStorage.getItem("clapclap_match_identity");
@@ -161,6 +165,27 @@
             );
         }
 
+        function setJoiningUi(isJoining) {
+            document.getElementById("join-match-btn").disabled = isJoining;
+        }
+
+        function setQueuedUi(isQueued) {
+            document.getElementById("cancel-match-btn").style.display = isQueued ? "" : "none";
+        }
+
+        function setResumeUi(showResume) {
+            document.getElementById("resume-room-btn").style.display = showResume ? "" : "none";
+        }
+
+        function goToMatchedRoom() {
+            if (!matchedRoomId || !currentSeat || !currentRoomPlayerToken) {
+                return;
+            }
+
+            saveRoomIdentity(matchedRoomId, currentRoomPlayerToken, currentSeat);
+            window.location.href = `/room/${matchedRoomId}`;
+        }
+
         async function joinMatchQueue() {
             const playerName = document.getElementById("player-name").value.trim();
             const msg = document.getElementById("match-message");
@@ -170,7 +195,7 @@
                 msg.textContent = "请先输入昵称。";
                 return;
             }
-            currentPlayerToken = ensureMatchIdentity(playerName);
+            currentMatchToken = ensureMatchIdentity(playerName);
 
             try {
                 const res = await fetch("/api/match/join", {
@@ -180,7 +205,7 @@
                     },
                     body: JSON.stringify({
                         player_name: playerName,
-                        player_token: currentPlayerToken
+                        player_token: currentMatchToken
                     })
                 });
 
@@ -193,15 +218,30 @@
 
                 if (data.matched) {
                     matchedRoomId = data.room_id;
-                    saveRoomIdentity(data.room_id, data.player_token, data.seat);
-                    msg.textContent = "匹配成功，正在跳转房间……";
-                    window.location.href = `/room/${data.room_id}`;
+                    currentSeat = data.seat;
+                    currentRoomPlayerToken = data.room_player_token || "";
+
+                    if (!currentRoomPlayerToken) {
+                        msg.textContent = "匹配成功，但服务端没有返回 room_player_token。";
+                        return;
+                    }
+
+                    saveRoomIdentity(data.room_id, currentRoomPlayerToken, currentSeat);
+                    msg.textContent = data.message || "匹配成功，正在跳转房间……";
+                    selfStatus.textContent = "你已经匹配成功，可以直接进入房间。";
+                    setQueuedUi(false);
+                    setResumeUi(true);
+                    goToMatchedRoom();
                     return;
                 }
 
                 joinedQueue = true;
-                msg.textContent = data.message || "已进入匹配队列。";
+                msg.textContent = data.already_queued
+                    ? "你已经在匹配队列中，请等待另一位玩家。"
+                    : (data.message || "已进入匹配队列。");
                 selfStatus.textContent = "你已在匹配队列中，正在等待另一位玩家。";
+                setQueuedUi(true);
+                setResumeUi(false);
             } catch (error) {
                 msg.textContent = "加入匹配失败：" + error;
             }
@@ -236,6 +276,106 @@
             }
         }
 
+        async function syncMyMatchState() {
+            if (!currentMatchToken) {
+                return;
+            }
+
+            try {
+                const res = await fetch(
+                    `/api/match/me?player_token=${encodeURIComponent(currentMatchToken)}`
+                );
+                const data = await res.json();
+
+                if (!res.ok || !data.ok) {
+                    return;
+                }
+
+                const state = data.state;
+
+                if (state.status === "matched" && state.room_id && state.seat) {
+                    joinedQueue = false;
+                    matchedRoomId = state.room_id;
+                    currentSeat = state.seat;
+                    currentRoomPlayerToken = state.room_player_token || "";
+
+                    if (!currentRoomPlayerToken) {
+                        document.getElementById("match-message").textContent =
+                            "你已匹配到房间，但缺少 room_player_token，暂时无法恢复。";
+                        return;
+                    }
+
+                    saveRoomIdentity(state.room_id, currentRoomPlayerToken, state.seat);
+
+                    document.getElementById("match-message").textContent =
+                        "你已经匹配到房间，正在为你恢复对局入口……";
+                    document.getElementById("self-status").textContent =
+                        `你已匹配成功，座位为 ${state.seat.toUpperCase()}。`;
+
+                    setQueuedUi(false);
+                    setResumeUi(true);
+
+                    goToMatchedRoom();
+                    return;
+                }
+
+                if (state.status === "queued") {
+                    joinedQueue = true;
+                    document.getElementById("self-status").textContent =
+                        "你已在匹配队列中，正在等待另一位玩家。";
+                    setQueuedUi(true);
+                    setResumeUi(false);
+                    return;
+                }
+
+                joinedQueue = false;
+                setQueuedUi(false);
+            } catch (error) {
+                console.error("syncMyMatchState error:", error);
+            }
+        }
+
+        async function cancelMyMatch() {
+            if (!currentPlayerToken) {
+                return;
+            }
+
+            try {
+                const res = await fetch("/api/match/cancel", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        player_token: currentPlayerToken
+                    })
+                });
+
+                const data = await res.json();
+
+                if (!res.ok || !data.ok) {
+                    document.getElementById("match-message").textContent =
+                        data.error || "取消匹配失败。";
+                    return;
+                }
+
+                joinedQueue = false;
+                matchedRoomId = null;
+                currentSeat = null;
+
+                document.getElementById("match-message").textContent =
+                    data.message || "已取消匹配。";
+                document.getElementById("self-status").textContent =
+                    "你当前尚未加入匹配队列。";
+
+                setQueuedUi(false);
+                setResumeUi(false);
+            } catch (error) {
+                document.getElementById("match-message").textContent =
+                    "取消匹配失败：" + error;
+            }
+        }
+
         async function fetchMyMatchResult() {
             if (!joinedQueue || matchedRoomId || !currentPlayerName) {
                 return;
@@ -264,13 +404,29 @@
         }
 
         document.getElementById("join-match-btn").addEventListener("click", joinMatchQueue);
+        document.getElementById("cancel-match-btn").addEventListener("click", cancelMyMatch);
+        document.getElementById("resume-room-btn").addEventListener("click", goToMatchedRoom);
+
+        const savedIdentityRaw = localStorage.getItem("clapclap_match_identity");
+        if (savedIdentityRaw) {
+            try {
+                const savedIdentity = JSON.parse(savedIdentityRaw);
+                currentPlayerName = savedIdentity.player_name || "";
+                currentMatchToken = savedIdentity.player_token || "";
+                if (currentPlayerName) {
+                    document.getElementById("player-name").value = currentPlayerName;
+                }
+            } catch (error) {
+                console.error(error);
+            }
+        }
 
         fetchMatchStatus();
-        fetchMyMatchResult();
+        syncMyMatchState();
 
         setInterval(() => {
             fetchMatchStatus();
-            fetchMyMatchResult();
+            syncMyMatchState();
         }, 3000);
     </script>
 </body>

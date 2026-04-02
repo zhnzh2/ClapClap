@@ -457,6 +457,8 @@
 
         function loadRoomIdentity(roomId) {
             const raw = localStorage.getItem(`clapclap_room_${roomId}`);
+            console.log("loadRoomIdentity raw =", roomId, raw);
+
             if (!raw) {
                 return {
                     player_token: "",
@@ -466,11 +468,14 @@
 
             try {
                 const parsed = JSON.parse(raw);
+                console.log("loadRoomIdentity parsed =", parsed);
+
                 return {
                     player_token: parsed.player_token || "",
                     seat: parsed.seat || null
                 };
             } catch (error) {
+                console.error("loadRoomIdentity parse error:", error);
                 return {
                     player_token: "",
                     seat: null
@@ -481,6 +486,14 @@
         const roomIdentity = loadRoomIdentity(roomId);
         let mySeat = roomIdentity.seat;
         let myPlayerToken = roomIdentity.player_token;
+
+        console.log("roomId =", roomId);
+        console.log("mySeat =", mySeat);
+        console.log("myPlayerToken =", myPlayerToken);
+
+        if (!myPlayerToken) {
+            console.warn("当前没有找到本地房间身份，后续将按观战/未知身份处理。");
+        }
 
         let latestRoom = null;
         const socket = io();
@@ -750,6 +763,10 @@
 
         async function fetchRoomState() {
             try {
+                if (!myPlayerToken) {
+                    setRoomMessage("当前未检测到本地房间身份，可能只能以观战或未知身份进入。", "waiting");
+                }
+                console.log("fetchRoomState player_token =", myPlayerToken);
                 const res = await fetch(
                     `/api/rooms/${roomId}?player_token=${encodeURIComponent(myPlayerToken)}`
                 );
@@ -772,6 +789,7 @@
 
         async function submitMove(seat, moveName) {
             try {
+                console.log("submitMove:", seat, moveName, myPlayerToken);
                 const res = await fetch(`/api/rooms/${roomId}/step`, {
                     method: "POST",
                     headers: {

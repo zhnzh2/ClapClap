@@ -7,9 +7,22 @@ from game import GameEngine
 
 from flask import redirect, url_for
 from flask_socketio import SocketIO, join_room as socket_join_room, emit
-from room_manager import create_room, get_room, join_room as room_join_room, load_rooms_from_storage
+from room_manager import (
+    create_room,
+    get_room,
+    join_room as room_join_room,
+    load_rooms_from_storage,
+    get_room_runtime_lock,
+)
 from state_api import get_game_state_payload, get_room_payload, parse_move_name
-from matchmaking import enqueue_or_match, get_match_status, pop_player_match_result, load_match_state
+from matchmaking import (
+    enqueue_or_match,
+    get_match_status,
+    pop_player_match_result,
+    load_match_state,
+    get_player_match_state,
+    cancel_match,
+)
 from storage import init_storage
 
 app = Flask(__name__)
@@ -125,78 +138,88 @@ def api_room_step(room_id: str):
     if room is None:
         return jsonify({"ok": False, "error": "房间不存在。"}), 404
 
-    data = request.get_json(silent=True)
-    if data is None:
-        return jsonify({"ok": False, "error": "请求体必须是 JSON。"}), 400
+    room_lock = get_room_runtime_lock(room_id)
 
-    player_token = data.get("player_token")
-    move_name = data.get("move_name")
+    with room_lock:
+        data = request.get_json(silent=True)
+        if data is None:
+            return jsonify({"ok": False, "error": "请求体必须是 JSON。"}), 400
 
-    if not isinstance(player_token, str) or not player_token.strip():
-        return jsonify({"ok": False, "error": "player_token 不能为空。"}), 400
+        player_token = data.get("player_token")
+        move_name = data.get("move_name")
 
-    seat = room.get_seat_by_token(player_token.strip())
-    if seat not in ("p1", "p2"):
-        return jsonify({"ok": False, "error": "身份无效，不能提交动作。"}), 403
+        if not isinstance(player_token, str) or not player_token.strip():
+            return jsonify({"ok": False, "error": "player_token 不能为空。"}), 400
 
-    if not isinstance(move_name, str):
-        return jsonify({"ok": False, "error": "move_name 必须是字符串。"}), 400
+        seat = room.get_seat_by_token(player_token.strip())
+        if seat not in ("p1", "p2"):
+            print(
+                "[api_room_step] 身份校验失败:",
+                "room_id=", room_id,
+                "player_token=", player_token,
+                "p1_token=", room.p1_token,
+                "p2_token=", room.p2_token,
+            )
+            return jsonify({"ok": False, "error": "身份无效，不能提交动作。"}), 403
 
-    try:
-        move = parse_move_name(move_name)
-    except ValueError as exc:
-        return jsonify({"ok": False, "error": str(exc)}), 400
+        if not isinstance(move_name, str):
+            return jsonify({"ok": False, "error": "move_name 必须是字符串。"}), 400
 
-    if room.status == "finished":
-        return jsonify({"ok": False, "error": "当前对局已结束。"}), 400
+        if room.status == "finished":
+            return jsonify({"ok": False, "error": "当前对局已结束。"}), 400
 
-    if not room.is_full():
-        return jsonify({"ok": False, "error": "房间人数未满，暂不能开始。"}), 400
+        if not room.is_full():
+            return jsonify({"ok": False, "error": "房间人数未满，暂不能开始。"}), 400
 
-    if seat == "p1" and room.pending_p1_move is not None:
-        return jsonify({"ok": False, "error": "你本回合已经提交过动作。"}), 400
+        if seat == "p1" and room.pending_p1_move is not None:
+            return jsonify({"ok": False, "error": "你本回合已经提交过动作。"}), 400
 
-    if seat == "p2" and room.pending_p2_move is not None:
-        return jsonify({"ok": False, "error": "你本回合已经提交过动作。"}), 400
+        if seat == "p2" and room.pending_p2_move is not None:
+            return jsonify({"ok": False, "error": "你本回合已经提交过动作。"}), 400
 
-    player = room.state.p1 if seat == "p1" else room.state.p2
-    if not GameEngine.can_afford(player, move):
-        return jsonify({"ok": False, "error": "当前动作不合法或资源不足。"}), 400
+        try:
+            move = parse_move_name(move_name)
+        except ValueError as exc:
+            return jsonify({"ok": False, "error": str(exc)}), 400
 
-    room.submit_move(seat, move_name)
+        player = room.state.p1 if seat == "p1" else room.state.p2
+        if not GameEngine.can_afford(player, move):
+            return jsonify({"ok": False, "error": "当前动作不合法或资源不足。"}), 400
 
-    both_ready = room.pending_p1_move is not None and room.pending_p2_move is not None
+        room.submit_move(seat, move_name)
 
-    if both_ready:
-        p1_move = parse_move_name(room.pending_p1_move)
-        p2_move = parse_move_name(room.pending_p2_move)
+        both_ready = room.pending_p1_move is not None and room.pending_p2_move is not None
 
-        GameEngine.resolve_round(room.state, p1_move, p2_move)
-        room.clear_pending_moves()
+        if both_ready:
+            p1_move = parse_move_name(room.pending_p1_move)
+            p2_move = parse_move_name(room.pending_p2_move)
 
-        if room.state.winner is not None:
-            room.status = "finished"
-        else:
-            room.status = "playing"
-        room.persist()
+            GameEngine.resolve_round(room.state, p1_move, p2_move)
+            room.clear_pending_moves()
+
+            if room.state.winner is not None:
+                room.status = "finished"
+            else:
+                room.status = "playing"
+
+            room.persist()
+            emit_room_state(room_id)
+
+            return jsonify({
+                "ok": True,
+                "message": "双方都已提交，本回合已结算。",
+                "resolved": True,
+                "room": get_room_payload(room),
+            })
 
         emit_room_state(room_id)
 
         return jsonify({
             "ok": True,
-            "message": "双方都已提交，本回合已结算。",
-            "resolved": True,
+            "message": f"{seat} 已提交动作，等待另一方。",
+            "resolved": False,
             "room": get_room_payload(room),
         })
-
-    emit_room_state(room_id)
-
-    return jsonify({
-        "ok": True,
-        "message": f"{seat} 已提交动作，等待另一方。",
-        "resolved": False,
-        "room": get_room_payload(room),
-    })
 
 @app.post("/api/rooms/<room_id>/reset")
 @app.post("/api/rooms/<room_id>/reset")
@@ -205,26 +228,29 @@ def api_room_reset(room_id: str):
     if room is None:
         return jsonify({"ok": False, "error": "房间不存在。"}), 404
 
-    data = request.get_json(silent=True)
-    if data is None:
-        return jsonify({"ok": False, "error": "请求体必须是 JSON。"}), 400
+    room_lock = get_room_runtime_lock(room_id)
 
-    player_token = data.get("player_token")
-    if not isinstance(player_token, str) or not player_token.strip():
-        return jsonify({"ok": False, "error": "player_token 不能为空。"}), 400
+    with room_lock:
+        data = request.get_json(silent=True)
+        if data is None:
+            return jsonify({"ok": False, "error": "请求体必须是 JSON。"}), 400
 
-    seat = room.get_seat_by_token(player_token.strip())
-    if seat not in ("p1", "p2"):
-        return jsonify({"ok": False, "error": "身份无效，不能重置房间。"}), 403
+        player_token = data.get("player_token")
+        if not isinstance(player_token, str) or not player_token.strip():
+            return jsonify({"ok": False, "error": "player_token 不能为空。"}), 400
 
-    room.reset_game()
-    emit_room_state(room_id)
+        seat = room.get_seat_by_token(player_token.strip())
+        if seat not in ("p1", "p2"):
+            return jsonify({"ok": False, "error": "身份无效，不能重置房间。"}), 403
 
-    return jsonify({
-        "ok": True,
-        "message": "房间对局已重置。",
-        "room": get_room_payload(room),
-    })
+        room.reset_game()
+        emit_room_state(room_id)
+
+        return jsonify({
+            "ok": True,
+            "message": "房间对局已重置。",
+            "room": get_room_payload(room),
+        })
 
 @app.post("/api/match/join")
 def api_match_join():
@@ -247,12 +273,13 @@ def api_match_join():
         return jsonify({
             "ok": True,
             "matched": True,
-            "message": "匹配成功，已进入房间。",
+            "message": "匹配成功，已进入房间。" if not result.get("already_in_room") else "你已经在房间中，正在返回。",
             "room_id": result["room_id"],
             "p1_name": result["p1_name"],
             "p2_name": result["p2_name"],
             "seat": result["seat"],
-            "player_token": result["player_token"],
+            "room_player_token": result.get("room_player_token"),
+            "already_in_room": result.get("already_in_room", False),
         })
 
     return jsonify({
@@ -270,6 +297,32 @@ def api_match_status():
         "status": status,
     })
 
+@app.get("/api/match/me")
+def api_match_me():
+    player_token = request.args.get("player_token", type=str)
+    if player_token is None or not player_token.strip():
+        return jsonify({"ok": False, "error": "player_token 不能为空。"}), 400
+
+    state = get_player_match_state(player_token.strip())
+
+    return jsonify({
+        "ok": True,
+        "state": state,
+    })
+
+@app.post("/api/match/cancel")
+def api_match_cancel():
+    data = request.get_json(silent=True)
+    if data is None:
+        return jsonify({"ok": False, "error": "请求体必须是 JSON。"}), 400
+
+    player_token = data.get("player_token")
+    if not isinstance(player_token, str) or not player_token.strip():
+        return jsonify({"ok": False, "error": "player_token 不能为空。"}), 400
+
+    result = cancel_match(player_token.strip())
+    return jsonify(result)
+
 @app.get("/api/match/result")
 def api_match_result():
     player_token = request.args.get("player_token", type=str)
@@ -283,7 +336,7 @@ def api_match_result():
         "matched": result["matched"],
         "room_id": result["room_id"],
         "seat": result["seat"],
-        "player_token": result["player_token"],
+        "room_player_token": result["room_player_token"],
     })
 
 @app.get("/favicon.ico")

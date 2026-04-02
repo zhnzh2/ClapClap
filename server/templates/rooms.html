@@ -140,6 +140,8 @@
                     seat: seat
                 })
             );
+
+            console.log("saveRoomIdentity:", roomId, playerToken, seat);
         }
 
         function saveMatchIdentity(playerName, playerToken) {
@@ -180,7 +182,14 @@
                 }
 
                 msg.textContent = `房间创建成功，房间号：${data.room.room_id}`;
+
+                if (!data.player_token) {
+                    msg.textContent = "创建房间失败：服务端没有返回 player_token。";
+                    return;
+                }
+
                 saveRoomIdentity(data.room.room_id, data.player_token, data.seat);
+                console.log("创建房间后 localStorage =", localStorage.getItem(`clapclap_room_${data.room.room_id}`));
                 window.location.href = `/room/${data.room.room_id}`;
             } catch (error) {
                 msg.textContent = "创建房间失败：" + error;

@@ -6,6 +6,7 @@ import random
 import string
 from threading import RLock
 from uuid import uuid4
+import traceback
 
 from models import GameState
 from storage import load_all_rooms, save_room
@@ -116,13 +117,21 @@ class Room:
 
 ROOMS: dict[str, Room] = {}
 ROOMS_LOCK = RLock()
+ROOM_RUNTIME_LOCKS: dict[str, RLock] = {}
 
 def load_rooms_from_storage() -> None:
     persisted = load_all_rooms()
     with ROOMS_LOCK:
         ROOMS.clear()
+        ROOM_RUNTIME_LOCKS.clear()
+
         for room_id, room_data in persisted.items():
-            ROOMS[room_id] = Room.from_dict(room_data)
+            try:
+                ROOMS[room_id] = Room.from_dict(room_data)
+                ROOM_RUNTIME_LOCKS[room_id] = RLock()
+            except Exception as exc:
+                print(f"[load_rooms_from_storage] 跳过无法兼容的旧房间 {room_id}: {exc}")
+                traceback.print_exc()
 
 def generate_room_id(length: int = 6) -> str:
     alphabet = string.ascii_uppercase + string.digits
@@ -137,12 +146,19 @@ def create_room(player_name: str) -> tuple[Room, str, str]:
         room = Room(room_id=room_id)
         seat, token = room.add_player(player_name)
         ROOMS[room_id] = room
+        ROOM_RUNTIME_LOCKS[room_id] = RLock()
         room.persist()
         return room, seat, token
 
 def get_room(room_id: str) -> Room | None:
     with ROOMS_LOCK:
         return ROOMS.get(room_id)
+
+def get_room_runtime_lock(room_id: str) -> RLock:
+    with ROOMS_LOCK:
+        if room_id not in ROOM_RUNTIME_LOCKS:
+            ROOM_RUNTIME_LOCKS[room_id] = RLock()
+        return ROOM_RUNTIME_LOCKS[room_id]
 
 def join_room(room_id: str, player_name: str) -> tuple[Room, str, str]:
     with ROOMS_LOCK:
