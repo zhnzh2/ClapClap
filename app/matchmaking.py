@@ -6,8 +6,8 @@ from threading import RLock
 from typing import Optional
 import traceback
 
-from room_manager import create_room, join_room
-from storage import load_kv, save_kv, delete_kv
+from app.room_manager import create_room, join_room
+from app.storage import load_kv, save_kv, delete_kv
 
 @dataclass
 class WaitingPlayer:

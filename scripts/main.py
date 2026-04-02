@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from constants import Move
-from game import GameEngine
-from models import GameState
+from app.constants import Move
+from app.game import GameEngine
+from app.models import GameState
 
 
 MOVE_INPUT_MAP: dict[str, Move] = {

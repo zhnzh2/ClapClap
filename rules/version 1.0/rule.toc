@@ -1,9 +1,0 @@
-\contentsline {section}{\numberline {1}游戏介绍}{2}{}%
-\contentsline {section}{\numberline {2}游戏开始以及资源介绍}{2}{}%
-\contentsline {section}{\numberline {3}游戏进行}{2}{}%
-\contentsline {section}{\numberline {4}手势介绍}{3}{}%
-\contentsline {subsection}{\numberline {4.1}资源手势}{3}{}%
-\contentsline {subsection}{\numberline {4.2}攻击手势}{3}{}%
-\contentsline {subsection}{\numberline {4.3}防御手势}{4}{}%
-\contentsline {subsection}{\numberline {4.4}锦囊手势}{4}{}%
-\contentsline {section}{\numberline {5}总结}{4}{}%

@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Optional
 
-from constants import (
+from app.constants import (
     INITIAL_BATTERY,
     INITIAL_HP,
     INITIAL_PICKAXE,

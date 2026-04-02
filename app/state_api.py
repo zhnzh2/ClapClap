@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from constants import ATTACK_MOVES, DEFENSE_MOVES, Move, RESOURCE_MOVES, TRICK_MOVES
-from game import GameEngine
-from models import GameState
+from app.constants import ATTACK_MOVES, DEFENSE_MOVES, Move, RESOURCE_MOVES, TRICK_MOVES
+from app.game import GameEngine
+from app.models import GameState
 
 def get_move_catalog() -> list[dict]:
     result: list[dict] = []

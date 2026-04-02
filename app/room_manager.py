@@ -8,8 +8,8 @@ from threading import RLock
 from uuid import uuid4
 import traceback
 
-from models import GameState
-from storage import load_all_rooms, save_room, delete_room
+from app.models import GameState
+from app.storage import load_all_rooms, save_room, delete_room
 
 @dataclass
 class Room:

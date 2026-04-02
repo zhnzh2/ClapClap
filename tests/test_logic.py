@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import unittest
 
-from constants import Move
-from game import GameEngine
-from models import GameState
+from app.constants import Move
+from app.game import GameEngine
+from app.models import GameState
 
 
 class TestClapClapLogic(unittest.TestCase):

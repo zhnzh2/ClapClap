@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from constants import (
+from app.constants import (
     ATTACK_MOVES,
     ATTACK_POWER,
     DAMAGE_VALUE,
@@ -9,7 +9,7 @@ from constants import (
     Move,
     Resource,
 )
-from models import GameState, PlayerState, RoundLog
+from app.models import GameState, PlayerState, RoundLog
 
 
 class GameEngine:
