@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ClapClap 房间对战</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, "Microsoft YaHei", sans-serif;
+            background: #f4f6fb;
+            color: #1f2937;
+        }
+
+        .container {
+            max-width: 960px;
+            margin: 0 auto;
+            padding: 34px 18px;
+        }
+
+        .top-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 18px;
+            flex-wrap: wrap;
+        }
+
+        .back-link {
+            text-decoration: none;
+            background: #6b7280;
+            color: white;
+            padding: 10px 14px;
+            border-radius: 12px;
+            font-weight: bold;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 18px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 18px;
+            padding: 22px;
+            box-shadow: 0 4px 14px rgba(0,0,0,0.08);
+        }
+
+        h1, h2 {
+            margin-top: 0;
+        }
+
+        p {
+            line-height: 1.8;
+            color: #374151;
+        }
+
+        input {
+            width: 100%;
+            padding: 11px 12px;
+            border-radius: 12px;
+            border: 1px solid #d1d5db;
+            margin-bottom: 12px;
+            box-sizing: border-box;
+            font-size: 15px;
+        }
+
+        button {
+            border: none;
+            border-radius: 12px;
+            padding: 11px 16px;
+            font-size: 15px;
+            font-weight: bold;
+            cursor: pointer;
+            background: #2563eb;
+            color: white;
+        }
+
+        .message {
+            margin-top: 12px;
+            min-height: 22px;
+            color: #374151;
+        }
+
+        .error-box {
+            background: #fee2e2;
+            color: #991b1b;
+            padding: 12px 14px;
+            border-radius: 12px;
+            margin-bottom: 14px;
+        }
+
+        @media (max-width: 760px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="top-row">
+            <h1>双人开房间对战</h1>
+            <a class="back-link" href="/">返回模式大厅</a>
+        </div>
+
+        {% if error_message %}
+        <div class="error-box">{{ error_message }}</div>
+        {% endif %}
+
+        <div class="grid">
+            <div class="card">
+                <h2>创建房间</h2>
+                <p>输入你的昵称后，创建一个新房间。系统会生成一个房间号，你可以把它发给另一位玩家。</p>
+                <input id="create-name" type="text" placeholder="输入你的昵称" />
+                <button id="create-room-btn">创建房间</button>
+                <div id="create-message" class="message"></div>
+            </div>
+
+            <div class="card">
+                <h2>加入房间</h2>
+                <p>输入你的昵称和房间号，加入另一位玩家创建的房间。</p>
+                <input id="join-name" type="text" placeholder="输入你的昵称" />
+                <input id="join-room-id" type="text" placeholder="输入房间号" />
+                <button id="join-room-btn">加入房间</button>
+                <div id="join-message" class="message"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function createRoom() {
+            const playerName = document.getElementById("create-name").value.trim();
+            const msg = document.getElementById("create-message");
+
+            if (!playerName) {
+                msg.textContent = "请先输入昵称。";
+                return;
+            }
+
+            try {
+                const res = await fetch("/api/rooms", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        player_name: playerName
+                    })
+                });
+
+                const data = await res.json();
+
+                if (!res.ok || !data.ok) {
+                    msg.textContent = data.error || "创建房间失败。";
+                    return;
+                }
+
+                msg.textContent = `房间创建成功，房间号：${data.room.room_id}`;
+                window.location.href = `/room/${data.room.room_id}?seat=p1`;
+            } catch (error) {
+                msg.textContent = "创建房间失败：" + error;
+            }
+        }
+
+        async function joinRoom() {
+            const playerName = document.getElementById("join-name").value.trim();
+            const roomId = document.getElementById("join-room-id").value.trim().toUpperCase();
+            const msg = document.getElementById("join-message");
+
+            if (!playerName || !roomId) {
+                msg.textContent = "请先输入昵称和房间号。";
+                return;
+            }
+
+            try {
+                const res = await fetch(`/api/rooms/${roomId}/join`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        player_name: playerName
+                    })
+                });
+
+                const data = await res.json();
+
+                if (!res.ok || !data.ok) {
+                    msg.textContent = data.error || "加入房间失败。";
+                    return;
+                }
+
+                msg.textContent = `加入成功，你的位置是 ${data.seat}`;
+                window.location.href = `/room/${roomId}?seat=${data.seat}`;
+            } catch (error) {
+                msg.textContent = "加入房间失败：" + error;
+            }
+        }
+
+        document.getElementById("create-room-btn").addEventListener("click", createRoom);
+        document.getElementById("join-room-btn").addEventListener("click", joinRoom);
+    </script>
+</body>
+</html>

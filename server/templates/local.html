@@ -403,7 +403,8 @@
             font-size: 13px;
         }
 
-        button.action-btn {
+        button.action-btn,
+        a.action-btn {
             border: none;
             border-radius: 10px;
             padding: 9px 12px;
@@ -412,19 +413,24 @@
             font-weight: bold;
             background: #e5e7eb;
             color: #111827;
+            text-decoration: none;
+            display: inline-block;
         }
 
-        button.action-btn.primary {
-            background: var(--blue);
+        button.action-btn.primary,
+        a.action-btn.primary {
+            background: #2563eb;
             color: white;
         }
 
-        button.action-btn.danger {
-            background: var(--danger);
+        button.action-btn.danger,
+        a.action-btn.danger {
+            background: #ef4444;
             color: white;
         }
 
-        button.action-btn.secondary {
+        button.action-btn.secondary,
+        a.action-btn.secondary {
             background: #6b7280;
             color: white;
         }
@@ -604,6 +610,7 @@
             <button class="action-btn secondary" id="help-open-btn">帮助</button>
             <button class="action-btn" id="refresh-btn">刷新状态</button>
             <button class="action-btn danger" id="reset-btn">重新开始</button>
+            <a class="action-btn secondary" href="/">返回大厅</a>
         </div>
     </div>
 

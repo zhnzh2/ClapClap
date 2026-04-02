@@ -61,3 +61,15 @@ def parse_move_name(name: str) -> Move:
         return Move[name]
     except KeyError as exc:
         raise ValueError(f"未知动作名: {name}") from exc
+    
+def get_room_payload(room) -> dict:
+    return {
+        "room_id": room.room_id,
+        "status": room.status,
+        "p1_name": room.p1_name,
+        "p2_name": room.p2_name,
+        "is_full": room.is_full(),
+        "pending_p1_move": room.pending_p1_move,
+        "pending_p2_move": room.pending_p2_move,
+        "game": get_game_state_payload(room.state, include_history=True),
+    }

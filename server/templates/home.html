@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ClapClap 模式大厅</title>
+    <style>
+        :root {
+            --bg: #f4f6fb;
+            --card: #ffffff;
+            --text: #1f2937;
+            --muted: #6b7280;
+            --shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+            --blue: #2563eb;
+            --border: #e5e7eb;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: Arial, "Microsoft YaHei", sans-serif;
+            background: var(--bg);
+            color: var(--text);
+        }
+
+        .container {
+            max-width: 1120px;
+            margin: 0 auto;
+            padding: 28px 18px 40px;
+        }
+
+        .hero {
+            text-align: center;
+            margin-bottom: 28px;
+        }
+
+        .hero h1 {
+            margin: 0 0 10px 0;
+            font-size: 38px;
+        }
+
+        .hero p {
+            margin: 0;
+            color: var(--muted);
+            font-size: 16px;
+        }
+
+        .mode-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 18px;
+        }
+
+        .mode-card {
+            background: var(--card);
+            border-radius: 18px;
+            padding: 22px;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        .mode-card h2 {
+            margin: 0;
+            font-size: 24px;
+        }
+
+        .mode-card p {
+            margin: 0;
+            line-height: 1.8;
+            color: #374151;
+        }
+
+        .badge {
+            display: inline-block;
+            width: fit-content;
+            padding: 5px 10px;
+            border-radius: 999px;
+            background: #eff6ff;
+            color: #1d4ed8;
+            font-size: 13px;
+            font-weight: bold;
+        }
+
+        .muted-badge {
+            background: #f3f4f6;
+            color: #4b5563;
+        }
+
+        .actions {
+            margin-top: auto;
+        }
+
+        .btn {
+            display: inline-block;
+            text-decoration: none;
+            border: none;
+            border-radius: 12px;
+            padding: 11px 16px;
+            font-size: 15px;
+            font-weight: bold;
+            cursor: pointer;
+            background: var(--blue);
+            color: white;
+        }
+
+        .btn.secondary {
+            background: #6b7280;
+        }
+
+        .footer-note {
+            margin-top: 26px;
+            text-align: center;
+            color: var(--muted);
+            font-size: 14px;
+        }
+
+        @media (max-width: 820px) {
+            .mode-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .hero h1 {
+                font-size: 30px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="hero">
+            <h1>ClapClap</h1>
+            <p>选择一种模式开始游戏</p>
+        </div>
+
+        <div class="mode-grid">
+            <div class="mode-card">
+                <span class="badge">当前可用</span>
+                <h2>模拟双人对战</h2>
+                <p>本地双人操作模式。适合体验规则、测试玩法和调整界面，也是你现在已有版本的正式入口。</p>
+                <div class="actions">
+                    <a class="btn" href="/local">进入模式</a>
+                </div>
+            </div>
+
+            <div class="mode-card">
+                <span class="badge muted-badge">即将开发</span>
+                <h2>双人开房间对战</h2>
+                <p>创建一个专属房间，邀请另一位玩家输入房间号加入。后面好友联机主要就靠这个模式。</p>
+                <div class="actions">
+                    <a class="btn secondary" href="/rooms">查看页面</a>
+                </div>
+            </div>
+
+            <div class="mode-card">
+                <span class="badge muted-badge">即将开发</span>
+                <h2>双人联机对战</h2>
+                <p>进入匹配队列，与在线玩家自动配对。匹配成功后会进入一个系统创建的对战房间。</p>
+                <div class="actions">
+                    <a class="btn secondary" href="/match">查看页面</a>
+                </div>
+            </div>
+
+            <div class="mode-card">
+                <span class="badge muted-badge">后续接入</span>
+                <h2>和电脑 AI 对战</h2>
+                <p>后面等你的 AI 训练好后，就可以在这里和电脑进行正式对战。当前先保留入口位置。</p>
+                <div class="actions">
+                    <a class="btn secondary" href="/ai">查看页面</a>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer-note">
+            当前第一阶段目标：先完成大厅与本地模式分离，再继续做房间系统。
+        </div>
+    </div>
+</body>
+</html>
