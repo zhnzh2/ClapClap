@@ -83,6 +83,29 @@ def set_player_match_state(
         "updated_at": datetime.utcnow().isoformat(),
     }
 
+def clear_match_state_by_room(room_id: str) -> None:
+    global MATCH_WAITING
+
+    with MATCH_LOCK:
+        tokens_to_reset: list[str] = []
+
+        for player_token, state in PLAYER_MATCH_STATE.items():
+            if state.get("room_id") == room_id:
+                tokens_to_reset.append(player_token)
+
+        for player_token in tokens_to_reset:
+            old_state = PLAYER_MATCH_STATE.get(player_token, {})
+            PLAYER_MATCH_STATE[player_token] = {
+                "status": "idle",
+                "player_name": old_state.get("player_name"),
+                "room_id": None,
+                "seat": None,
+                "room_player_token": None,
+                "updated_at": datetime.utcnow().isoformat(),
+            }
+
+        persist_match_state()
+
 def enqueue_or_match(player_name: str, player_token: str) -> dict:
     global MATCH_WAITING
 

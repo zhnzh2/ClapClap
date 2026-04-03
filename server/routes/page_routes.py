@@ -1,14 +1,15 @@
-from flask import Blueprint, render_template
+from flask import Blueprint, render_template, current_app
 
 from app.room_manager import get_room
 
 page_bp = Blueprint("page", __name__)
 
-
 @page_bp.get("/")
 def home():
-    return render_template("home.html")
-
+    return render_template(
+        "home.html",
+        server_boot_id=current_app.config.get("SERVER_BOOT_ID", "")
+    )
 
 @page_bp.get("/local")
 def local_mode():

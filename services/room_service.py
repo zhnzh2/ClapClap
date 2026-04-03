@@ -6,11 +6,12 @@ from app.room_manager import (
     get_room,
     join_room as room_join_room,
     get_room_runtime_lock,
+    delete_room_by_id,
 )
 from app.state_api import get_room_payload, parse_move_name
+from app.matchmaking import clear_match_state_by_room
 from server.runtime import run_periodic_cleanup
 from server.socket_events import emit_room_state
-
 
 def create_room_service(player_name: str) -> dict:
     room, seat, player_token = create_room(player_name.strip())
@@ -242,4 +243,33 @@ def cancel_room_move_service(room_id: str, player_token: str) -> tuple[dict, int
             "ok": True,
             "message": message,
             "room": get_room_payload(room),
+        }, 200
+    
+def leave_room_service(room_id: str, player_token: str) -> tuple[dict, int]:
+    room = get_room(room_id)
+    if room is None:
+        return {
+            "ok": False,
+            "error": "房间不存在。",
+        }, 404
+
+    room_lock = get_room_runtime_lock(room_id)
+
+    with room_lock:
+        seat = room.get_seat_by_token(player_token.strip())
+        if seat not in ("p1", "p2"):
+            return {
+                "ok": False,
+                "error": "身份无效，不能退出房间。",
+            }, 403
+
+        from server.socket_events import emit_opponent_left
+
+        emit_opponent_left(room_id, seat)
+        clear_match_state_by_room(room_id)
+        delete_room_by_id(room_id)
+
+        return {
+            "ok": True,
+            "message": "你已退出房间。",
         }, 200

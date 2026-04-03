@@ -834,71 +834,21 @@
             color: #374151;
         }
 
-        .game-finish-mask {
+        .modal-mask {
             display: none;
             position: fixed;
             inset: 0;
             background: rgba(15, 23, 42, 0.34);
-            z-index: 1001;
             align-items: center;
             justify-content: center;
         }
 
-        .game-finish-mask.show {
+        .modal-mask.show {
             display: flex;
         }
 
-        .game-finish-card {
-            width: min(460px, calc(100vw - 32px));
-            background: white;
-            border: 1px solid var(--border);
-            border-radius: 22px;
-            box-shadow: 0 24px 60px rgba(15, 23, 42, 0.20);
-            padding: 26px 22px;
-            text-align: center;
-        }
-
-        .game-finish-title {
-            font-size: 24px;
-            font-weight: bold;
-            color: var(--text);
-            margin-bottom: 8px;
-        }
-
-        .game-finish-subtitle {
-            color: var(--muted);
-            line-height: 1.7;
-            margin-bottom: 14px;
-        }
-
-        .game-finish-actions {
-            display: flex;
-            justify-content: center;
-            flex-wrap: wrap;
-            gap: 10px;
-            margin-top: 14px;
-        }
-
-        .game-finish-actions button {
-            min-width: 120px;
-        }
-
-        .settings-mask {
-            display: none;
-            position: fixed;
-            inset: 0;
-            background: rgba(15, 23, 42, 0.34);
-            z-index: 1002;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .settings-mask.show {
-            display: flex;
-        }
-
-        .settings-card {
-            width: min(460px, calc(100vw - 32px));
+        .modal-card {
+            width: min(480px, calc(100vw - 32px));
             background: white;
             border: 1px solid var(--border);
             border-radius: 22px;
@@ -906,11 +856,35 @@
             padding: 22px 20px;
         }
 
-        .settings-title {
+        .modal-card.large {
+            width: min(720px, calc(100vw - 32px));
+            max-height: calc(100vh - 64px);
+            overflow-y: auto;
+        }
+
+        .modal-title {
             font-size: 22px;
             font-weight: bold;
             margin-bottom: 12px;
             color: var(--text);
+        }
+
+        .modal-body {
+            color: var(--muted);
+            line-height: 1.8;
+            font-size: 14px;
+        }
+
+        .modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 18px;
+            flex-wrap: wrap;
+        }
+
+        .modal-actions.center {
+            justify-content: center;
         }
 
         .settings-group {
@@ -956,38 +930,6 @@
             background: white;
         }
 
-        .help-mask {
-            display: none;
-            position: fixed;
-            inset: 0;
-            background: rgba(15, 23, 42, 0.34);
-            z-index: 1003;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .help-mask.show {
-            display: flex;
-        }
-
-        .help-card {
-            width: min(720px, calc(100vw - 32px));
-            max-height: calc(100vh - 64px);
-            overflow-y: auto;
-            background: white;
-            border: 1px solid var(--border);
-            border-radius: 22px;
-            box-shadow: 0 24px 60px rgba(15, 23, 42, 0.20);
-            padding: 22px 20px;
-        }
-
-        .help-title {
-            font-size: 22px;
-            font-weight: bold;
-            margin-bottom: 12px;
-            color: var(--text);
-        }
-
         .help-section {
             margin-bottom: 14px;
             padding: 12px;
@@ -1007,13 +949,6 @@
             margin: 6px 0;
             line-height: 1.7;
             color: var(--text);
-        }
-
-        .help-actions {
-            display: flex;
-            justify-content: flex-end;
-            gap: 10px;
-            margin-top: 10px;
         }
 
         .battle-main-layout {
@@ -1257,8 +1192,8 @@
                 <div class="top-actions">
                     <button class="secondary" id="open-help-btn" type="button">帮助</button>
                     <button class="secondary" id="open-settings-btn" type="button">设置</button>
-                    <a class="btn secondary" href="/rooms">返回房间大厅</a>
-                    <button class="danger" id="reset-room-btn">重置对局</button>
+                    <button class="danger" id="back-home-btn" type="button">返回主页</button>
+                    <button class="danger" id="leave-room-btn" type="button">退出房间</button>
                 </div>
         </div>
 
@@ -1446,23 +1381,23 @@
         </div>
     </div>
 
-    <div class="game-finish-mask" id="game-finish-mask">
-        <div class="game-finish-card">
-            <div class="game-finish-title" id="game-finish-title">对局结束</div>
-            <div class="game-finish-subtitle" id="game-finish-subtitle">
+    <div class="modal-mask" id="game-finish-mask" style="z-index: 1001;">
+        <div class="modal-card" style="text-align: center;">
+            <div class="modal-title" id="game-finish-title">对局结束</div>
+            <div class="modal-body" id="game-finish-subtitle">
                 本局已经结束。
             </div>
             <div class="result-chip-row" id="game-finish-chip-row"></div>
-            <div class="game-finish-actions">
+            <div class="modal-actions center">
                 <button type="button" id="finish-reset-btn">再来一局</button>
-                <button type="button" id="finish-back-btn">返回大厅</button>
+                <button type="button" class="danger" id="finish-back-btn">返回主页</button>
             </div>
         </div>
     </div>
 
-    <div class="settings-mask" id="settings-mask">
-        <div class="settings-card">
-            <div class="settings-title">房间设置</div>
+    <div class="modal-mask" id="settings-mask" style="z-index: 1002;">
+        <div class="modal-card">
+            <div class="modal-title">房间设置</div>
 
             <div class="settings-group">
                 <div class="settings-group-title">界面显示</div>
@@ -1518,15 +1453,15 @@
                 </div>
             </div>
 
-            <div class="settings-actions">
+            <div class="modal-actions">
                 <button type="button" class="secondary" id="close-settings-btn">关闭</button>
             </div>
         </div>
     </div>
 
-    <div class="help-mask" id="help-mask">
-        <div class="help-card">
-            <div class="help-title">房间帮助</div>
+    <div class="modal-mask" id="help-mask" style="z-index: 1003;">
+        <div class="modal-card large">
+            <div class="modal-title">房间帮助</div>
 
             <div class="help-section">
                 <div class="help-section-title">按键操作</div>
@@ -1548,11 +1483,35 @@
                 <p>· 任意一方生命值降到 0 或以下时，对局结束。</p>
             </div>
 
-            <div class="help-actions">
+            <div class="modal-actions">
                 <button type="button" class="secondary" id="close-help-btn">关闭</button>
             </div>
         </div>
     </div>
 
+    <div class="modal-mask" id="confirm-mask" style="z-index: 1004;">
+        <div class="modal-card">
+            <div class="modal-title" id="confirm-title">确认操作</div>
+            <div class="modal-body" id="confirm-message">你确定要继续吗？</div>
+
+            <div class="modal-actions">
+                <button type="button" class="secondary" id="confirm-cancel-btn">取消</button>
+                <button type="button" class="danger" id="confirm-ok-btn">确认</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-mask" id="opponent-left-mask" style="z-index: 1004;">
+        <div class="modal-card">
+            <div class="modal-title">对手已退出房间</div>
+            <div class="modal-body">
+                对方已经退出当前房间。点击下方确认后，你也会退出房间并返回主菜单。
+            </div>
+
+            <div class="modal-actions">
+                <button type="button" class="danger" id="opponent-left-ok-btn">确认</button>
+            </div>
+        </div>
+    </div>
 </body>
 </html>

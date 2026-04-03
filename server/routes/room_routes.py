@@ -7,10 +7,10 @@ from services.room_service import (
     submit_room_move_service,
     reset_room_service,
     cancel_room_move_service,
+    leave_room_service,
 )
 
 room_bp = Blueprint("room", __name__)
-
 
 @room_bp.post("/api/rooms")
 def api_create_room():
@@ -97,4 +97,17 @@ def api_room_cancel_step(room_id: str):
         return jsonify({"ok": False, "error": "player_token 不能为空。"}), 400
 
     result, status_code = cancel_room_move_service(room_id, player_token.strip())
+    return jsonify(result), status_code
+
+@room_bp.post("/api/rooms/<room_id>/leave")
+def api_leave_room(room_id: str):
+    data = request.get_json(silent=True)
+    if data is None:
+        return jsonify({"ok": False, "error": "请求体必须是 JSON。"}), 400
+
+    player_token = data.get("player_token")
+    if not isinstance(player_token, str) or not player_token.strip():
+        return jsonify({"ok": False, "error": "player_token 不能为空。"}), 400
+
+    result, status_code = leave_room_service(room_id, player_token.strip())
     return jsonify(result), status_code

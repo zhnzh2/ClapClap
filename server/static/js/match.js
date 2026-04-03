@@ -67,6 +67,10 @@
             );
         }
 
+        function clearRoomIdentity(roomId) {
+            localStorage.removeItem(`clapclap_room_${roomId}`);
+        }
+
         function setJoiningUi(isJoining) {
             document.getElementById("join-match-btn").disabled = isJoining;
         }
@@ -79,13 +83,41 @@
             document.getElementById("resume-room-btn").style.display = showResume ? "" : "none";
         }
 
-        function goToMatchedRoom() {
+        async function goToMatchedRoom() {
             if (!matchedRoomId || !currentSeat || !currentRoomPlayerToken) {
                 return;
             }
 
-            saveRoomIdentity(matchedRoomId, currentRoomPlayerToken, currentSeat);
-            window.location.href = `/room/${matchedRoomId}`;
+            try {
+                const res = await fetch(
+                    `/api/rooms/${matchedRoomId}?player_token=${encodeURIComponent(currentRoomPlayerToken)}`
+                );
+                const parsed = await readJsonSafely(res);
+
+                if (!parsed.ok || !res.ok || !parsed.data.ok) {
+                    clearRoomIdentity(matchedRoomId);
+                    matchedRoomId = null;
+                    currentSeat = null;
+                    currentRoomPlayerToken = "";
+                    joinedQueue = false;
+
+                    document.getElementById("match-message").textContent =
+                        "检测到旧房间已失效，已清除无效恢复状态，请重新匹配。";
+                    document.getElementById("self-status").textContent =
+                        "你当前尚未加入匹配队列。";
+
+                    setQueuedUi(false);
+                    setResumeUi(false);
+                    hideMatchedTransition();
+                    return;
+                }
+
+                saveRoomIdentity(matchedRoomId, currentRoomPlayerToken, currentSeat);
+                window.location.href = `/room/${matchedRoomId}`;
+            } catch (error) {
+                document.getElementById("match-message").textContent =
+                    "恢复房间失败：" + error;
+            }
         }
 
         function showMatchedTransition(opponentName, seat) {
@@ -123,8 +155,8 @@
         function delayedGoToMatchedRoom(opponentName, seat) {
             showMatchedTransition(opponentName, seat);
 
-            window.setTimeout(() => {
-                goToMatchedRoom();
+            window.setTimeout(async () => {
+                await goToMatchedRoom();
             }, 3000);
         }
 
@@ -380,7 +412,9 @@
 
         document.getElementById("join-match-btn").addEventListener("click", joinMatchQueue);
         document.getElementById("cancel-match-btn").addEventListener("click", cancelMyMatch);
-        document.getElementById("resume-room-btn").addEventListener("click", goToMatchedRoom);
+        document.getElementById("resume-room-btn").addEventListener("click", async () => {
+            await goToMatchedRoom();
+        });
 
         const savedIdentityRaw = localStorage.getItem("clapclap_match_identity");
         if (savedIdentityRaw) {

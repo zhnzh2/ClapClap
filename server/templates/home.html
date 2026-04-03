@@ -157,12 +157,12 @@
                 </div>
             </div>
 
-            <div class="mode-card">
-                <span class="badge">当前可用</span>
-                <h2>匹配模式</h2>
-                <p>进入匹配队列，与在线玩家自动配对。</p>
+            <div class="mode-card" id="match-mode-card">
+                <span class="badge" id="match-mode-badge">当前可用</span>
+                <h2 id="match-mode-title">匹配模式</h2>
+                <p id="match-mode-desc">进入匹配队列，与在线玩家自动配对。</p>
                 <div class="actions">
-                    <a class="btn" href="/match">进入模式</a>
+                    <a class="btn" id="match-mode-btn" href="/match">进入模式</a>
                 </div>
             </div>
 
@@ -180,5 +180,170 @@
                 当前开发进度：大厅、本地、房间、匹配页面与主要联机链路已接通；下一阶段将继续做代码整理、测试补强与 AI 模式接入。
             </div>
     </div>
+
+    <script>
+        function getLatestRoomIdentity() {
+            let latestRoom = null;
+
+            for (let i = 0; i < localStorage.length; i += 1) {
+                const key = localStorage.key(i);
+                if (!key) {
+                    continue;
+                }
+
+                if (!key.startsWith("clapclap_room_")) {
+                    continue;
+                }
+
+                if (key.startsWith("clapclap_room_ui_settings_")) {
+                    continue;
+                }
+
+                const roomId = key.slice("clapclap_room_".length);
+                const raw = localStorage.getItem(key);
+                if (!raw) {
+                    continue;
+                }
+
+                try {
+                    const parsed = JSON.parse(raw);
+                    if (!parsed || !parsed.player_token) {
+                        continue;
+                    }
+
+                    latestRoom = {
+                        roomId,
+                        player_token: parsed.player_token,
+                        seat: parsed.seat || null
+                    };
+                } catch (error) {
+                    continue;
+                }
+            }
+
+            return latestRoom;
+        }
+
+        window.addEventListener("load", () => {
+            const latestRoom = getLatestRoomIdentity();
+            if (!latestRoom || !latestRoom.roomId) {
+                return;
+            }
+
+            const titleEl = document.getElementById("match-mode-title");
+            const descEl = document.getElementById("match-mode-desc");
+            const btnEl = document.getElementById("match-mode-btn");
+            const badgeEl = document.getElementById("match-mode-badge");
+
+            if (titleEl) {
+                titleEl.textContent = "返回房间";
+            }
+
+            if (descEl) {
+                descEl.textContent = "检测到你仍有一个未退出的房间，可以直接回到该房间继续游戏。";
+            }
+
+            if (btnEl) {
+                btnEl.textContent = "返回房间";
+                btnEl.href = `/room/${latestRoom.roomId}`;
+            }
+
+            if (badgeEl) {
+                badgeEl.textContent = "可继续";
+                badgeEl.classList.remove("muted-badge");
+            }
+        });
+    </script>
+
+    <script>
+        const SERVER_BOOT_ID = "{{ server_boot_id }}";
+
+        function clearAllFrontendCacheForNewBoot() {
+            const savedBootId = localStorage.getItem("clapclap_server_boot_id");
+
+            if (savedBootId === SERVER_BOOT_ID) {
+                return;
+            }
+
+            localStorage.clear();
+            sessionStorage.clear();
+            localStorage.setItem("clapclap_server_boot_id", SERVER_BOOT_ID);
+        }
+
+        function getLatestRoomIdentity() {
+            let latestRoom = null;
+
+            for (let i = 0; i < localStorage.length; i += 1) {
+                const key = localStorage.key(i);
+                if (!key) {
+                    continue;
+                }
+
+                if (!key.startsWith("clapclap_room_")) {
+                    continue;
+                }
+
+                if (key.startsWith("clapclap_room_ui_settings_")) {
+                    continue;
+                }
+
+                const roomId = key.slice("clapclap_room_".length);
+                const raw = localStorage.getItem(key);
+                if (!raw) {
+                    continue;
+                }
+
+                try {
+                    const parsed = JSON.parse(raw);
+                    if (!parsed || !parsed.player_token) {
+                        continue;
+                    }
+
+                    latestRoom = {
+                        roomId,
+                        player_token: parsed.player_token,
+                        seat: parsed.seat || null
+                    };
+                } catch (error) {
+                    continue;
+                }
+            }
+
+            return latestRoom;
+        }
+
+        window.addEventListener("load", () => {
+            clearAllFrontendCacheForNewBoot();
+
+            const latestRoom = getLatestRoomIdentity();
+            if (!latestRoom || !latestRoom.roomId) {
+                return;
+            }
+
+            const titleEl = document.getElementById("match-mode-title");
+            const descEl = document.getElementById("match-mode-desc");
+            const btnEl = document.getElementById("match-mode-btn");
+            const badgeEl = document.getElementById("match-mode-badge");
+
+            if (titleEl) {
+                titleEl.textContent = "返回房间";
+            }
+
+            if (descEl) {
+                descEl.textContent = "检测到你仍有一个未退出的房间，可以直接回到该房间继续游戏。";
+            }
+
+            if (btnEl) {
+                btnEl.textContent = "返回房间";
+                btnEl.href = `/room/${latestRoom.roomId}`;
+            }
+
+            if (badgeEl) {
+                badgeEl.textContent = "可继续";
+                badgeEl.classList.remove("muted-badge");
+            }
+        });
+    </script>
+
 </body>
 </html>

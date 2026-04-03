@@ -49,6 +49,7 @@
         let roundResolvePreview = null;
         let resolvePreviewTimer = null;
         let waitingManualRevealAdvance = false;
+        let confirmAction = null;
 
         if (typeof io !== "function") {
             console.error("room_detail.js: Socket.IO 未加载成功");
@@ -85,6 +86,18 @@
 
         socket.on("room_error", (data) => {
             setRoomMessage(data?.error || "房间实时连接出错。", "error");
+        });
+
+        socket.on("opponent_left", (data) => {
+            if (!data || !data.ok) {
+                return;
+            }
+
+            if (data.left_seat === mySeat) {
+                return;
+            }
+
+            openOpponentLeftModal();
         });
 
         const moveGroups = {
@@ -300,6 +313,92 @@
 
         function closeSettingsModal() {
             document.getElementById("settings-mask").classList.remove("show");
+        }
+
+        function clearCurrentRoomIdentity() {
+            localStorage.removeItem(`clapclap_room_${roomId}`);
+        }
+
+        function clearAllRoomIdentity() {
+            const keysToDelete = [];
+
+            for (let i = 0; i < localStorage.length; i += 1) {
+                const key = localStorage.key(i);
+                if (!key) {
+                    continue;
+                }
+
+                if (
+                    key.startsWith("clapclap_room_") ||
+                    key.startsWith("clapclap_room_ui_settings_") ||
+                    key === "clapclap_match_player_token" ||
+                    key === "clapclap_match_player_name" ||
+                    key === "clapclap_match_state"
+                ) {
+                    keysToDelete.push(key);
+                }
+            }
+
+            keysToDelete.forEach((key) => localStorage.removeItem(key));
+        }
+
+        function goHome() {
+            window.location.href = "/";
+        }
+
+        function goHomeKeepRoom() {
+            goHome();
+        }
+
+        function openConfirmModal(title, message, onConfirm) {
+            const mask = document.getElementById("confirm-mask");
+            const titleEl = document.getElementById("confirm-title");
+            const messageEl = document.getElementById("confirm-message");
+
+            titleEl.textContent = title;
+            messageEl.textContent = message;
+            confirmAction = onConfirm;
+            mask.classList.add("show");
+        }
+
+        function closeConfirmModal() {
+            const mask = document.getElementById("confirm-mask");
+            mask.classList.remove("show");
+            confirmAction = null;
+        }
+
+        function openOpponentLeftModal() {
+            document.getElementById("opponent-left-mask").classList.add("show");
+        }
+
+        function closeOpponentLeftModal() {
+            document.getElementById("opponent-left-mask").classList.remove("show");
+        }
+
+        async function leaveRoomAndGoHome() {
+            try {
+                const res = await fetch(`/api/rooms/${roomId}/leave`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        player_token: myPlayerToken
+                    })
+                });
+
+                const data = await res.json();
+
+                if (!res.ok || !data.ok) {
+                    setRoomMessage(data.error || "退出房间失败。", "error");
+                    return;
+                }
+
+                clearAllRoomIdentity();
+                goHome();
+            } catch (error) {
+                setRoomMessage("退出房间失败：" + error, "error");
+            }
         }
 
         function getMyPendingMove(room) {
@@ -1362,6 +1461,8 @@
                 closeHelpModal();
                 closeSettingsModal();
                 closeFinishModal();
+                closeConfirmModal();
+                closeOpponentLeftModal();
                 return;
             }
 
@@ -1619,6 +1720,44 @@
             renderRoom(room);
         }
 
+        function getLatestRoomIdentity() {
+            let latestRoom = null;
+
+            for (let i = 0; i < localStorage.length; i += 1) {
+                const key = localStorage.key(i);
+                if (!key || !key.startsWith("clapclap_room_")) {
+                    continue;
+                }
+
+                if (key.startsWith("clapclap_room_ui_settings_")) {
+                    continue;
+                }
+
+                const roomId = key.slice("clapclap_room_".length);
+                const raw = localStorage.getItem(key);
+                if (!raw) {
+                    continue;
+                }
+
+                try {
+                    const parsed = JSON.parse(raw);
+                    if (!parsed || !parsed.player_token) {
+                        continue;
+                    }
+
+                    latestRoom = {
+                        roomId,
+                        player_token: parsed.player_token,
+                        seat: parsed.seat || null
+                    };
+                } catch (error) {
+                    continue;
+                }
+            }
+
+            return latestRoom;
+        }
+
         async function submitMove(seat, moveName) {
             if (isSpectatorMode()) {
                 setRoomMessage("观战模式下不能提交动作。", "error");
@@ -1737,11 +1876,79 @@
 
         window.addEventListener("load", () => {
             try {
-                const resetRoomBtn = document.getElementById("reset-room-btn");
-                if (resetRoomBtn) {
-                    resetRoomBtn.addEventListener("click", resetRoomGame);
+                const confirmMask = document.getElementById("confirm-mask");
+                if (confirmMask) {
+                    confirmMask.addEventListener("click", (event) => {
+                        if (event.target.id === "confirm-mask") {
+                            closeConfirmModal();
+                        }
+                    });
+                }
+                
+                const backHomeBtn = document.getElementById("back-home-btn");
+                if (backHomeBtn) {
+                    backHomeBtn.addEventListener("click", () => {
+                        openConfirmModal(
+                            "确认返回主页",
+                            "返回主页后你将暂时离开当前页面，但房间会保留，你之后仍可继续返回该房间。",
+                            () => {
+                                closeConfirmModal();
+                                goHomeKeepRoom();
+                            }
+                        );
+                    });
                 }
 
+                const leaveRoomBtn = document.getElementById("leave-room-btn");
+                if (leaveRoomBtn) {
+                    leaveRoomBtn.addEventListener("click", () => {
+                        openConfirmModal(
+                            "确认退出房间",
+                            "退出房间后当前房间会关闭，确认继续吗？",
+                            async () => {
+                                closeConfirmModal();
+                                await leaveRoomAndGoHome();
+                            }
+                        );
+                    });
+                }
+
+                const finishBackBtn = document.getElementById("finish-back-btn");
+                if (finishBackBtn) {
+                    finishBackBtn.addEventListener("click", () => {
+                        openConfirmModal(
+                            "确认返回主页",
+                            "返回主页后你将暂时离开当前页面，但房间会保留。",
+                            () => {
+                                closeConfirmModal();
+                                goHomeKeepRoom();
+                            }
+                        );
+                    });
+                }
+
+                const confirmCancelBtn = document.getElementById("confirm-cancel-btn");
+                if (confirmCancelBtn) {
+                    confirmCancelBtn.addEventListener("click", closeConfirmModal);
+                }
+
+                const confirmOkBtn = document.getElementById("confirm-ok-btn");
+                if (confirmOkBtn) {
+                    confirmOkBtn.addEventListener("click", async () => {
+                        if (typeof confirmAction === "function") {
+                            await confirmAction();
+                        }
+                    });
+                }
+
+                const opponentLeftOkBtn = document.getElementById("opponent-left-ok-btn");
+                if (opponentLeftOkBtn) {
+                    opponentLeftOkBtn.addEventListener("click", () => {
+                        closeOpponentLeftModal();
+                        clearAllRoomIdentity();
+                        goHome();
+                    });
+                }
                 const openHelpBtn = document.getElementById("open-help-btn");
                 if (openHelpBtn) {
                     openHelpBtn.addEventListener("click", openHelpModal);
@@ -1793,13 +2000,6 @@
                 const finishResetBtn = document.getElementById("finish-reset-btn");
                 if (finishResetBtn) {
                     finishResetBtn.addEventListener("click", resetRoomGame);
-                }
-
-                const finishBackBtn = document.getElementById("finish-back-btn");
-                if (finishBackBtn) {
-                    finishBackBtn.addEventListener("click", () => {
-                        window.location.href = "/rooms";
-                    });
                 }
 
                 document.addEventListener("keydown", handleGlobalKeyboard);

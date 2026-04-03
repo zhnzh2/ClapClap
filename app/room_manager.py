@@ -293,3 +293,9 @@ def join_room(room_id: str, player_name: str) -> tuple[Room, str, str]:
         seat, token = room.add_player(player_name)
         room.persist()
         return room, seat, token
+    
+def delete_room_by_id(room_id: str) -> None:
+    with ROOMS_LOCK:
+        ROOMS.pop(room_id, None)
+        ROOM_RUNTIME_LOCKS.pop(room_id, None)
+        delete_room(room_id)

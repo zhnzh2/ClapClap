@@ -19,6 +19,16 @@ def emit_room_state(room_id: str) -> None:
         to=room_id,
     )
 
+def emit_opponent_left(room_id: str, left_seat: str) -> None:
+    socketio.emit(
+        "opponent_left",
+        {
+            "ok": True,
+            "room_id": room_id,
+            "left_seat": left_seat,
+        },
+        to=room_id,
+    )
 
 @socketio.on("join_room")
 def handle_join_room(data):
