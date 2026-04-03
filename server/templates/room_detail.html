@@ -47,16 +47,16 @@
         .container {
             max-width: 1160px;
             margin: 0 auto;
-            padding: 24px 16px 40px;
+            padding: 18px 16px 24px;
         }
 
         .top-row {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            gap: 12px;
+            gap: 10px;
             flex-wrap: wrap;
-            margin-bottom: 16px;
+            margin-bottom: 10px;
         }
 
         .top-actions {
@@ -98,9 +98,9 @@
         .card {
             background: var(--card);
             border-radius: 18px;
-            padding: 18px;
+            padding: 14px;
             box-shadow: var(--shadow);
-            margin-bottom: 16px;
+            margin-bottom: 10px;
         }
 
         .card h2 {
@@ -475,7 +475,7 @@
         }
 
         .section-block {
-            margin-bottom: 18px;
+            margin-bottom: 10px;
         }
 
         .section-title {
@@ -629,7 +629,7 @@
         .move-layout {
             display: flex;
             flex-direction: column;
-            gap: 12px;
+            gap: 8px;
         }
 
         .move-row {
@@ -662,10 +662,10 @@
         }
 
         .submit-confirm-hint {
-            margin-top: 10px;
-            font-size: 13px;
+            margin-top: 6px;
+            font-size: 12px;
             color: var(--muted);
-            line-height: 1.7;
+            line-height: 1.5;
         }
 
         .single-selection-grid {
@@ -675,8 +675,8 @@
         .pending-row {
             display: grid;
             grid-template-columns: 180px 1fr 1fr;
-            gap: 12px;
-            margin-bottom: 14px;
+            gap: 10px;
+            margin-bottom: 10px;
         }
 
         .pending-round-box {
@@ -928,6 +928,66 @@
             background: white;
         }
 
+        .help-mask {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.34);
+            z-index: 1003;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .help-mask.show {
+            display: flex;
+        }
+
+        .help-card {
+            width: min(720px, calc(100vw - 32px));
+            max-height: calc(100vh - 64px);
+            overflow-y: auto;
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: 22px;
+            box-shadow: 0 24px 60px rgba(15, 23, 42, 0.20);
+            padding: 22px 20px;
+        }
+
+        .help-title {
+            font-size: 22px;
+            font-weight: bold;
+            margin-bottom: 12px;
+            color: var(--text);
+        }
+
+        .help-section {
+            margin-bottom: 14px;
+            padding: 12px;
+            border-radius: 14px;
+            background: var(--panel);
+            border: 1px solid var(--border);
+        }
+
+        .help-section-title {
+            font-size: 14px;
+            font-weight: bold;
+            margin-bottom: 8px;
+            color: var(--text);
+        }
+
+        .help-section p {
+            margin: 6px 0;
+            line-height: 1.7;
+            color: var(--text);
+        }
+
+        .help-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
         @media (max-width: 980px) {
             .player-row-grid {
                 grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -947,13 +1007,14 @@
         <div class="top-row">
             <h1>房间对战</h1>
                 <div class="top-actions">
+                    <button class="secondary" id="open-help-btn" type="button">帮助</button>
                     <button class="secondary" id="open-settings-btn" type="button">设置</button>
                     <a class="btn secondary" href="/rooms">返回房间大厅</a>
                     <button class="danger" id="reset-room-btn">重置对局</button>
                 </div>
         </div>
 
-        <div class="card">
+        <div class="card" id="overview-card">
             <div class="section-block" id="room-info-section">
                 <div class="section-title">房间信息</div>
                 <div class="info-row-compact">
@@ -1169,6 +1230,11 @@
                     <label for="toggle-history-section">显示历史记录</label>
                     <input type="checkbox" id="toggle-history-section" />
                 </div>
+
+                <div class="settings-item">
+                    <label for="toggle-move-subtitles">显示动作分组副标题</label>
+                    <input type="checkbox" id="toggle-move-subtitles" />
+                </div>
             </div>
 
             <div class="settings-group">
@@ -1185,6 +1251,36 @@
 
             <div class="settings-actions">
                 <button type="button" class="secondary" id="close-settings-btn">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="help-mask" id="help-mask">
+        <div class="help-card">
+            <div class="help-title">房间帮助</div>
+
+            <div class="help-section">
+                <div class="help-section-title">按键操作</div>
+                <p>· 1 / 2 / 3 / 4：选择锦囊动作</p>
+                <p>· Q / W / E / R：选择资源与防御动作</p>
+                <p>· A / S / D / F / G：选择气系攻击动作</p>
+                <p>· Z / X / C / V：选择盾系攻击动作</p>
+                <p>· Enter：确认当前已选择的动作</p>
+                <p>· Backspace：取消当前选择；如果你已经提交且对方尚未提交，则撤回本回合提交</p>
+                <p>· Escape：关闭帮助弹窗、设置弹窗或结束弹窗</p>
+            </div>
+
+            <div class="help-section">
+                <div class="help-section-title">大致规则</div>
+                <p>· 每回合双方各选择一个动作，双方都确认后统一结算。</p>
+                <p>· 资源动作主要用于获得气、盾等后续行动所需资源。</p>
+                <p>· 攻击动作会消耗已有资源并对对方造成伤害。</p>
+                <p>· 防御与锦囊动作会根据规则在不同对局中起到抵挡、转化或特殊效果。</p>
+                <p>· 任意一方生命值降到 0 或以下时，对局结束。</p>
+            </div>
+
+            <div class="help-actions">
+                <button type="button" class="secondary" id="close-help-btn">关闭</button>
             </div>
         </div>
     </div>

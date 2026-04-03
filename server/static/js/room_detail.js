@@ -59,6 +59,7 @@
             showInvite: false,
             showRoundResult: false,
             showHistory: false,
+            showMoveSubtitles: false,
             playerStateMode: "compact"
         };
 
@@ -228,6 +229,7 @@
             document.getElementById("toggle-invite-section").checked = !!roomUiSettings.showInvite;
             document.getElementById("toggle-round-result").checked = !!roomUiSettings.showRoundResult;
             document.getElementById("toggle-history-section").checked = !!roomUiSettings.showHistory;
+            document.getElementById("toggle-move-subtitles").checked = !!roomUiSettings.showMoveSubtitles;
             document.getElementById("player-state-mode-select").value = roomUiSettings.playerStateMode || "compact";
         }
 
@@ -269,6 +271,32 @@
                     playerStateModeCompact.style.display = "";
                 }
             }
+            updateOverviewCardVisibility();
+        }
+
+        function updateOverviewCardVisibility() {
+            const overviewCard = document.getElementById("overview-card");
+            const spectatorBanner = document.getElementById("spectator-banner");
+
+            if (!overviewCard) {
+                return;
+            }
+
+            const showAnything =
+                !!roomUiSettings.showRoomInfo ||
+                !!roomUiSettings.showRoomStatus ||
+                !!roomUiSettings.showInvite ||
+                (spectatorBanner && spectatorBanner.style.display !== "none");
+
+            overviewCard.style.display = showAnything ? "" : "none";
+        }
+
+        function openHelpModal() {
+            document.getElementById("help-mask").classList.add("show");
+        }
+
+        function closeHelpModal() {
+            document.getElementById("help-mask").classList.remove("show");
         }
 
         function openSettingsModal() {
@@ -624,6 +652,7 @@
         function renderSpectatorBanner() {
             const banner = document.getElementById("spectator-banner");
             banner.style.display = isSpectatorMode() ? "" : "none";
+            updateOverviewCardVisibility();
         }
 
         function setSettlingMask(show) {
@@ -847,6 +876,12 @@
                 applyRoomUiSettings();
             });
 
+            document.getElementById("toggle-move-subtitles").addEventListener("change", (event) => {
+                roomUiSettings.showMoveSubtitles = event.target.checked;
+                saveRoomUiSettings();
+                renderRoom(latestRoom);
+            });
+
             document.getElementById("player-state-mode-select").addEventListener("change", (event) => {
                 roomUiSettings.playerStateMode = event.target.value;
                 saveRoomUiSettings();
@@ -879,10 +914,12 @@
             const topTitle = document.createElement("div");
             topTitle.className = "move-group-title";
             topTitle.textContent = "资源 / 防御 / 锦囊";
+            topTitle.style.display = roomUiSettings.showMoveSubtitles ? "" : "none";
 
             const bottomTitle = document.createElement("div");
             bottomTitle.className = "move-group-title";
             bottomTitle.textContent = "攻击";
+            bottomTitle.style.display = roomUiSettings.showMoveSubtitles ? "" : "none";
 
             const topGrid = document.createElement("div");
             topGrid.className = "move-grid top-action-grid";
@@ -1165,6 +1202,8 @@
             }
 
             if (event.key === "Escape") {
+                closeHelpModal();
+                closeSettingsModal();
                 closeFinishModal();
                 return;
             }
@@ -1189,9 +1228,15 @@
 
                 const finishMask = document.getElementById("game-finish-mask");
                 const settingsMask = document.getElementById("settings-mask");
+                const helpMask = document.getElementById("help-mask");
 
                 if (finishMask.classList.contains("show")) {
                     closeFinishModal();
+                    return;
+                }
+
+                if (helpMask.classList.contains("show")) {
+                    closeHelpModal();
                     return;
                 }
 
@@ -1253,15 +1298,17 @@
 
                 if (pendingOpponentEl) {
                     pendingOpponentEl.textContent =
-                        opponentPending ? moveLabel(opponentPending, room.game.move_catalog || []) : "暂无";
+                        opponentPending ? "对方已选择" : "";
                 }
 
                 if (pendingSelfLabelEl) {
-                    pendingSelfLabelEl.textContent = "我的待提交";
+                    pendingSelfLabelEl.textContent =
+                        myPending ? "我方已选择" : "我方待选择";
                 }
 
                 if (pendingOpponentLabelEl) {
-                    pendingOpponentLabelEl.textContent = "对方待提交";
+                    pendingOpponentLabelEl.textContent = 
+                        opponentPending ? "对方已选择" : "对方选择中";
                 }
 
                 applyPendingHighlights(room);
@@ -1442,6 +1489,16 @@
                     resetRoomBtn.addEventListener("click", resetRoomGame);
                 }
 
+                const openHelpBtn = document.getElementById("open-help-btn");
+                if (openHelpBtn) {
+                    openHelpBtn.addEventListener("click", openHelpModal);
+                }
+
+                const closeHelpBtn = document.getElementById("close-help-btn");
+                if (closeHelpBtn) {
+                    closeHelpBtn.addEventListener("click", closeHelpModal);
+                }
+
                 const openSettingsBtn = document.getElementById("open-settings-btn");
                 if (openSettingsBtn) {
                     openSettingsBtn.addEventListener("click", openSettingsModal);
@@ -1457,6 +1514,15 @@
                     settingsMask.addEventListener("click", (event) => {
                         if (event.target.id === "settings-mask") {
                             closeSettingsModal();
+                        }
+                    });
+                }
+
+                const helpMask = document.getElementById("help-mask");
+                if (helpMask) {
+                    helpMask.addEventListener("click", (event) => {
+                        if (event.target.id === "help-mask") {
+                            closeHelpModal();
                         }
                     });
                 }
