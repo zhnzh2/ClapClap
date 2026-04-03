@@ -43,6 +43,7 @@
         }
 
         let currentSelectedMoveName = null;
+        let currentSelectedOriginalMoveName = null;
         let currentSelectedSeat = null;
         let lastRenderedRoundCount = -1;
 
@@ -317,6 +318,52 @@
             if (mySeat === "p1") return room.pending_p2_move;
             if (mySeat === "p2") return room.pending_p1_move;
             return null;
+        }
+
+        function updatePendingChoicePreview() {
+            if (!latestRoom) {
+                return;
+            }
+
+            const pendingSelfEl = document.getElementById("pending-self");
+            const pendingSelfLabelEl = document.getElementById("pending-self-label");
+            const pendingOpponentEl = document.getElementById("pending-opponent");
+            const pendingOpponentLabelEl = document.getElementById("pending-opponent-label");
+
+            const myPending = getMyPendingMove(latestRoom);
+            const opponentPending = getOpponentPendingMove(latestRoom);
+
+            const myPreviewMove =
+                !myPending &&
+                currentSelectedSeat === mySeat &&
+                currentSelectedOriginalMoveName
+                    ? currentSelectedOriginalMoveName
+                    : null;
+
+            if (pendingSelfEl) {
+                if (myPending) {
+                    pendingSelfEl.textContent = moveLabel(myPending, latestRoom.game.move_catalog || []);
+                } else if (myPreviewMove) {
+                    pendingSelfEl.textContent = moveLabel(myPreviewMove, latestRoom.game.move_catalog || []);
+                } else {
+                    pendingSelfEl.textContent = "暂无";
+                }
+            }
+
+            if (pendingSelfLabelEl) {
+                pendingSelfLabelEl.textContent =
+                    myPending ? "我方已选择" : "我方待选择";
+            }
+
+            if (pendingOpponentEl) {
+                pendingOpponentEl.textContent =
+                    opponentPending ? "对方已选择" : "";
+            }
+
+            if (pendingOpponentLabelEl) {
+                pendingOpponentLabelEl.textContent =
+                    opponentPending ? "对方已选择" : "对方选择中";
+            }
         }
 
         function isMyActionLocked(room) {
@@ -695,16 +742,12 @@
 
             if (mySeat === "p1") {
                 p1NameBox.classList.add("seat-p1");
-                p1PlayerBox.classList.add("active-seat", "active-seat-p1");
                 document.getElementById("p1-seat-note").textContent = "这是你当前操作的一侧。";
                 document.getElementById("p2-seat-note").textContent = "这是对方当前状态。";
-                p1RowFull.classList.add("seat-p1");
             } else if (mySeat === "p2") {
                 p2NameBox.classList.add("seat-p2");
-                p2PlayerBox.classList.add("active-seat", "active-seat-p2");
                 document.getElementById("p1-seat-note").textContent = "这是对方当前状态。";
                 document.getElementById("p2-seat-note").textContent = "这是你当前操作的一侧。";
-                p2RowFull.classList.add("seat-p2");
             } else {
                 document.getElementById("p1-seat-note").textContent = "当前为观战或未知身份。";
                 document.getElementById("p2-seat-note").textContent = "当前为观战或未知身份。";
@@ -1055,6 +1098,7 @@
 
         function clearMoveSelection() {
             currentSelectedMoveName = null;
+            currentSelectedOriginalMoveName = null;
             currentSelectedSeat = null;
 
             document.querySelectorAll(".move-btn").forEach((node) => {
@@ -1066,6 +1110,8 @@
                     "pending-confirm-p2"
                 );
             });
+
+            updatePendingChoicePreview();
         }
 
         function selectMoveForConfirm(seat, moveName) {
@@ -1074,6 +1120,7 @@
             clearMoveSelection();
 
             currentSelectedMoveName = normalizedMoveName;
+            currentSelectedOriginalMoveName = moveName;
             currentSelectedSeat = seat;
 
             const btn = document.querySelector(
@@ -1081,16 +1128,14 @@
             );
 
             if (!btn) {
+                updatePendingChoicePreview();
                 return;
             }
 
-            if (seat === "p1") {
-                btn.classList.add("pending-confirm-p1");
-            } else if (seat === "p2") {
-                btn.classList.add("pending-confirm-p2");
-            }
-
+            btn.classList.add("pending-confirm-p1");
             btn.classList.add("keyboard-focus");
+
+            updatePendingChoicePreview();
 
             setRoomMessage(
                 `已选择 ${moveLabel(btn.dataset.originalMoveName, latestRoom?.game?.move_catalog || [])}，按 Enter 确认提交，按 Backspace 取消。`,
@@ -1166,6 +1211,7 @@
 
                 renderRoom(data.room);
                 clearMoveSelection();
+                updatePendingChoicePreview();
                 setRoomMessage(data.message || "已撤回本回合提交动作。", "waiting");
 
                 const myMsgEl = document.getElementById(`${mySeat}-submit-msg`);
@@ -1291,9 +1337,21 @@
                 const myPending = getMyPendingMove(room);
                 const opponentPending = getOpponentPendingMove(room);
 
+                const myPreviewMove =
+                    !myPending &&
+                    currentSelectedSeat === mySeat &&
+                    currentSelectedOriginalMoveName
+                        ? currentSelectedOriginalMoveName
+                        : null;
+
                 if (pendingSelfEl) {
-                    pendingSelfEl.textContent =
-                        myPending ? moveLabel(myPending, room.game.move_catalog || []) : "暂无";
+                    if (myPending) {
+                        pendingSelfEl.textContent = moveLabel(myPending, room.game.move_catalog || []);
+                    } else if (myPreviewMove) {
+                        pendingSelfEl.textContent = moveLabel(myPreviewMove, room.game.move_catalog || []);
+                    } else {
+                        pendingSelfEl.textContent = "暂无";
+                    }
                 }
 
                 if (pendingOpponentEl) {
@@ -1307,7 +1365,7 @@
                 }
 
                 if (pendingOpponentLabelEl) {
-                    pendingOpponentLabelEl.textContent = 
+                    pendingOpponentLabelEl.textContent =
                         opponentPending ? "对方已选择" : "对方选择中";
                 }
 
@@ -1331,10 +1389,10 @@
                 const leftPlayer = leftSeat === "p1" ? room.game.p1 : room.game.p2;
                 const rightPlayer = rightSeat === "p1" ? room.game.p1 : room.game.p2;
 
-                document.getElementById("left-row-title").textContent = `${getSeatDisplayName(room, leftSeat)} 状态`;
-                document.getElementById("right-row-title").textContent = `${getSeatDisplayName(room, rightSeat)} 状态`;
-                document.getElementById("left-compact-title").textContent = `${getSeatDisplayName(room, leftSeat)} 状态`;
-                document.getElementById("right-compact-title").textContent = `${getSeatDisplayName(room, rightSeat)} 状态`;
+                document.getElementById("left-row-title").textContent = getSeatDisplayName(room, leftSeat);
+                document.getElementById("right-row-title").textContent = getSeatDisplayName(room, rightSeat);
+                document.getElementById("left-compact-title").textContent = getSeatDisplayName(room, leftSeat);
+                document.getElementById("right-compact-title").textContent = getSeatDisplayName(room, rightSeat);
 
                 document.getElementById("p1-state-full").innerHTML = renderPlayerStateFull(leftPlayer);
                 document.getElementById("p2-state-full").innerHTML = renderPlayerStateFull(rightPlayer);
@@ -1416,8 +1474,8 @@
                     return;
                 }
 
-                clearMoveSelection();
                 renderRoom(data.room);
+                clearMoveSelection();
 
                 if (data.resolved) {
                     setRoomMessage(data.message || "本回合已结算。", "success");
