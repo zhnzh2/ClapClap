@@ -171,8 +171,7 @@
 
         .move-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
-            gap: 8px;
+            gap: 10px;
         }
 
         .move-btn {
@@ -180,10 +179,14 @@
             border: 1px solid #d1d5db;
             background: white;
             border-radius: 10px;
-            padding: 16px 8px 8px;
+            padding: 16px 10px 10px;
             cursor: pointer;
             text-align: center;
-            min-height: 58px;
+            min-height: 64px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
             transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease, background 0.12s ease;
         }
 
@@ -215,14 +218,18 @@
         }
 
         .move-label {
-            font-size: 14px;
+            font-size: 15px;
             font-weight: bold;
-            margin-bottom: 3px;
+            margin-bottom: 4px;
+            line-height: 1.2;
+            text-align: center;
         }
 
         .move-name {
-            font-size: 10px;
+            font-size: 11px;
             color: var(--muted);
+            line-height: 1.2;
+            text-align: center;
         }
 
         .message {
@@ -231,20 +238,59 @@
             color: #374151;
         }
 
-        .history-list {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            max-height: 280px;
+        .history-table-wrapper {
+            max-height: 360px;
             overflow-y: auto;
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            background: white;
         }
 
-        .history-item {
-            background: var(--panel);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 12px;
-            line-height: 1.7;
+        .history-table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+        }
+
+        .history-table thead th {
+            position: sticky;
+            top: 0;
+            z-index: 1;
+            background: #f8fafc;
+            color: var(--muted);
+            font-size: 13px;
+            font-weight: 700;
+            text-align: center;
+            padding: 10px 8px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .history-table tbody td {
+            padding: 10px 8px;
+            border-bottom: 1px solid #edf2f7;
+            font-size: 13px;
+            color: var(--text);
+            line-height: 1.5;
+            text-align: center;
+            vertical-align: middle;
+            word-break: break-word;
+        }
+
+        .history-table tbody tr:nth-child(even) {
+            background: #fcfdff;
+        }
+
+        .history-table-col-round {
+            width: 72px;
+        }
+
+        .history-table-col-move {
+            width: 100px;
+        }
+
+        .history-table-col-summary {
+            width: auto;
+            text-align: left;
         }
 
         .muted {
@@ -618,12 +664,18 @@
             pointer-events: none;
         }
 
-        .move-btn.pending-confirm-p1,
-        .move-btn.pending-confirm-p2 {
+        .move-btn.pending-confirm-p1 {
             border: 2px solid var(--blue);
-            background: #f7fbff;
+            background: var(--blue-soft);
             color: #1d4ed8;
             box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.10);
+        }
+
+        .move-btn.pending-confirm-p2 {
+            border: 2px solid var(--red);
+            background: var(--red-soft);
+            color: #991b1b;
+            box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.10);
         }
 
         .move-layout {
@@ -646,12 +698,20 @@
             grid-template-columns: 1fr;
         }
 
-        .move-grid.top-action-grid {
-            grid-template-columns: repeat(8, minmax(0, 1fr));
+        .move-grid.resource-defense-grid {
+            grid-template-columns: repeat(4, minmax(110px, 1fr));
         }
 
-        .move-grid.bottom-action-grid {
-            grid-template-columns: repeat(9, minmax(0, 1fr));
+        .move-grid.qi-attack-grid {
+            grid-template-columns: repeat(5, minmax(110px, 1fr));
+        }
+
+        .move-grid.shield-attack-grid {
+            grid-template-columns: repeat(4, minmax(110px, 1fr));
+        }
+
+        .move-grid.trick-grid {
+            grid-template-columns: repeat(4, minmax(110px, 1fr));
         }
 
         .move-section {
@@ -729,13 +789,11 @@
         }
 
         @media (max-width: 980px) {
-            .pending-row {
-                grid-template-columns: 1fr;
-            }
-
-            .move-grid.top-action-grid,
-            .move-grid.bottom-action-grid {
-                grid-template-columns: repeat(4, minmax(0, 1fr));
+            .move-grid.resource-defense-grid,
+            .move-grid.qi-attack-grid,
+            .move-grid.shield-attack-grid,
+            .move-grid.trick-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
             }
         }
 
@@ -1058,7 +1116,34 @@
         }
 
         .status-table-row.full {
-            grid-template-columns: repeat(7, minmax(0, 1fr));
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .status-table-full-top,
+        .status-table-full-bottom {
+            display: grid;
+            gap: 10px;
+            align-items: stretch;
+        }
+
+        .status-table-full-top {
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+        }
+
+        .status-table-full-bottom {
+            width: 100%;
+            max-width: 78%;
+            margin: 0 auto;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+
+        .status-table-cell {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
         }
 
         .status-table-cell {
@@ -1281,14 +1366,12 @@
 
                 <div class="selection-grid single-selection-grid">
                     <div class="selection-box" id="p1-submit-box">
-                        <h3 id="p1-submit-title">你的动作选择区</h3>
                         <div id="p1-move-groups"></div>
                         <div class="message" id="p1-submit-msg"></div>
                         <div class="submit-confirm-hint">先选择动作，再按 Enter 确认；按 Backspace 可取消选择或撤回本回合提交。</div>
                     </div>
 
                     <div class="selection-box" id="p2-submit-box">
-                        <h3 id="p2-submit-title">你的动作选择区</h3>
                         <div id="p2-move-groups"></div>
                         <div class="message" id="p2-submit-msg"></div>
                         <div class="submit-confirm-hint">先选择动作，再按 Enter 确认；按 Backspace 可取消选择或撤回本回合提交。</div>
@@ -1340,13 +1423,13 @@
                         </div>
                     </div>
             </div>
+
+            <div class="card" id="history-section">
+                <h2>历史记录</h2>
+                <div id="history" class="history-table-wrapper"></div>
+            </div>
         </div>
     </div>
-
-        <div class="card" id="history-section">
-            <h2>历史记录</h2>
-            <div id="history" class="history-list"></div>
-        </div>
     </div>
 
     <script>
@@ -1423,6 +1506,14 @@
                     <select id="player-state-mode-select" class="settings-select">
                         <option value="compact" selected>精简模式</option>
                         <option value="full">完整模式</option>
+                    </select>
+                </div>
+
+                <div class="settings-item">
+                    <label for="reveal-advance-mode-select">回合展示</label>
+                    <select id="reveal-advance-mode-select" class="settings-select">
+                        <option value="auto" selected>自动模式</option>
+                        <option value="manual">手动模式</option>
                     </select>
                 </div>
             </div>

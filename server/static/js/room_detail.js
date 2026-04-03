@@ -48,6 +48,7 @@
         let lastRenderedRoundCount = -1;
         let roundResolvePreview = null;
         let resolvePreviewTimer = null;
+        let waitingManualRevealAdvance = false;
 
         if (typeof io !== "function") {
             console.error("room_detail.js: Socket.IO 未加载成功");
@@ -61,9 +62,10 @@
             showRoomStatus: false,
             showInvite: false,
             showRoundResult: false,
-            showHistory: false,
+            showHistory: true,
             showMoveSubtitles: false,
-            playerStateMode: "compact"
+            playerStateMode: "compact",
+            revealAdvanceMode: "auto"
         };
 
         let roomUiSettings = { ...DEFAULT_ROOM_UI_SETTINGS };
@@ -86,15 +88,10 @@
         });
 
         const moveGroups = {
-            top_row: {
-                resource: ["QI", "SHIELD"],
-                defense: ["SHI_ZI", "BA_GUA"],
-                trick: ["CHI", "SHUANG_CHI", "SHAN", "GAO"]
-            },
-            bottom_row: {
-                attack_qi: ["GI", "PO", "LENG_FENG", "RU_LAI", "HEI_DONG"],
-                attack_shield: ["FIRE", "SHAN_DIAN", "LIE_YAN", "SHINING"]
-            }
+            resource_defense: ["QI", "SHIELD", "SHI_ZI", "BA_GUA"],
+            attack_qi: ["GI", "PO", "LENG_FENG", "RU_LAI", "HEI_DONG"],
+            attack_shield: ["FIRE", "SHAN_DIAN", "LIE_YAN", "SHINING"],
+            trick: ["CHI", "SHUANG_CHI", "SHAN", "GAO"]
         };
 
         function seatDisplayText(seat) {
@@ -228,6 +225,7 @@
             document.getElementById("toggle-history-section").checked = !!roomUiSettings.showHistory;
             document.getElementById("toggle-move-subtitles").checked = !!roomUiSettings.showMoveSubtitles;
             document.getElementById("player-state-mode-select").value = roomUiSettings.playerStateMode || "compact";
+            document.getElementById("reveal-advance-mode-select").value = roomUiSettings.revealAdvanceMode || "auto";
         }
 
         function applyRoomUiSettings() {
@@ -787,8 +785,6 @@
             const resetBtn = document.getElementById("reset-room-btn");
             const p1SubmitBox = document.getElementById("p1-submit-box");
             const p2SubmitBox = document.getElementById("p2-submit-box");
-            const p1SubmitTitle = document.getElementById("p1-submit-title");
-            const p2SubmitTitle = document.getElementById("p2-submit-title");
 
             if (mySeat === "p1") {
                 if (actionSection) {
@@ -802,12 +798,6 @@
                 }
                 if (p2SubmitBox) {
                     p2SubmitBox.style.display = "none";
-                }
-                if (p1SubmitTitle) {
-                    p1SubmitTitle.textContent = "你的提交区";
-                }
-                if (p2SubmitTitle) {
-                    p2SubmitTitle.textContent = "P2 提交区";
                 }
                 return;
             }
@@ -824,12 +814,6 @@
                 }
                 if (p2SubmitBox) {
                     p2SubmitBox.style.display = "";
-                }
-                if (p1SubmitTitle) {
-                    p1SubmitTitle.textContent = "P1 提交区";
-                }
-                if (p2SubmitTitle) {
-                    p2SubmitTitle.textContent = "你的提交区";
                 }
                 return;
             }
@@ -877,33 +861,38 @@
 
             return `
                 <div class="status-table-row full ${sideClass}">
-                    <div class="status-table-cell status-table-cell-stat">
-                        <span class="status-table-key">生命</span>
-                        <span class="status-table-value">${player.hp ?? 0}</span>
+                    <div class="status-table-full-top">
+                        <div class="status-table-cell status-table-cell-stat">
+                            <span class="status-table-key">生命</span>
+                            <span class="status-table-value">${player.hp ?? 0}</span>
+                        </div>
+                        <div class="status-table-cell status-table-cell-stat">
+                            <span class="status-table-key">镐</span>
+                            <span class="status-table-value">${player.pickaxe ?? 0}</span>
+                        </div>
+                        <div class="status-table-cell status-table-cell-stat">
+                            <span class="status-table-key">气</span>
+                            <span class="status-table-value">${player.qi ?? 0}</span>
+                        </div>
+                        <div class="status-table-cell status-table-cell-stat">
+                            <span class="status-table-key">盾</span>
+                            <span class="status-table-value">${player.shield ?? 0}</span>
+                        </div>
                     </div>
-                    <div class="status-table-cell status-table-cell-stat">
-                        <span class="status-table-key">镐</span>
-                        <span class="status-table-value">${player.pickaxe ?? 0}</span>
-                    </div>
-                    <div class="status-table-cell status-table-cell-stat">
-                        <span class="status-table-key">气</span>
-                        <span class="status-table-value">${player.qi ?? 0}</span>
-                    </div>
-                    <div class="status-table-cell status-table-cell-stat">
-                        <span class="status-table-key">盾</span>
-                        <span class="status-table-value">${player.shield ?? 0}</span>
-                    </div>
-                    <div class="status-table-cell status-table-cell-stat">
-                        <span class="status-table-key">火种</span>
-                        <span class="status-table-value">${player.spark ?? 0}</span>
-                    </div>
-                    <div class="status-table-cell status-table-cell-stat">
-                        <span class="status-table-key">电池</span>
-                        <span class="status-table-value">${player.battery ?? 0}</span>
-                    </div>
-                    <div class="status-table-cell status-table-cell-stat">
-                        <span class="status-table-key">闪次数</span>
-                        <span class="status-table-value">${player.flash_used ?? 0}</span>
+
+                    <div class="status-table-full-bottom">
+                        <div class="status-table-cell status-table-cell-stat">
+                            <span class="status-table-key">火种</span>
+                            <span class="status-table-value">${player.spark ?? 0}</span>
+                        </div>
+                        <div class="status-table-cell status-table-cell-stat">
+                            <span class="status-table-key">电池</span>
+                            <span class="status-table-value">${player.battery ?? 0}</span>
+                        </div>
+                        <div class="status-table-cell status-table-cell-stat">
+                            <span class="status-table-key">闪次数</span>
+                            <span class="status-table-value">${player.flash_used ?? 0}</span>
+                        </div>
                     </div>
                 </div>
             `;
@@ -976,6 +965,11 @@
                 saveRoomUiSettings();
                 applyRoomUiSettings();
             });
+
+            document.getElementById("reveal-advance-mode-select").addEventListener("change", (event) => {
+                roomUiSettings.revealAdvanceMode = event.target.value;
+                saveRoomUiSettings();
+            });
         }
 
         function moveLabel(moveName, catalog) {
@@ -994,37 +988,27 @@
             const layout = document.createElement("div");
             layout.className = "move-layout";
 
-            const topRow = document.createElement("div");
-            topRow.className = "move-row top-row";
-
-            const bottomRow = document.createElement("div");
-            bottomRow.className = "move-row bottom-row";
-
-            const topTitle = document.createElement("div");
-            topTitle.className = "move-group-title";
-            topTitle.textContent = "资源 / 防御 / 锦囊";
-            topTitle.style.display = roomUiSettings.showMoveSubtitles ? "" : "none";
-
-            const bottomTitle = document.createElement("div");
-            bottomTitle.className = "move-group-title";
-            bottomTitle.textContent = "攻击";
-            bottomTitle.style.display = roomUiSettings.showMoveSubtitles ? "" : "none";
-
-            const topGrid = document.createElement("div");
-            topGrid.className = "move-grid top-action-grid";
-
-            const bottomGrid = document.createElement("div");
-            bottomGrid.className = "move-grid bottom-action-grid";
-
-            const topMoveNames = [
-                ...moveGroups.top_row.resource,
-                ...moveGroups.top_row.defense,
-                ...moveGroups.top_row.trick
-            ];
-
-            const bottomMoveNames = [
-                ...moveGroups.bottom_row.attack_qi,
-                ...moveGroups.bottom_row.attack_shield
+            const rows = [
+                {
+                    title: "资源 / 防御",
+                    className: "move-grid resource-defense-grid",
+                    moveNames: moveGroups.resource_defense
+                },
+                {
+                    title: "气系攻击",
+                    className: "move-grid qi-attack-grid",
+                    moveNames: moveGroups.attack_qi
+                },
+                {
+                    title: "盾系攻击",
+                    className: "move-grid shield-attack-grid",
+                    moveNames: moveGroups.attack_shield
+                },
+                {
+                    title: "锦囊",
+                    className: "move-grid trick-grid",
+                    moveNames: moveGroups.trick
+                }
             ];
 
             function appendMoveButton(grid, moveName) {
@@ -1070,11 +1054,21 @@
                     btn.classList.add("pending-confirm-p1");
                 }
 
-                btn.addEventListener("click", () => {
+                btn.addEventListener("click", async () => {
                     if (!legal) return;
                     if (isMyActionLocked(latestRoom)) return;
                     if (isSpectatorMode()) return;
                     if (seat !== mySeat) return;
+
+                    const normalizedCurrent = normalizeMoveName(moveName);
+
+                    if (
+                        currentSelectedSeat === seat &&
+                        currentSelectedMoveName === normalizedCurrent
+                    ) {
+                        await confirmSelectedMove();
+                        return;
+                    }
 
                     selectMoveForConfirm(seat, moveName);
                 });
@@ -1082,47 +1076,85 @@
                 grid.appendChild(btn);
             }
 
-            for (const moveName of topMoveNames) {
-                appendMoveButton(topGrid, moveName);
+            for (const rowConfig of rows) {
+                const row = document.createElement("div");
+                row.className = "move-row single-move-row";
+
+                const title = document.createElement("div");
+                title.className = "move-group-title";
+                title.textContent = rowConfig.title;
+                title.style.display = roomUiSettings.showMoveSubtitles ? "" : "none";
+
+                const grid = document.createElement("div");
+                grid.className = rowConfig.className;
+
+                for (const moveName of rowConfig.moveNames) {
+                    appendMoveButton(grid, moveName);
+                }
+
+                row.appendChild(title);
+                row.appendChild(grid);
+                layout.appendChild(row);
             }
-
-            for (const moveName of bottomMoveNames) {
-                appendMoveButton(bottomGrid, moveName);
-            }
-
-            topRow.appendChild(topTitle);
-            topRow.appendChild(topGrid);
-
-            bottomRow.appendChild(bottomTitle);
-            bottomRow.appendChild(bottomGrid);
-
-            layout.appendChild(topRow);
-            layout.appendChild(bottomRow);
 
             container.appendChild(layout);
+
         }
 
         function renderHistory(logs) {
             const historyEl = document.getElementById("history");
-            historyEl.innerHTML = "";
-
-            if (!logs || logs.length === 0) {
-                historyEl.innerHTML = "<div class='muted'>当前还没有历史记录。</div>";
+            if (!historyEl) {
                 return;
             }
 
-            for (const log of logs.slice().reverse()) {
-                const item = document.createElement("div");
-                item.className = "history-item";
-                item.innerHTML = `
-                    <div><strong>第 ${log.round_num} 回合</strong></div>
-                    <div>P1：${log.p1_move_label} (${log.p1_move})</div>
-                    <div>P2：${log.p2_move_label} (${log.p2_move})</div>
-                    <div>P1 伤害：${log.p1_damage_taken} | P2 伤害：${log.p2_damage_taken}</div>
-                    <div><strong>总结：</strong>${log.summary}</div>
-                `;
-                historyEl.appendChild(item);
+            historyEl.innerHTML = "";
+
+            if (!logs || logs.length === 0) {
+                historyEl.innerHTML = "<div class='muted' style='padding: 12px;'>当前还没有历史记录。</div>";
+                return;
             }
+
+            const rowsHtml = logs.slice().reverse().map((log) => {
+                const p1Move = log.p1_move_label || log.p1_move || "";
+                const p2Move = log.p2_move_label || log.p2_move || "";
+
+                const damageParts = [];
+                if ((log.p1_damage_taken ?? 0) > 0) {
+                    damageParts.push(`1号位受到${log.p1_damage_taken}点伤害`);
+                }
+                if ((log.p2_damage_taken ?? 0) > 0) {
+                    damageParts.push(`2号位受到${log.p2_damage_taken}点伤害`);
+                }
+
+                const summaryText = damageParts.length > 0
+                    ? damageParts.join("，")
+                    : "";
+
+                return `
+                    <tr>
+                        <td class="history-table-col-round">${log.round_num}</td>
+                        <td class="history-table-col-move">${p1Move}</td>
+                        <td class="history-table-col-move">${p2Move}</td>
+                        <td class="history-table-col-summary">${summaryText}</td>
+                    </tr>
+                `;
+            }).join("");
+
+            historyEl.innerHTML = `
+                <table class="history-table">
+                    <thead>
+                        <tr>
+                            <th class="history-table-col-round">回合数</th>
+                            <th class="history-table-col-move">1号位动作</th>
+                            <th class="history-table-col-move">2号位动作</th>
+                            <th class="history-table-col-summary">总结</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${rowsHtml}
+                    </tbody>
+                </table>
+            `;
         }
 
         async function copyTextWithFeedback(text, successText) {
@@ -1194,6 +1226,33 @@
             return document.querySelector(
                 `.move-btn[data-seat="${mySeat}"][data-move-name="${normalized}"]`
             );
+        }
+
+        function highlightResolvedPreviewButtons(preview) {
+            if (!preview || !latestRoom) {
+                return;
+            }
+
+            document.querySelectorAll(".move-btn").forEach((node) => {
+                node.classList.remove("pending-confirm-p1", "pending-confirm-p2");
+            });
+
+            const myMove = mySeat === "p1" ? preview.p1_move : preview.p2_move;
+            const opponentMove = mySeat === "p1" ? preview.p2_move : preview.p1_move;
+
+            if (myMove) {
+                const myBtn = findMoveButtonByMoveName(myMove);
+                if (myBtn) {
+                    myBtn.classList.add("pending-confirm-p1");
+                }
+            }
+
+            if (opponentMove) {
+                const opponentBtn = findMoveButtonByMoveName(opponentMove);
+                if (opponentBtn) {
+                    opponentBtn.classList.add("pending-confirm-p2");
+                }
+            }
         }
 
         async function confirmSelectedMove() {
@@ -1289,6 +1348,12 @@
         }
 
         async function handleGlobalKeyboard(event) {
+            if (waitingManualRevealAdvance && latestRoom) {
+                event.preventDefault();
+                finishResolvedPreview(latestRoom);
+                return;
+            }
+
             if (event.target && ["INPUT", "TEXTAREA", "SELECT"].includes(event.target.tagName)) {
                 return;
             }
@@ -1475,6 +1540,11 @@
                     "p2"
                 );
 
+                if (roundResolvePreview) {
+                    showResolvedPreview(roundResolvePreview, room);
+                    highlightResolvedPreviewButtons(roundResolvePreview);
+                }
+
                 renderHistory(room.game.history || []);
             } catch (error) {
                 console.error("renderRoom error:", error, room);
@@ -1510,6 +1580,8 @@
         }
 
         function showResolvedPreview(preview, room) {
+            waitingManualRevealAdvance = false;
+
             const pendingSelfEl = document.getElementById("pending-self");
             const pendingOpponentEl = document.getElementById("pending-opponent");
             const pendingSelfLabelEl = document.getElementById("pending-self-label");
@@ -1538,6 +1610,13 @@
                     ? moveLabel(opponentMove, room.game.move_catalog || [])
                     : "暂无";
             }
+        }
+
+        function finishResolvedPreview(room) {
+            roundResolvePreview = null;
+            waitingManualRevealAdvance = false;
+            clearMoveSelection();
+            renderRoom(room);
         }
 
         async function submitMove(seat, moveName) {
@@ -1575,18 +1654,25 @@
 
                     if (roundResolvePreview) {
                         showResolvedPreview(roundResolvePreview, data.room);
+                        highlightResolvedPreviewButtons(roundResolvePreview);
                     }
 
                     setRoomMessage(data.message || "本回合已结算。", "success");
 
                     if (resolvePreviewTimer) {
                         window.clearTimeout(resolvePreviewTimer);
+                        resolvePreviewTimer = null;
                     }
 
-                    resolvePreviewTimer = window.setTimeout(() => {
-                        roundResolvePreview = null;
-                        renderRoom(data.room);
-                    }, 1000);
+                    if ((roomUiSettings.revealAdvanceMode || "auto") === "manual") {
+                        waitingManualRevealAdvance = true;
+                        setRoomMessage("本回合动作已展示。按任意键或点击任意位置进入下一回合。", "waiting");
+                    } else {
+                        waitingManualRevealAdvance = false;
+                        resolvePreviewTimer = window.setTimeout(() => {
+                            finishResolvedPreview(data.room);
+                        }, 1000);
+                    }
                 } else {
                     renderRoom(data.room);
                     setRoomMessage(data.message || "你已提交动作，当前操作已锁定，正在等待对方。", "waiting");
@@ -1717,6 +1803,27 @@
                 }
 
                 document.addEventListener("keydown", handleGlobalKeyboard);
+                document.addEventListener("click", (event) => {
+                    if (!waitingManualRevealAdvance || !latestRoom) {
+                        return;
+                    }
+
+                    const settingsMask = document.getElementById("settings-mask");
+                    const helpMask = document.getElementById("help-mask");
+                    const finishMask = document.getElementById("game-finish-mask");
+
+                    if (settingsMask.classList.contains("show")) {
+                        return;
+                    }
+                    if (helpMask.classList.contains("show")) {
+                        return;
+                    }
+                    if (finishMask.classList.contains("show")) {
+                        return;
+                    }
+
+                    finishResolvedPreview(latestRoom);
+                });
 
                 loadRoomUiSettings();
                 syncSettingsControls();
