@@ -187,6 +187,28 @@ class Room:
         self.updated_at = datetime.utcnow()
         self.persist()
 
+    def cancel_submitted_move(self, seat: str) -> tuple[bool, str]:
+        if seat == "p1":
+            if self.pending_p1_move is None:
+                return False, "你当前还没有已提交的动作。"
+            if self.pending_p2_move is not None:
+                return False, "对方已经提交，当前回合已进入结算，不能撤回。"
+
+            self.pending_p1_move = None
+        elif seat == "p2":
+            if self.pending_p2_move is None:
+                return False, "你当前还没有已提交的动作。"
+            if self.pending_p1_move is not None:
+                return False, "对方已经提交，当前回合已进入结算，不能撤回。"
+
+            self.pending_p2_move = None
+        else:
+            raise ValueError("未知座位。")
+
+        self.updated_at = datetime.utcnow()
+        self.persist()
+        return True, "已撤回本回合提交动作。"
+
     def clear_pending_moves(self) -> None:
         self.pending_p1_move = None
         self.pending_p2_move = None

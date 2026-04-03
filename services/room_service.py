@@ -201,3 +201,38 @@ def reset_room_service(room_id: str, player_token: str) -> tuple[dict, int]:
             "message": message,
             "room": get_room_payload(room),
         }, 200
+    
+def cancel_room_move_service(room_id: str, player_token: str) -> tuple[dict, int]:
+    room = get_room(room_id)
+    if room is None:
+        return {
+            "ok": False,
+            "error": "房间不存在。",
+        }, 404
+
+    room_lock = get_room_runtime_lock(room_id)
+
+    with room_lock:
+        seat = room.get_seat_by_token(player_token.strip())
+        if seat not in ("p1", "p2"):
+            return {
+                "ok": False,
+                "error": "身份无效，不能撤回动作。",
+            }, 403
+
+        room.mark_seen(seat)
+
+        success, message = room.cancel_submitted_move(seat)
+        if not success:
+            return {
+                "ok": False,
+                "error": message,
+            }, 400
+
+        emit_room_state(room_id)
+
+        return {
+            "ok": True,
+            "message": message,
+            "room": get_room_payload(room),
+        }, 200

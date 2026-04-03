@@ -54,10 +54,11 @@
         const socket = io();
 
         const DEFAULT_ROOM_UI_SETTINGS = {
-            showRoomInfo: true,
+            showRoomInfo: false,
             showRoomStatus: false,
             showInvite: false,
             showRoundResult: false,
+            showHistory: false,
             playerStateMode: "compact"
         };
 
@@ -81,16 +82,20 @@
         });
 
         const moveGroups = {
-            resource: ["QI", "SHIELD"],
-            attack_qi: ["GI", "PO", "LENG_FENG", "RU_LAI", "HEI_DONG"],
-            attack_shield: ["FIRE", "SHAN_DIAN", "LIE_YAN", "SHINING"],
-            defense: ["SHI_ZI", "BA_GUA"],
-            trick: ["CHI", "SHUANG_CHI", "SHAN", "GAO"]
+            top_row: {
+                resource: ["QI", "SHIELD"],
+                defense: ["SHI_ZI", "BA_GUA"],
+                trick: ["CHI", "SHUANG_CHI", "SHAN", "GAO"]
+            },
+            bottom_row: {
+                attack_qi: ["GI", "PO", "LENG_FENG", "RU_LAI", "HEI_DONG"],
+                attack_shield: ["FIRE", "SHAN_DIAN", "LIE_YAN", "SHINING"]
+            }
         };
 
         function seatDisplayText(seat) {
-            if (seat === "p1") return "P1";
-            if (seat === "p2") return "P2";
+            if (seat === "p1") return "1号位";
+            if (seat === "p2") return "2号位";
             return "观战 / 未知";
         }
 
@@ -106,8 +111,8 @@
         }
 
         function getSeatLabel(seat) {
-            if (seat === "p1") return "P1";
-            if (seat === "p2") return "P2";
+            if (seat === "p1") return "1号位";
+            if (seat === "p2") return "2号位";
             return "观战";
         }
 
@@ -117,36 +122,70 @@
             return null;
         }
 
+        function getSeatDisplayName(room, seat) {
+            const playerName = seat === "p1" ? (room.p1_name || "暂无") : (room.p2_name || "暂无");
+            const seatLabel = seat === "p1" ? "1号位" : "2号位";
+            return `${playerName} · ${seatLabel}`;
+        }
+
+        function getOrderedSeatsForDisplay() {
+            if (mySeat === "p1") {
+                return ["p1", "p2"];
+            }
+            if (mySeat === "p2") {
+                return ["p2", "p1"];
+            }
+            return ["p1", "p2"];
+        }
+
         function isSpectatorMode() {
             return mySeat !== "p1" && mySeat !== "p2";
         }
 
         const MOVE_SHORTCUTS = {
-            "qi": "1",
-            "shield": "2",
-            "spark": "3",
-            "battery": "4",
-            "pickaxe": "Q",
-            "flash": "W",
-            "blackhole": "E",
+            "chi": "1",
+            "shuang_chi": "2",
+            "shan": "3",
+            "gao": "4",
+
+            "qi": "Q",
+            "shield": "W",
+            "shi_zi": "E",
+            "ba_gua": "R",
+
             "gi": "A",
-            "cannon": "S",
-            "crossbow": "D",
-            "eight_trigrams": "F"
+            "po": "S",
+            "leng_feng": "D",
+            "ru_lai": "F",
+            "hei_dong": "G",
+
+            "fire": "Z",
+            "shan_dian": "X",
+            "lie_yan": "C",
+            "shining": "V"
         };
 
         const KEY_TO_MOVE_NAME = {
-            "1": "qi",
-            "2": "shield",
-            "3": "spark",
-            "4": "battery",
-            "q": "pickaxe",
-            "w": "flash",
-            "e": "blackhole",
+            "1": "chi",
+            "2": "shuang_chi",
+            "3": "shan",
+            "4": "gao",
+
+            "q": "qi",
+            "w": "shield",
+            "e": "shi_zi",
+            "r": "ba_gua",
+
             "a": "gi",
-            "s": "cannon",
-            "d": "crossbow",
-            "f": "eight_trigrams"
+            "s": "po",
+            "d": "leng_feng",
+            "f": "ru_lai",
+            "g": "hei_dong",
+
+            "z": "fire",
+            "x": "shan_dian",
+            "c": "lie_yan",
+            "v": "shining"
         };
 
         function normalizeMoveName(moveName) {
@@ -188,6 +227,7 @@
             document.getElementById("toggle-room-status").checked = !!roomUiSettings.showRoomStatus;
             document.getElementById("toggle-invite-section").checked = !!roomUiSettings.showInvite;
             document.getElementById("toggle-round-result").checked = !!roomUiSettings.showRoundResult;
+            document.getElementById("toggle-history-section").checked = !!roomUiSettings.showHistory;
             document.getElementById("player-state-mode-select").value = roomUiSettings.playerStateMode || "compact";
         }
 
@@ -196,6 +236,7 @@
             const roomStatusSection = document.getElementById("room-status-section");
             const inviteSection = document.getElementById("invite-section");
             const roundResultSection = document.getElementById("round-result-section");
+            const historySection = document.getElementById("history-section");
             const playerStateModeFull = document.getElementById("player-state-mode-full");
             const playerStateModeCompact = document.getElementById("player-state-mode-compact");
 
@@ -213,6 +254,10 @@
 
             if (roundResultSection) {
                 roundResultSection.style.display = roomUiSettings.showRoundResult ? "" : "none";
+            }
+
+            if (historySection) {
+                historySection.style.display = roomUiSettings.showHistory ? "" : "none";
             }
 
             if (playerStateModeFull && playerStateModeCompact) {
@@ -638,31 +683,76 @@
         }
 
         function applyPendingHighlights(room) {
-            const p1Box = document.getElementById("pending-p1-box");
-            const p2Box = document.getElementById("pending-p2-box");
+            const selfBox = document.getElementById("pending-self-box");
+            const opponentBox = document.getElementById("pending-opponent-box");
 
-            p1Box.classList.remove("pending-ready-p1");
-            p2Box.classList.remove("pending-ready-p2");
-
-            if (room.pending_p1_move) {
-                p1Box.classList.add("pending-ready-p1");
+            if (!selfBox || !opponentBox) {
+                return;
             }
 
-            if (room.pending_p2_move) {
-                p2Box.classList.add("pending-ready-p2");
+            selfBox.classList.remove("pending-self-ready");
+            opponentBox.classList.remove("pending-opponent-ready");
+
+            const myPending = getMyPendingMove(room);
+            const opponentPending = getOpponentPendingMove(room);
+
+            if (myPending) {
+                selfBox.classList.add("pending-self-ready");
+            }
+
+            if (opponentPending) {
+                opponentBox.classList.add("pending-opponent-ready");
             }
         }
 
         function applySeatVisibility() {
             const actionSection = document.getElementById("action-section");
             const resetBtn = document.getElementById("reset-room-btn");
+            const p1SubmitBox = document.getElementById("p1-submit-box");
+            const p2SubmitBox = document.getElementById("p2-submit-box");
+            const p1SubmitTitle = document.getElementById("p1-submit-title");
+            const p2SubmitTitle = document.getElementById("p2-submit-title");
 
-            if (mySeat === "p1" || mySeat === "p2") {
+            if (mySeat === "p1") {
                 if (actionSection) {
                     actionSection.style.display = "";
                 }
                 if (resetBtn) {
                     resetBtn.disabled = false;
+                }
+                if (p1SubmitBox) {
+                    p1SubmitBox.style.display = "";
+                }
+                if (p2SubmitBox) {
+                    p2SubmitBox.style.display = "none";
+                }
+                if (p1SubmitTitle) {
+                    p1SubmitTitle.textContent = "你的提交区";
+                }
+                if (p2SubmitTitle) {
+                    p2SubmitTitle.textContent = "P2 提交区";
+                }
+                return;
+            }
+
+            if (mySeat === "p2") {
+                if (actionSection) {
+                    actionSection.style.display = "";
+                }
+                if (resetBtn) {
+                    resetBtn.disabled = false;
+                }
+                if (p1SubmitBox) {
+                    p1SubmitBox.style.display = "none";
+                }
+                if (p2SubmitBox) {
+                    p2SubmitBox.style.display = "";
+                }
+                if (p1SubmitTitle) {
+                    p1SubmitTitle.textContent = "P1 提交区";
+                }
+                if (p2SubmitTitle) {
+                    p2SubmitTitle.textContent = "你的提交区";
                 }
                 return;
             }
@@ -751,6 +841,12 @@
                 applyRoomUiSettings();
             });
 
+            document.getElementById("toggle-history-section").addEventListener("change", (event) => {
+                roomUiSettings.showHistory = event.target.checked;
+                saveRoomUiSettings();
+                applyRoomUiSettings();
+            });
+
             document.getElementById("player-state-mode-select").addEventListener("change", (event) => {
                 roomUiSettings.playerStateMode = event.target.value;
                 saveRoomUiSettings();
@@ -765,76 +861,119 @@
 
         function renderMoveGroups(containerId, legalMoves, catalog, seat) {
             const container = document.getElementById(containerId);
+            if (!container) {
+                return;
+            }
+
             container.innerHTML = "";
 
-            for (const [groupKey, moveNames] of Object.entries(moveGroups)) {
-                const title = document.createElement("div");
-                title.className = "move-group-title";
-                title.textContent = moveCategoryTitle(groupKey);
-                container.appendChild(title);
+            const layout = document.createElement("div");
+            layout.className = "move-layout";
 
-                const grid = document.createElement("div");
-                grid.className = "move-grid";
+            const topRow = document.createElement("div");
+            topRow.className = "move-row top-row";
 
-                for (const moveName of moveNames) {
-                    const btn = document.createElement("button");
-                    btn.className = "move-btn";
-                    btn.type = "button";
+            const bottomRow = document.createElement("div");
+            bottomRow.className = "move-row bottom-row";
 
-                    const legal = legalMoves.includes(moveName);
-                    if (!legal) {
-                        btn.classList.add("disabled");
-                    }
+            const topTitle = document.createElement("div");
+            topTitle.className = "move-group-title";
+            topTitle.textContent = "资源 / 防御 / 锦囊";
 
-                    btn.innerHTML = `
-                        <div class="move-label">${moveLabel(moveName, catalog)}</div>
-                        <div class="move-name">${moveName}</div>
-                    `;
+            const bottomTitle = document.createElement("div");
+            bottomTitle.className = "move-group-title";
+            bottomTitle.textContent = "攻击";
 
-                    const normalizedMoveName = normalizeMoveName(moveName);
-                    const shortcutKey = MOVE_SHORTCUTS[normalizedMoveName];
+            const topGrid = document.createElement("div");
+            topGrid.className = "move-grid top-action-grid";
 
-                    if (shortcutKey) {
-                        const shortcutEl = document.createElement("div");
-                        shortcutEl.className = "move-shortcut";
-                        shortcutEl.textContent = shortcutKey;
-                        btn.appendChild(shortcutEl);
-                    }
+            const bottomGrid = document.createElement("div");
+            bottomGrid.className = "move-grid bottom-action-grid";
 
-                    const actionLocked = isMyActionLocked(latestRoom);
-                    if (!legal || actionLocked) {
-                        btn.classList.add("locked");
-                    }
+            const topMoveNames = [
+                ...moveGroups.top_row.resource,
+                ...moveGroups.top_row.defense,
+                ...moveGroups.top_row.trick
+            ];
 
-                    btn.dataset.moveName = normalizedMoveName;
-                    btn.dataset.seat = seat;
+            const bottomMoveNames = [
+                ...moveGroups.bottom_row.attack_qi,
+                ...moveGroups.bottom_row.attack_shield
+            ];
 
-                    btn.addEventListener("click", () => {
-                        if (!legal) return;
-                        if (isMyActionLocked(latestRoom)) return;
-                        if (isSpectatorMode()) return;
+            function appendMoveButton(grid, moveName) {
+                const btn = document.createElement("button");
+                btn.className = "move-btn";
+                btn.type = "button";
 
-                        container.querySelectorAll(".move-btn").forEach((node) => {
-                            node.classList.remove("selected-p1", "selected-p2", "keyboard-focus");
-                        });
-
-                        currentSelectedMoveName = normalizedMoveName;
-                        currentSelectedSeat = seat;
-
-                        if (seat === "p1") {
-                            btn.classList.add("selected-p1");
-                        } else if (seat === "p2") {
-                            btn.classList.add("selected-p2");
-                        }
-
-                        submitMove(seat, moveName);
-                    });
-
-                    grid.appendChild(btn);
+                const legal = legalMoves.includes(moveName);
+                if (!legal) {
+                    btn.classList.add("disabled");
                 }
 
-                container.appendChild(grid);
+                btn.innerHTML = `
+                    <div class="move-label">${moveLabel(moveName, catalog)}</div>
+                    <div class="move-name">${moveName}</div>
+                `;
+
+                const normalizedMoveName = normalizeMoveName(moveName);
+                const shortcutKey = MOVE_SHORTCUTS[normalizedMoveName];
+
+                if (shortcutKey) {
+                    const shortcutEl = document.createElement("div");
+                    shortcutEl.className = "move-shortcut";
+                    shortcutEl.textContent = shortcutKey;
+                    btn.appendChild(shortcutEl);
+                }
+
+                const actionLocked = isMyActionLocked(latestRoom);
+                if (!legal || actionLocked) {
+                    btn.classList.add("locked");
+                }
+
+                btn.dataset.moveName = normalizedMoveName;
+                btn.dataset.originalMoveName = moveName;
+                btn.dataset.seat = seat;
+
+                if (
+                    seat === mySeat &&
+                    currentSelectedMoveName === normalizedMoveName &&
+                    currentSelectedSeat === seat &&
+                    !isMyActionLocked(latestRoom)
+                ) {
+                    btn.classList.add("pending-confirm-p1");
+                }
+
+                btn.addEventListener("click", () => {
+                    if (!legal) return;
+                    if (isMyActionLocked(latestRoom)) return;
+                    if (isSpectatorMode()) return;
+                    if (seat !== mySeat) return;
+
+                    selectMoveForConfirm(seat, moveName);
+                });
+
+                grid.appendChild(btn);
             }
+
+            for (const moveName of topMoveNames) {
+                appendMoveButton(topGrid, moveName);
+            }
+
+            for (const moveName of bottomMoveNames) {
+                appendMoveButton(bottomGrid, moveName);
+            }
+
+            topRow.appendChild(topTitle);
+            topRow.appendChild(topGrid);
+
+            bottomRow.appendChild(bottomTitle);
+            bottomRow.appendChild(bottomGrid);
+
+            layout.appendChild(topRow);
+            layout.appendChild(bottomRow);
+
+            container.appendChild(layout);
         }
 
         function renderHistory(logs) {
@@ -877,9 +1016,128 @@
             await copyTextWithFeedback(getInviteLink(), "邀请链接已复制。");
         }
 
+        function clearMoveSelection() {
+            currentSelectedMoveName = null;
+            currentSelectedSeat = null;
+
+            document.querySelectorAll(".move-btn").forEach((node) => {
+                node.classList.remove(
+                    "selected-p1",
+                    "selected-p2",
+                    "keyboard-focus",
+                    "pending-confirm-p1",
+                    "pending-confirm-p2"
+                );
+            });
+        }
+
+        function selectMoveForConfirm(seat, moveName) {
+            const normalizedMoveName = normalizeMoveName(moveName);
+
+            clearMoveSelection();
+
+            currentSelectedMoveName = normalizedMoveName;
+            currentSelectedSeat = seat;
+
+            const btn = document.querySelector(
+                `.move-btn[data-seat="${seat}"][data-move-name="${normalizedMoveName}"]`
+            );
+
+            if (!btn) {
+                return;
+            }
+
+            if (seat === "p1") {
+                btn.classList.add("pending-confirm-p1");
+            } else if (seat === "p2") {
+                btn.classList.add("pending-confirm-p2");
+            }
+
+            btn.classList.add("keyboard-focus");
+
+            setRoomMessage(
+                `已选择 ${moveLabel(btn.dataset.originalMoveName, latestRoom?.game?.move_catalog || [])}，按 Enter 确认提交，按 Backspace 取消。`,
+                "waiting"
+            );
+        }
+
         function findMoveButtonByMoveName(moveName) {
             const normalized = normalizeMoveName(moveName);
-            return document.querySelector(`.move-btn[data-move-name="${normalized}"]`);
+            return document.querySelector(
+                `.move-btn[data-seat="${mySeat}"][data-move-name="${normalized}"]`
+            );
+        }
+
+        async function confirmSelectedMove() {
+            if (isSpectatorMode()) return;
+            if (!latestRoom) return;
+            if (!currentSelectedMoveName || !currentSelectedSeat) return;
+            if (currentSelectedSeat !== mySeat) return;
+            if (isMyActionLocked(latestRoom)) return;
+
+            const btn = document.querySelector(
+                `.move-btn[data-seat="${currentSelectedSeat}"][data-move-name="${currentSelectedMoveName}"]`
+            );
+            if (!btn) {
+                return;
+            }
+
+            const originalMoveName = btn.dataset.originalMoveName;
+            await submitMove(currentSelectedSeat, originalMoveName);
+        }
+
+        async function cancelSubmittedMove() {
+            if (isSpectatorMode()) {
+                return;
+            }
+            if (!latestRoom) {
+                return;
+            }
+            if (!isMyActionLocked(latestRoom)) {
+                return;
+            }
+
+            const myPending = getMyPendingMove(latestRoom);
+            const opponentPending = getOpponentPendingMove(latestRoom);
+
+            if (!myPending) {
+                return;
+            }
+
+            if (opponentPending) {
+                setRoomMessage("对方也已提交，当前回合正在进入结算，不能撤回。", "error");
+                return;
+            }
+
+            try {
+                const res = await fetch(`/api/rooms/${roomId}/cancel-step`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        player_token: myPlayerToken
+                    })
+                });
+
+                const data = await res.json();
+
+                if (!res.ok || !data.ok) {
+                    setRoomMessage(data.error || "撤回提交失败。", "error");
+                    return;
+                }
+
+                renderRoom(data.room);
+                clearMoveSelection();
+                setRoomMessage(data.message || "已撤回本回合提交动作。", "waiting");
+
+                const myMsgEl = document.getElementById(`${mySeat}-submit-msg`);
+                if (myMsgEl) {
+                    myMsgEl.textContent = "";
+                }
+            } catch (error) {
+                setRoomMessage("撤回提交失败：" + error, "error");
+            }
         }
 
         function handleMoveKeyboardSelect(event) {
@@ -898,16 +1156,14 @@
             if (btn.classList.contains("locked") || btn.classList.contains("disabled")) return;
 
             event.preventDefault();
-
-            document.querySelectorAll(".move-btn").forEach((node) => {
-                node.classList.remove("keyboard-focus");
-            });
-
-            btn.classList.add("keyboard-focus");
-            btn.click();
+            selectMoveForConfirm(mySeat, btn.dataset.originalMoveName || moveName);
         }
 
-        function handleGlobalKeyboard(event) {
+        async function handleGlobalKeyboard(event) {
+            if (event.target && ["INPUT", "TEXTAREA", "SELECT"].includes(event.target.tagName)) {
+                return;
+            }
+
             if (event.key === "Escape") {
                 closeFinishModal();
                 return;
@@ -920,6 +1176,38 @@
                     resetRoomGame();
                     return;
                 }
+
+                if (currentSelectedMoveName && currentSelectedSeat === mySeat) {
+                    event.preventDefault();
+                    await confirmSelectedMove();
+                    return;
+                }
+            }
+
+            if (event.key === "Backspace") {
+                event.preventDefault();
+
+                const finishMask = document.getElementById("game-finish-mask");
+                const settingsMask = document.getElementById("settings-mask");
+
+                if (finishMask.classList.contains("show")) {
+                    closeFinishModal();
+                    return;
+                }
+
+                if (settingsMask.classList.contains("show")) {
+                    closeSettingsModal();
+                    return;
+                }
+
+                if (currentSelectedMoveName && currentSelectedSeat === mySeat) {
+                    clearMoveSelection();
+                    setRoomMessage("已取消当前选择。", "info");
+                    return;
+                }
+
+                await cancelSubmittedMove();
+                return;
             }
 
             handleMoveKeyboardSelect(event);
@@ -943,8 +1231,39 @@
                 applySeatVisibility();
                 applySeatHighlights();
 
-                document.getElementById("pending-p1").textContent = room.pending_p1_move || "暂无";
-                document.getElementById("pending-p2").textContent = room.pending_p2_move || "暂无";
+                const currentRound = Array.isArray(room.game?.history) ? room.game.history.length + 1 : 1;
+
+                const currentRoundEl = document.getElementById("current-round");
+                const pendingSelfEl = document.getElementById("pending-self");
+                const pendingOpponentEl = document.getElementById("pending-opponent");
+                const pendingSelfLabelEl = document.getElementById("pending-self-label");
+                const pendingOpponentLabelEl = document.getElementById("pending-opponent-label");
+
+                if (currentRoundEl) {
+                    currentRoundEl.textContent = currentRound;
+                }
+
+                const myPending = getMyPendingMove(room);
+                const opponentPending = getOpponentPendingMove(room);
+
+                if (pendingSelfEl) {
+                    pendingSelfEl.textContent =
+                        myPending ? moveLabel(myPending, room.game.move_catalog || []) : "暂无";
+                }
+
+                if (pendingOpponentEl) {
+                    pendingOpponentEl.textContent =
+                        opponentPending ? moveLabel(opponentPending, room.game.move_catalog || []) : "暂无";
+                }
+
+                if (pendingSelfLabelEl) {
+                    pendingSelfLabelEl.textContent = "我的待提交";
+                }
+
+                if (pendingOpponentLabelEl) {
+                    pendingOpponentLabelEl.textContent = "对方待提交";
+                }
+
                 applyPendingHighlights(room);
 
                 const mySeatTextEl = document.getElementById("my-seat-text");
@@ -961,11 +1280,20 @@
                 renderResetHint(room);
                 renderFinishModal(room);
 
-                document.getElementById("p1-state-full").innerHTML = renderPlayerStateFull(room.game.p1);
-                document.getElementById("p2-state-full").innerHTML = renderPlayerStateFull(room.game.p2);
+                const [leftSeat, rightSeat] = getOrderedSeatsForDisplay();
+                const leftPlayer = leftSeat === "p1" ? room.game.p1 : room.game.p2;
+                const rightPlayer = rightSeat === "p1" ? room.game.p1 : room.game.p2;
 
-                document.getElementById("p1-state-compact").innerHTML = renderPlayerStateCompact(room.game.p1);
-                document.getElementById("p2-state-compact").innerHTML = renderPlayerStateCompact(room.game.p2);
+                document.getElementById("left-row-title").textContent = `${getSeatDisplayName(room, leftSeat)} 状态`;
+                document.getElementById("right-row-title").textContent = `${getSeatDisplayName(room, rightSeat)} 状态`;
+                document.getElementById("left-compact-title").textContent = `${getSeatDisplayName(room, leftSeat)} 状态`;
+                document.getElementById("right-compact-title").textContent = `${getSeatDisplayName(room, rightSeat)} 状态`;
+
+                document.getElementById("p1-state-full").innerHTML = renderPlayerStateFull(leftPlayer);
+                document.getElementById("p2-state-full").innerHTML = renderPlayerStateFull(rightPlayer);
+
+                document.getElementById("p1-state-compact").innerHTML = renderPlayerStateCompact(leftPlayer);
+                document.getElementById("p2-state-compact").innerHTML = renderPlayerStateCompact(rightPlayer);
 
                 renderMoveGroups(
                     "p1-move-groups",
@@ -1041,6 +1369,7 @@
                     return;
                 }
 
+                clearMoveSelection();
                 renderRoom(data.room);
 
                 if (data.resolved) {
@@ -1050,7 +1379,9 @@
                 }
 
                 const msgEl = document.getElementById(`${seat}-submit-msg`);
-                msgEl.textContent = `${seat.toUpperCase()} 已提交 ${moveName}`;
+                if (msgEl) {
+                    msgEl.textContent = `你已提交 ${moveLabel(moveName, data.room?.game?.move_catalog || [])}`;
+                }
             } catch (error) {
                 setRoomMessage("提交动作失败：" + error, "error");
             }
@@ -1088,8 +1419,17 @@
                     setRoomMessage(data.message || "已发起重置请求，等待另一方确认。", "waiting");
                 }
 
-                document.getElementById("p1-submit-msg").textContent = "";
-                document.getElementById("p2-submit-msg").textContent = "";
+                const p1SubmitMsg = document.getElementById("p1-submit-msg");
+                const p2SubmitMsg = document.getElementById("p2-submit-msg");
+
+                if (p1SubmitMsg) {
+                    p1SubmitMsg.textContent = "";
+                }
+                if (p2SubmitMsg) {
+                    p2SubmitMsg.textContent = "";
+                }
+
+                clearMoveSelection();
             } catch (error) {
                 setRoomMessage("重置失败：" + error, "error");
             }

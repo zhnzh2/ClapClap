@@ -93,10 +93,12 @@
                 `对手：${opponentName || "已匹配玩家"}`;
             document.getElementById("matched-seat-chip").textContent =
                 `座位：${(seat || "").toUpperCase()}`;
+            document.getElementById("matched-room-chip").textContent =
+                `房间：${matchedRoomId || "加载中"}`;
             document.getElementById("match-success-subtitle").textContent =
-                "已完成匹配，正在同步房间身份、恢复座位并连接对局……";
+                "已完成匹配，正在同步房间身份、恢复座位并准备进入对战房间……";
             document.getElementById("match-success-countdown").textContent =
-                "1 秒后自动进入房间……";
+                "3 秒后自动进入房间……";
             document.getElementById("match-success-mask").classList.add("show");
         }
 
@@ -123,7 +125,7 @@
 
             window.setTimeout(() => {
                 goToMatchedRoom();
-            }, 1000);
+            }, 3000);
         }
 
         async function joinMatchQueue() {
