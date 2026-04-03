@@ -138,8 +138,11 @@ def submit_room_move_service(
         both_ready = room.pending_p1_move is not None and room.pending_p2_move is not None
 
         if both_ready:
-            p1_move = parse_move_name(room.pending_p1_move)
-            p2_move = parse_move_name(room.pending_p2_move)
+            resolved_p1_move_name = room.pending_p1_move
+            resolved_p2_move_name = room.pending_p2_move
+
+            p1_move = parse_move_name(resolved_p1_move_name)
+            p2_move = parse_move_name(resolved_p2_move_name)
 
             GameEngine.resolve_round(room.state, p1_move, p2_move)
             room.clear_pending_moves()
@@ -156,6 +159,10 @@ def submit_room_move_service(
                 "ok": True,
                 "message": "双方都已提交，本回合已结算。",
                 "resolved": True,
+                "resolved_preview": {
+                    "p1_move": resolved_p1_move_name,
+                    "p2_move": resolved_p2_move_name,
+                },
                 "room": get_room_payload(room),
             }, 200
 

@@ -46,6 +46,8 @@
         let currentSelectedOriginalMoveName = null;
         let currentSelectedSeat = null;
         let lastRenderedRoundCount = -1;
+        let roundResolvePreview = null;
+        let resolvePreviewTimer = null;
 
         if (typeof io !== "function") {
             console.error("room_detail.js: Socket.IO 未加载成功");
@@ -867,24 +869,57 @@
             `;
         }
 
-        function renderPlayerStateFull(player) {
+        function renderPlayerStateFull(player, side = "self") {
+            const sideClass = side === "self" ? "state-side-self" : "state-side-opponent";
+
             return `
-                ${resourceItem("生命", player.hp)}
-                ${resourceItem("气", player.qi)}
-                ${resourceItem("盾", player.shield)}
-                ${resourceItem("火种", player.spark)}
-                ${resourceItem("电池", player.battery)}
-                ${resourceItem("镐", player.pickaxe)}
-                ${resourceItem("闪次数", player.flash_used)}
+                <div class="full-state-row ${sideClass}">
+                    <div class="full-state-item">
+                        <span class="full-state-key">生命</span>
+                        <span class="full-state-value">${player.hp}</span>
+                    </div>
+                    <div class="full-state-item">
+                        <span class="full-state-key">镐</span>
+                        <span class="full-state-value">${player.pickaxe}</span>
+                    </div>
+                    <div class="full-state-item">
+                        <span class="full-state-key">气</span>
+                        <span class="full-state-value">${player.qi}</span>
+                    </div>
+                    <div class="full-state-item">
+                        <span class="full-state-key">盾</span>
+                        <span class="full-state-value">${player.shield}</span>
+                    </div>
+                    <div class="full-state-item">
+                        <span class="full-state-key">上回合</span>
+                        <span class="full-state-value">${player.last_move || "暂无"}</span>
+                    </div>
+                </div>
             `;
         }
 
-        function renderPlayerStateCompact(player) {
+        function renderPlayerStateCompact(player, side = "self") {
+            const sideClass = side === "self" ? "state-side-self" : "state-side-opponent";
+
             return `
-                ${resourceItem("生命", player.hp)}
-                ${resourceItem("镐", player.pickaxe)}
-                ${resourceItem("气", player.qi)}
-                ${resourceItem("盾", player.shield)}
+                <div class="compact-state-row ${sideClass}">
+                    <div class="compact-state-item">
+                        <span class="compact-state-key">血量</span>
+                        <span class="compact-state-value">${player.hp}</span>
+                    </div>
+                    <div class="compact-state-item">
+                        <span class="compact-state-key">镐</span>
+                        <span class="compact-state-value">${player.pickaxe}</span>
+                    </div>
+                    <div class="compact-state-item">
+                        <span class="compact-state-key">气</span>
+                        <span class="compact-state-value">${player.qi}</span>
+                    </div>
+                    <div class="compact-state-item">
+                        <span class="compact-state-key">盾</span>
+                        <span class="compact-state-value">${player.shield}</span>
+                    </div>
+                </div>
             `;
         }
 
@@ -1394,11 +1429,11 @@
                 document.getElementById("left-compact-title").textContent = getSeatDisplayName(room, leftSeat);
                 document.getElementById("right-compact-title").textContent = getSeatDisplayName(room, rightSeat);
 
-                document.getElementById("p1-state-full").innerHTML = renderPlayerStateFull(leftPlayer);
-                document.getElementById("p2-state-full").innerHTML = renderPlayerStateFull(rightPlayer);
+                document.getElementById("p1-state-full").innerHTML = renderPlayerStateFull(leftPlayer, "self");
+                document.getElementById("p2-state-full").innerHTML = renderPlayerStateFull(rightPlayer, "opponent");
 
-                document.getElementById("p1-state-compact").innerHTML = renderPlayerStateCompact(leftPlayer);
-                document.getElementById("p2-state-compact").innerHTML = renderPlayerStateCompact(rightPlayer);
+                document.getElementById("p1-state-compact").innerHTML = renderPlayerStateCompact(leftPlayer, "self");
+                document.getElementById("p2-state-compact").innerHTML = renderPlayerStateCompact(rightPlayer, "opponent");
 
                 renderMoveGroups(
                     "p1-move-groups",
@@ -1448,6 +1483,37 @@
             }
         }
 
+        function showResolvedPreview(preview, room) {
+            const pendingSelfEl = document.getElementById("pending-self");
+            const pendingOpponentEl = document.getElementById("pending-opponent");
+            const pendingSelfLabelEl = document.getElementById("pending-self-label");
+            const pendingOpponentLabelEl = document.getElementById("pending-opponent-label");
+
+            if (!preview || !room) {
+                return;
+            }
+
+            const myMove = mySeat === "p1" ? preview.p1_move : preview.p2_move;
+            const opponentMove = mySeat === "p1" ? preview.p2_move : preview.p1_move;
+
+            if (pendingSelfLabelEl) {
+                pendingSelfLabelEl.textContent = "我方本回合动作";
+            }
+            if (pendingOpponentLabelEl) {
+                pendingOpponentLabelEl.textContent = "对方本回合动作";
+            }
+            if (pendingSelfEl) {
+                pendingSelfEl.textContent = myMove
+                    ? moveLabel(myMove, room.game.move_catalog || [])
+                    : "暂无";
+            }
+            if (pendingOpponentEl) {
+                pendingOpponentEl.textContent = opponentMove
+                    ? moveLabel(opponentMove, room.game.move_catalog || [])
+                    : "暂无";
+            }
+        }
+
         async function submitMove(seat, moveName) {
             if (isSpectatorMode()) {
                 setRoomMessage("观战模式下不能提交动作。", "error");
@@ -1474,12 +1540,29 @@
                     return;
                 }
 
-                renderRoom(data.room);
                 clearMoveSelection();
 
                 if (data.resolved) {
+                    roundResolvePreview = data.resolved_preview || null;
+
+                    renderRoom(data.room);
+
+                    if (roundResolvePreview) {
+                        showResolvedPreview(roundResolvePreview, data.room);
+                    }
+
                     setRoomMessage(data.message || "本回合已结算。", "success");
+
+                    if (resolvePreviewTimer) {
+                        window.clearTimeout(resolvePreviewTimer);
+                    }
+
+                    resolvePreviewTimer = window.setTimeout(() => {
+                        roundResolvePreview = null;
+                        renderRoom(data.room);
+                    }, 1000);
                 } else {
+                    renderRoom(data.room);
                     setRoomMessage(data.message || "你已提交动作，当前操作已锁定，正在等待对方。", "waiting");
                 }
 
