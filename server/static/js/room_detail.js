@@ -133,12 +133,6 @@
         }
 
         function getOrderedSeatsForDisplay() {
-            if (mySeat === "p1") {
-                return ["p1", "p2"];
-            }
-            if (mySeat === "p2") {
-                return ["p2", "p1"];
-            }
             return ["p1", "p2"];
         }
 
@@ -735,24 +729,33 @@
             const p1RowFull = document.getElementById("p1-row-full");
             const p2RowFull = document.getElementById("p2-row-full");
 
-            p1NameBox.classList.remove("seat-p1");
-            p2NameBox.classList.remove("seat-p2");
-            p1PlayerBox.classList.remove("active-seat", "active-seat-p1");
-            p2PlayerBox.classList.remove("active-seat", "active-seat-p2");
-            p1RowFull.classList.remove("seat-p1", "seat-p2");
-            p2RowFull.classList.remove("seat-p1", "seat-p2");
+            if (p1NameBox) {
+                p1NameBox.classList.remove("seat-p1");
+            }
+            if (p2NameBox) {
+                p2NameBox.classList.remove("seat-p2");
+            }
+            if (p1PlayerBox) {
+                p1PlayerBox.classList.remove("active-seat", "active-seat-p1", "active-seat-p2");
+            }
+            if (p2PlayerBox) {
+                p2PlayerBox.classList.remove("active-seat", "active-seat-p1", "active-seat-p2");
+            }
+            if (p1RowFull) {
+                p1RowFull.classList.remove("seat-p1", "seat-p2");
+            }
+            if (p2RowFull) {
+                p2RowFull.classList.remove("seat-p1", "seat-p2");
+            }
 
             if (mySeat === "p1") {
-                p1NameBox.classList.add("seat-p1");
-                document.getElementById("p1-seat-note").textContent = "这是你当前操作的一侧。";
-                document.getElementById("p2-seat-note").textContent = "这是对方当前状态。";
+                if (p1NameBox) {
+                    p1NameBox.classList.add("seat-p1");
+                }
             } else if (mySeat === "p2") {
-                p2NameBox.classList.add("seat-p2");
-                document.getElementById("p1-seat-note").textContent = "这是对方当前状态。";
-                document.getElementById("p2-seat-note").textContent = "这是你当前操作的一侧。";
-            } else {
-                document.getElementById("p1-seat-note").textContent = "当前为观战或未知身份。";
-                document.getElementById("p2-seat-note").textContent = "当前为观战或未知身份。";
+                if (p2NameBox) {
+                    p2NameBox.classList.add("seat-p2");
+                }
             }
         }
 
@@ -873,26 +876,34 @@
             const sideClass = side === "self" ? "state-side-self" : "state-side-opponent";
 
             return `
-                <div class="full-state-row ${sideClass}">
-                    <div class="full-state-item">
-                        <span class="full-state-key">生命</span>
-                        <span class="full-state-value">${player.hp}</span>
+                <div class="status-table-row full ${sideClass}">
+                    <div class="status-table-cell status-table-cell-stat">
+                        <span class="status-table-key">生命</span>
+                        <span class="status-table-value">${player.hp ?? 0}</span>
                     </div>
-                    <div class="full-state-item">
-                        <span class="full-state-key">镐</span>
-                        <span class="full-state-value">${player.pickaxe}</span>
+                    <div class="status-table-cell status-table-cell-stat">
+                        <span class="status-table-key">镐</span>
+                        <span class="status-table-value">${player.pickaxe ?? 0}</span>
                     </div>
-                    <div class="full-state-item">
-                        <span class="full-state-key">气</span>
-                        <span class="full-state-value">${player.qi}</span>
+                    <div class="status-table-cell status-table-cell-stat">
+                        <span class="status-table-key">气</span>
+                        <span class="status-table-value">${player.qi ?? 0}</span>
                     </div>
-                    <div class="full-state-item">
-                        <span class="full-state-key">盾</span>
-                        <span class="full-state-value">${player.shield}</span>
+                    <div class="status-table-cell status-table-cell-stat">
+                        <span class="status-table-key">盾</span>
+                        <span class="status-table-value">${player.shield ?? 0}</span>
                     </div>
-                    <div class="full-state-item">
-                        <span class="full-state-key">上回合</span>
-                        <span class="full-state-value">${player.last_move || "暂无"}</span>
+                    <div class="status-table-cell status-table-cell-stat">
+                        <span class="status-table-key">火种</span>
+                        <span class="status-table-value">${player.spark ?? 0}</span>
+                    </div>
+                    <div class="status-table-cell status-table-cell-stat">
+                        <span class="status-table-key">电池</span>
+                        <span class="status-table-value">${player.battery ?? 0}</span>
+                    </div>
+                    <div class="status-table-cell status-table-cell-stat">
+                        <span class="status-table-key">闪次数</span>
+                        <span class="status-table-value">${player.flash_used ?? 0}</span>
                     </div>
                 </div>
             `;
@@ -902,22 +913,22 @@
             const sideClass = side === "self" ? "state-side-self" : "state-side-opponent";
 
             return `
-                <div class="compact-state-row ${sideClass}">
-                    <div class="compact-state-item">
-                        <span class="compact-state-key">血量</span>
-                        <span class="compact-state-value">${player.hp}</span>
+                <div class="status-table-row ${sideClass}">
+                    <div class="status-table-cell status-table-cell-stat">
+                        <span class="status-table-key">生命</span>
+                        <span class="status-table-value">${player.hp ?? 0}</span>
                     </div>
-                    <div class="compact-state-item">
-                        <span class="compact-state-key">镐</span>
-                        <span class="compact-state-value">${player.pickaxe}</span>
+                    <div class="status-table-cell status-table-cell-stat">
+                        <span class="status-table-key">镐</span>
+                        <span class="status-table-value">${player.pickaxe ?? 0}</span>
                     </div>
-                    <div class="compact-state-item">
-                        <span class="compact-state-key">气</span>
-                        <span class="compact-state-value">${player.qi}</span>
+                    <div class="status-table-cell status-table-cell-stat">
+                        <span class="status-table-key">气</span>
+                        <span class="status-table-value">${player.qi ?? 0}</span>
                     </div>
-                    <div class="compact-state-item">
-                        <span class="compact-state-key">盾</span>
-                        <span class="compact-state-value">${player.shield}</span>
+                    <div class="status-table-cell status-table-cell-stat">
+                        <span class="status-table-key">盾</span>
+                        <span class="status-table-value">${player.shield ?? 0}</span>
                     </div>
                 </div>
             `;
@@ -1424,16 +1435,31 @@
                 const leftPlayer = leftSeat === "p1" ? room.game.p1 : room.game.p2;
                 const rightPlayer = rightSeat === "p1" ? room.game.p1 : room.game.p2;
 
-                document.getElementById("left-row-title").textContent = getSeatDisplayName(room, leftSeat);
-                document.getElementById("right-row-title").textContent = getSeatDisplayName(room, rightSeat);
-                document.getElementById("left-compact-title").textContent = getSeatDisplayName(room, leftSeat);
-                document.getElementById("right-compact-title").textContent = getSeatDisplayName(room, rightSeat);
+                document.getElementById("left-row-title").textContent = `${getSeatDisplayName(room, leftSeat)} `;
+                document.getElementById("right-row-title").textContent = `${getSeatDisplayName(room, rightSeat)} `;
+                document.getElementById("left-compact-title").textContent = `${getSeatDisplayName(room, leftSeat)} `;
+                document.getElementById("right-compact-title").textContent = `${getSeatDisplayName(room, rightSeat)} `;
 
-                document.getElementById("p1-state-full").innerHTML = renderPlayerStateFull(leftPlayer, "self");
-                document.getElementById("p2-state-full").innerHTML = renderPlayerStateFull(rightPlayer, "opponent");
+                const leftSideType = leftSeat === mySeat ? "self" : "opponent";
+                const rightSideType = rightSeat === mySeat ? "self" : "opponent";
 
-                document.getElementById("p1-state-compact").innerHTML = renderPlayerStateCompact(leftPlayer, "self");
-                document.getElementById("p2-state-compact").innerHTML = renderPlayerStateCompact(rightPlayer, "opponent");
+                document.getElementById("p1-player-box").classList.toggle("status-table-line-self", leftSideType === "self");
+                document.getElementById("p1-player-box").classList.toggle("status-table-line-opponent", leftSideType !== "self");
+
+                document.getElementById("p2-player-box").classList.toggle("status-table-line-self", rightSideType === "self");
+                document.getElementById("p2-player-box").classList.toggle("status-table-line-opponent", rightSideType !== "self");
+
+                document.getElementById("p1-row-full").classList.toggle("status-table-line-self", leftSideType === "self");
+                document.getElementById("p1-row-full").classList.toggle("status-table-line-opponent", leftSideType !== "self");
+
+                document.getElementById("p2-row-full").classList.toggle("status-table-line-self", rightSideType === "self");
+                document.getElementById("p2-row-full").classList.toggle("status-table-line-opponent", rightSideType !== "self");
+
+                document.getElementById("p1-state-full").innerHTML = renderPlayerStateFull(leftPlayer, leftSideType);
+                document.getElementById("p2-state-full").innerHTML = renderPlayerStateFull(rightPlayer, rightSideType);
+
+                document.getElementById("p1-state-compact").innerHTML = renderPlayerStateCompact(leftPlayer, leftSideType);
+                document.getElementById("p2-state-compact").innerHTML = renderPlayerStateCompact(rightPlayer, rightSideType);
 
                 renderMoveGroups(
                     "p1-move-groups",

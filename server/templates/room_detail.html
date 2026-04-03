@@ -825,36 +825,6 @@
             min-width: 120px;
         }
 
-        .player-list-compact {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-
-        .player-row-full {
-            background: var(--panel);
-            border: 1px solid var(--border);
-            border-radius: 14px;
-            padding: 12px 14px;
-        }
-
-        .player-row-title {
-            font-size: 15px;
-            font-weight: bold;
-            margin-bottom: 8px;
-            color: var(--text);
-        }
-
-        .player-row-grid {
-            display: grid;
-            grid-template-columns: repeat(7, minmax(0, 1fr));
-            gap: 8px;
-        }
-
-        .compact-resource-grid {
-            grid-template-columns: repeat(4, minmax(0, 1fr));
-        }
-
         .settings-mask {
             display: none;
             position: fixed;
@@ -1006,78 +976,179 @@
             }
         }
 
-        .compact-state-row,
-        .full-state-row {
-            display: grid;
-            grid-auto-flow: column;
-            grid-auto-columns: minmax(0, 1fr);
-            gap: 8px;
-            align-items: stretch;
+        .player-state-vertical-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
         }
 
-        .compact-state-item,
-        .full-state-item {
+        .status-table-wrapper {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        .status-table-header {
+            display: grid;
+            align-items: center;
+            gap: 12px;
+            padding: 0 6px;
+            color: var(--muted);
+            font-size: 13px;
+            font-weight: 700;
+        }
+
+        .status-table-header.compact {
+            grid-template-columns: 220px minmax(0, 1fr);
+        }
+
+        .status-table-header.full {
+            grid-template-columns: 220px minmax(0, 1fr);
+        }
+
+        .status-table-line {
+            display: grid;
+            grid-template-columns: 220px minmax(0, 1fr);
+            gap: 12px;
+            align-items: stretch;
             border: 1px solid var(--border);
-            border-radius: 10px;
-            background: var(--panel);
-            padding: 8px 6px;
-            text-align: center;
+            border-radius: 18px;
+            background: #ffffff;
+            padding: 14px 14px;
+            transition: 0.2s ease;
+        }
+
+        .status-table-head-player,
+        .status-table-head-stat {
             min-width: 0;
         }
 
-        .compact-state-key,
-        .full-state-key {
-            display: block;
-            font-size: 11px;
-            color: var(--muted);
-            margin-bottom: 3px;
-            line-height: 1.2;
+        .status-table-head-player {
+            text-align: left;
+            padding-left: 12px;
         }
 
-        .compact-state-value,
-        .full-state-value {
-            display: block;
-            font-size: 15px;
-            font-weight: 700;
+        .status-table-head-stat {
+            text-align: left;
+        }
+
+        .status-table-player-cell {
+            display: flex;
+            align-items: center;
+            font-size: 18px;
+            font-weight: 800;
             color: var(--text);
-            line-height: 1.2;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
+            min-width: 0;
+            word-break: break-word;
+            line-height: 1.35;
         }
 
-        .state-side-self .compact-state-item,
-        .state-side-self .full-state-item {
-            background: #f7fbff;
+        .status-table-content-cell {
+            min-width: 0;
+        }
+
+        .status-table-row {
+            display: grid;
+            gap: 12px;
+            align-items: stretch;
+        }
+
+        .status-table-row:not(.full) {
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+        }
+
+        .status-table-row.full {
+            grid-template-columns: repeat(7, minmax(0, 1fr));
+        }
+
+        .status-table-cell {
+            min-width: 0;
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            background: #f8fafc;
+            padding: 10px 8px;
+            text-align: center;
+        }
+
+        .status-table-key {
+            display: block;
+            font-size: 12px;
+            color: var(--muted);
+            margin-bottom: 6px;
+            line-height: 1.2;
+        }
+
+        .status-table-value {
+            display: block;
+            font-size: 20px;
+            font-weight: 800;
+            color: var(--text);
+            line-height: 1.1;
+        }
+
+        .status-table-row.full .status-table-value {
+            font-size: 17px;
+        }
+
+        .status-table-line:has(.state-side-self) {
+            background: linear-gradient(135deg, #eff6ff 0%, #f8fbff 100%);
+            border-color: #93c5fd;
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.08);
+        }
+
+        .status-table-line:has(.state-side-self) .status-table-player-cell {
+            color: #1d4ed8;
+        }
+
+        .status-table-line:has(.state-side-opponent) {
+            background: #ffffff;
+        }
+
+        .state-side-self .status-table-cell {
+            background: #f8fbff;
             border-color: #bfdbfe;
         }
 
-        .state-side-opponent .compact-state-item,
-        .state-side-opponent .full-state-item {
-            background: #fff7f7;
-            border-color: #fecaca;
+        .state-side-opponent .status-table-cell {
+            background: #ffffff;
+            border-color: #dbe3ee;
         }
 
-        .player-row-title,
-        #left-compact-title,
-        #right-compact-title {
-            margin-bottom: 6px;
+        @media (max-width: 1400px) {
+            .status-table-header.compact,
+            .status-table-header.full,
+            .status-table-line {
+                grid-template-columns: 180px minmax(0, 1fr);
+            }
         }
 
-        #player-state-mode-full .player-row {
-            margin-bottom: 10px;
+        @media (max-width: 1100px) {
+            .status-table-header {
+                display: none;
+            }
+
+            .status-table-line {
+                grid-template-columns: 1fr;
+                gap: 12px;
+            }
+
+            .status-table-player-cell {
+                padding-left: 2px;
+            }
         }
 
-        #player-state-mode-full .full-state-item {
-            padding: 7px 4px;
+        .status-table-line-self {
+            background: linear-gradient(135deg, #eff6ff 0%, #f8fbff 100%);
+            border-color: #93c5fd;
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.08);
         }
 
-        #player-state-mode-full .full-state-key {
-            font-size: 10px;
+        .status-table-line-self .status-table-player-cell {
+            color: #1d4ed8;
         }
 
-        #player-state-mode-full .full-state-value {
-            font-size: 13px;
+        .status-table-line-opponent {
+            background: #ffffff;
         }
 
         @media (max-width: 980px) {
@@ -1231,31 +1302,40 @@
         <div class="battle-right-column">
             <div class="card">
                 <h2>当前对局状态</h2>
-                    <div id="player-state-mode-full" style="display: none;">
-                        <div class="player-list-compact">
-                            <div class="player-row-full" id="p1-row-full">
-                                <div class="player-row-title" id="left-row-title">左侧状态</div>
-                                <div class="player-row-grid" id="p1-state-full"></div>
-                                <div class="section-note" id="p1-seat-note"></div>
+                    <div id="player-state-mode-compact">
+                        <div class="status-table-wrapper">
+                            <div class="status-table-header compact">
+                                <div class="status-table-head-player">玩家</div>
+                                <div class="status-table-head-stat">资源</div>
                             </div>
 
-                            <div class="player-row-full" id="p2-row-full">
-                                <div class="player-row-title" id="right-row-title">右侧状态</div>
-                                <div class="player-row-grid" id="p2-state-full"></div>
-                                <div class="section-note" id="p2-seat-note"></div>
+                            <div class="status-table-line" id="p1-player-box">
+                                <div class="status-table-player-cell" id="left-compact-title">1号位</div>
+                                <div class="status-table-content-cell" id="p1-state-compact"></div>
+                            </div>
+
+                            <div class="status-table-line" id="p2-player-box">
+                                <div class="status-table-player-cell" id="right-compact-title">2号位</div>
+                                <div class="status-table-content-cell" id="p2-state-compact"></div>
                             </div>
                         </div>
                     </div>
 
-                    <div id="player-state-mode-compact">
-                        <div class="player-grid">
-                            <div class="player-box" id="p1-player-box">
-                                <h3 id="left-compact-title">左侧状态</h3>
-                                <div id="p1-state-compact" class="resource-grid compact-resource-grid"></div>
+                    <div id="player-state-mode-full" style="display: none;">
+                        <div class="status-table-wrapper">
+                            <div class="status-table-header full">
+                                <div class="status-table-head-player">玩家</div>
+                                <div class="status-table-head-stat">资源</div>
                             </div>
-                            <div class="player-box" id="p2-player-box">
-                                <h3 id="right-compact-title">右侧状态</h3>
-                                <div id="p2-state-compact" class="resource-grid compact-resource-grid"></div>
+
+                            <div class="status-table-line" id="p1-row-full">
+                                <div class="status-table-player-cell" id="left-row-title">1号位</div>
+                                <div class="status-table-content-cell" id="p1-state-full"></div>
+                            </div>
+
+                            <div class="status-table-line" id="p2-row-full">
+                                <div class="status-table-player-cell" id="right-row-title">2号位</div>
+                                <div class="status-table-content-cell" id="p2-state-full"></div>
                             </div>
                         </div>
                     </div>
@@ -1341,8 +1421,8 @@
                 <div class="settings-item">
                     <label for="player-state-mode-select">状态显示模式</label>
                     <select id="player-state-mode-select" class="settings-select">
-                        <option value="compact" selected>精简模式（左右显示）</option>
-                        <option value="full">完整模式（每人一整行）</option>
+                        <option value="compact" selected>精简模式</option>
+                        <option value="full">完整模式</option>
                     </select>
                 </div>
             </div>
