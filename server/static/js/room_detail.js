@@ -49,6 +49,8 @@
         let roundResolvePreview = null;
         let resolvePreviewTimer = null;
         let waitingManualRevealAdvance = false;
+        let resolvePreviewRoundNumber = null;
+        let lastResolvedHistoryLength = 0;
         let confirmAction = null;
         let opponentOfflineSince = null;
         let offlineNoticeShown = false;
@@ -82,7 +84,44 @@
                 return;
             }
 
-            renderRoom(data.room);
+            const room = data.room;
+            const historyLength = Array.isArray(room?.game?.history) ? room.game.history.length : 0;
+            const bothPendingCleared = !room?.pending_p1_move && !room?.pending_p2_move;
+            const hasNewResolvedRound =
+                bothPendingCleared &&
+                historyLength > 0 &&
+                historyLength > lastResolvedHistoryLength;
+
+            if (hasNewResolvedRound) {
+                roundResolvePreview = buildResolvedPreviewFromRoom(room);
+                resolvePreviewRoundNumber = historyLength;
+
+                renderRoom(room);
+
+                if (roundResolvePreview) {
+                    showResolvedPreview(roundResolvePreview, room);
+                    highlightResolvedPreviewButtons(roundResolvePreview);
+                }
+
+                if (resolvePreviewTimer) {
+                    window.clearTimeout(resolvePreviewTimer);
+                    resolvePreviewTimer = null;
+                }
+
+                if ((roomUiSettings.revealAdvanceMode || "auto") === "manual") {
+                    waitingManualRevealAdvance = true;
+                    setRoomMessage("本回合动作已展示。按任意键或点击任意位置进入下一回合。", "waiting");
+                } else {
+                    waitingManualRevealAdvance = false;
+                    resolvePreviewTimer = window.setTimeout(() => {
+                        finishResolvedPreview(room);
+                    }, 1000);
+                }
+
+                return;
+            }
+
+            renderRoom(room);
             setRoomMessage("房间状态已实时同步。", "info");
         });
 
@@ -1549,7 +1588,10 @@
                 applySeatVisibility();
                 applySeatHighlights();
 
-                const currentRound = Array.isArray(room.game?.history) ? room.game.history.length + 1 : 1;
+                const historyLength = Array.isArray(room.game?.history) ? room.game.history.length : 0;
+                const currentRound = roundResolvePreview
+                    ? (resolvePreviewRoundNumber || historyLength || 1)
+                    : (historyLength + 1);
 
                 const currentRoundEl = document.getElementById("current-round");
                 const pendingSelfEl = document.getElementById("pending-self");
@@ -1733,6 +1775,23 @@
             }
         }
 
+        function buildResolvedPreviewFromRoom(room) {
+            const history = room?.game?.history || [];
+            if (!Array.isArray(history) || history.length === 0) {
+                return null;
+            }
+
+            const lastLog = history[history.length - 1];
+            if (!lastLog) {
+                return null;
+            }
+
+            return {
+                p1_move: lastLog.p1_move || null,
+                p2_move: lastLog.p2_move || null
+            };
+        }
+
         function showResolvedPreview(preview, room) {
             waitingManualRevealAdvance = false;
 
@@ -1769,6 +1828,11 @@
         function finishResolvedPreview(room) {
             roundResolvePreview = null;
             waitingManualRevealAdvance = false;
+            resolvePreviewRoundNumber = null;
+
+            const history = room?.game?.history || [];
+            lastResolvedHistoryLength = Array.isArray(history) ? history.length : 0;
+
             clearMoveSelection();
             renderRoom(room);
         }
@@ -1840,7 +1904,10 @@
                 clearMoveSelection();
 
                 if (data.resolved) {
-                    roundResolvePreview = data.resolved_preview || null;
+                    roundResolvePreview = data.resolved_preview || buildResolvedPreviewFromRoom(data.room);
+                    resolvePreviewRoundNumber = Array.isArray(data.room?.game?.history)
+                        ? data.room.game.history.length
+                        : null;
 
                     renderRoom(data.room);
 
