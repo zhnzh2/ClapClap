@@ -77,6 +77,21 @@ def load_all_rooms() -> dict[str, dict]:
 
     return result
 
+def load_room(room_id: str) -> dict | None:
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT payload FROM room_store WHERE room_id = ?",
+            (room_id,),
+        ).fetchone()
+
+    if row is None:
+        return None
+
+    try:
+        return json.loads(row["payload"])
+    except Exception:
+        return None
+
 def delete_room(room_id: str) -> None:
     with get_connection() as conn:
         conn.execute(

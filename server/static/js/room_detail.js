@@ -1917,11 +1917,11 @@
                 if (finishBackBtn) {
                     finishBackBtn.addEventListener("click", () => {
                         openConfirmModal(
-                            "确认返回主页",
-                            "返回主页后你将暂时离开当前页面，但房间会保留。",
-                            () => {
+                            "确认退出房间",
+                            "退出房间后当前房间会关闭，确认继续吗？",
+                            async () => {
                                 closeConfirmModal();
-                                goHomeKeepRoom();
+                                await leaveRoomAndGoHome();
                             }
                         );
                     });
@@ -2036,7 +2036,7 @@
                 renderSpectatorBanner();
                 setRoomMessage("正在连接房间并同步状态……", "info");
                 fetchRoomState();
-                setInterval(fetchRoomState, 15000);
+                setInterval(fetchRoomState, 3000);
             } catch (error) {
                 console.error("room_detail.js init error:", error);
             }

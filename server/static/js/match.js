@@ -130,7 +130,7 @@
             document.getElementById("match-success-subtitle").textContent =
                 "已完成匹配，正在同步房间身份、恢复座位并准备进入对战房间……";
             document.getElementById("match-success-countdown").textContent =
-                "3 秒后自动进入房间……";
+                "正在进入房间……";
             document.getElementById("match-success-mask").classList.add("show");
         }
 
@@ -157,7 +157,7 @@
 
             window.setTimeout(async () => {
                 await goToMatchedRoom();
-            }, 3000);
+            }, 300);
         }
 
         async function joinMatchQueue() {
@@ -436,5 +436,5 @@
         setInterval(() => {
             fetchMatchStatus();
             syncMyMatchState();
-        }, 3000);
+        }, 1000);
 })();

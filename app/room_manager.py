@@ -9,7 +9,7 @@ from uuid import uuid4
 import traceback
 
 from app.models import GameState
-from app.storage import load_all_rooms, save_room, delete_room
+from app.storage import load_all_rooms, load_room, save_room, delete_room
 
 @dataclass
 class Room:
@@ -255,7 +255,29 @@ def create_room(player_name: str) -> tuple[Room, str, str]:
 
 def get_room(room_id: str) -> Room | None:
     with ROOMS_LOCK:
-        return ROOMS.get(room_id)
+        room = ROOMS.get(room_id)
+        if room is not None:
+            return room
+
+    room_data = load_room(room_id)
+    if room_data is None:
+        return None
+
+    try:
+        restored_room = Room.from_dict(room_data)
+    except Exception as exc:
+        print(f"[get_room] 恢复房间 {room_id} 失败: {exc}")
+        traceback.print_exc()
+        return None
+
+    with ROOMS_LOCK:
+        existing = ROOMS.get(room_id)
+        if existing is not None:
+            return existing
+
+        ROOMS[room_id] = restored_room
+        ROOM_RUNTIME_LOCKS.setdefault(room_id, RLock())
+        return restored_room
 
 def get_room_runtime_lock(room_id: str) -> RLock:
     with ROOMS_LOCK:
@@ -285,11 +307,11 @@ def cleanup_expired_rooms() -> list[str]:
     return deleted_room_ids
 
 def join_room(room_id: str, player_name: str) -> tuple[Room, str, str]:
-    with ROOMS_LOCK:
-        room = ROOMS.get(room_id)
-        if room is None:
-            raise ValueError("房间不存在。")
+    room = get_room(room_id)
+    if room is None:
+        raise ValueError("房间不存在。")
 
+    with ROOMS_LOCK:
         seat, token = room.add_player(player_name)
         room.persist()
         return room, seat, token

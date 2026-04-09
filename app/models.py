@@ -54,13 +54,13 @@ class PlayerState:
     @classmethod
     def from_dict(cls, data: dict) -> "PlayerState":
         return cls(
-            hp=data["hp"],
-            qi=data["qi"],
-            shield=data["shield"],
-            spark=data["spark"],
-            battery=data["battery"],
-            pickaxe=data["pickaxe"],
-            flash_used=data["flash_used"],
+            hp=data.get("hp", INITIAL_HP),
+            qi=data.get("qi", INITIAL_QI),
+            shield=data.get("shield", INITIAL_SHIELD),
+            spark=data.get("spark", INITIAL_SPARK),
+            battery=data.get("battery", INITIAL_BATTERY),
+            pickaxe=data.get("pickaxe", INITIAL_PICKAXE),
+            flash_used=data.get("flash_used", 0),
         )
 
 @dataclass
@@ -140,7 +140,70 @@ class RoundLog:
     
     @classmethod
     def from_dict(cls, data: dict) -> "RoundLog":
-        return cls(**data)
+        if not isinstance(data, dict):
+            raise TypeError("RoundLog 数据必须是 dict。")
+
+        p1_after = data.get("p1_after", {})
+        p2_after = data.get("p2_after", {})
+
+        if not isinstance(p1_after, dict):
+            p1_after = {}
+        if not isinstance(p2_after, dict):
+            p2_after = {}
+
+        raw_p1_move = data.get("p1_move")
+        raw_p2_move = data.get("p2_move")
+
+        try:
+            p1_move = Move[raw_p1_move] if isinstance(raw_p1_move, str) else Move.QI
+        except KeyError:
+            try:
+                p1_move = Move(raw_p1_move)
+            except Exception:
+                p1_move = Move.QI
+
+        try:
+            p2_move = Move[raw_p2_move] if isinstance(raw_p2_move, str) else Move.QI
+        except KeyError:
+            try:
+                p2_move = Move(raw_p2_move)
+            except Exception:
+                p2_move = Move.QI
+
+        return cls(
+            round_num=data.get("round_num", 0),
+
+            p1_move=p1_move,
+            p2_move=p2_move,
+
+            p1_valid=data.get("p1_valid", True),
+            p2_valid=data.get("p2_valid", True),
+
+            p1_damage_taken=data.get("p1_damage_taken", 0),
+            p2_damage_taken=data.get("p2_damage_taken", 0),
+
+            p1_pickaxe_blocked=data.get("p1_pickaxe_blocked", 0),
+            p2_pickaxe_blocked=data.get("p2_pickaxe_blocked", 0),
+
+            p1_note=data.get("p1_note", ""),
+            p2_note=data.get("p2_note", ""),
+            summary=data.get("summary", ""),
+
+            p1_hp_after=p1_after.get("hp", data.get("p1_hp_after", 0)),
+            p2_hp_after=p2_after.get("hp", data.get("p2_hp_after", 0)),
+            p1_qi_after=p1_after.get("qi", data.get("p1_qi_after", 0)),
+            p2_qi_after=p2_after.get("qi", data.get("p2_qi_after", 0)),
+            p1_shield_after=p1_after.get("shield", data.get("p1_shield_after", 0)),
+            p2_shield_after=p2_after.get("shield", data.get("p2_shield_after", 0)),
+            p1_spark_after=p1_after.get("spark", data.get("p1_spark_after", 0)),
+            p2_spark_after=p2_after.get("spark", data.get("p2_spark_after", 0)),
+            p1_battery_after=p1_after.get("battery", data.get("p1_battery_after", 0)),
+            p2_battery_after=p2_after.get("battery", data.get("p2_battery_after", 0)),
+            p1_pickaxe_after=p1_after.get("pickaxe", data.get("p1_pickaxe_after", 0)),
+            p2_pickaxe_after=p2_after.get("pickaxe", data.get("p2_pickaxe_after", 0)),
+
+            winner_after_round=data.get("winner_after_round"),
+        )
 
 @dataclass
 class GameState:
@@ -191,9 +254,13 @@ class GameState:
         state.p2 = PlayerState.from_dict(p2_data)
 
         raw_history = data.get("history", [])
+        state.history = []
+
         if isinstance(raw_history, list):
-            state.history = [RoundLog.from_dict(item) for item in raw_history]
-        else:
-            state.history = []
+            for item in raw_history:
+                try:
+                    state.history.append(RoundLog.from_dict(item))
+                except Exception:
+                    continue
 
         return state
