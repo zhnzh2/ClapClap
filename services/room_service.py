@@ -46,7 +46,8 @@ def get_room_service(room_id: str, player_token: str | None) -> tuple[dict, int]
     if room is None:
         return {
             "ok": False,
-            "error": "房间不存在。",
+            "error": "房间不存在，可能是房主已退出、房间已失效，或服务刚刚重启。",
+            "error_code": "ROOM_NOT_FOUND",
         }, 404
 
     requester_seat = None
@@ -73,7 +74,8 @@ def submit_room_move_service(
     if room is None:
         return {
             "ok": False,
-            "error": "房间不存在。",
+            "error": "房间不存在，可能是房主已退出、房间已失效，或服务刚刚重启。",
+            "error_code": "ROOM_NOT_FOUND",
         }, 404
 
     room_lock = get_room_runtime_lock(room_id)
@@ -184,7 +186,8 @@ def reset_room_service(room_id: str, player_token: str) -> tuple[dict, int]:
     if room is None:
         return {
             "ok": False,
-            "error": "房间不存在。",
+            "error": "房间不存在，可能是房主已退出、房间已失效，或服务刚刚重启。",
+            "error_code": "ROOM_NOT_FOUND",
         }, 404
 
     room_lock = get_room_runtime_lock(room_id)
@@ -215,7 +218,8 @@ def cancel_room_move_service(room_id: str, player_token: str) -> tuple[dict, int
     if room is None:
         return {
             "ok": False,
-            "error": "房间不存在。",
+            "error": "房间不存在，可能是房主已退出、房间已失效，或服务刚刚重启。",
+            "error_code": "ROOM_NOT_FOUND",
         }, 404
 
     room_lock = get_room_runtime_lock(room_id)
@@ -250,7 +254,8 @@ def leave_room_service(room_id: str, player_token: str) -> tuple[dict, int]:
     if room is None:
         return {
             "ok": False,
-            "error": "房间不存在。",
+            "error": "房间不存在，可能是房主已退出、房间已失效，或服务刚刚重启。",
+            "error_code": "ROOM_NOT_FOUND",
         }, 404
 
     room_lock = get_room_runtime_lock(room_id)

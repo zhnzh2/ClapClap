@@ -101,8 +101,7 @@
                     currentRoomPlayerToken = "";
                     joinedQueue = false;
 
-                    document.getElementById("match-message").textContent =
-                        "检测到旧房间已失效，已清除无效恢复状态，请重新匹配。";
+                    setMatchMessage(data.error || "检测到旧房间已失效，已清除无效恢复状态，请重新匹配。", "error");
                     document.getElementById("self-status").textContent =
                         "你当前尚未加入匹配队列。";
 
@@ -115,9 +114,21 @@
                 saveRoomIdentity(matchedRoomId, currentRoomPlayerToken, currentSeat);
                 window.location.href = `/room/${matchedRoomId}`;
             } catch (error) {
-                document.getElementById("match-message").textContent =
-                    "恢复房间失败：" + error;
+                setMatchMessage("恢复房间失败：" + error, "error");
             }
+        }
+
+        function clearFrontendCacheForNewBoot() {
+            const savedBootId = localStorage.getItem("clapclap_server_boot_id");
+
+            if (savedBootId === SERVER_BOOT_ID) {
+                return false;
+            }
+
+            localStorage.clear();
+            sessionStorage.clear();
+            localStorage.setItem("clapclap_server_boot_id", SERVER_BOOT_ID);
+            return true;
         }
 
         function showMatchedTransition(opponentName, seat) {
@@ -158,6 +169,19 @@
             window.setTimeout(async () => {
                 await goToMatchedRoom();
             }, 300);
+        }
+
+        function setMatchMessage(text, type = "info") {
+            const el = document.getElementById("match-message");
+            if (!el) return;
+            el.className = `message ${type}`;
+            el.textContent = text || "";
+        }
+
+        function setQueueStatusMessage(text, type = "info") {
+            const el = document.getElementById("queue-status");
+            if (!el) return;
+            el.textContent = text || "";
         }
 
         async function joinMatchQueue() {
@@ -297,15 +321,13 @@
                     currentRoomPlayerToken = state.room_player_token || "";
 
                     if (!currentRoomPlayerToken) {
-                        document.getElementById("match-message").textContent =
-                            "你已匹配到房间，但缺少 room_player_token，暂时无法恢复。";
+                        setMatchMessage("你已匹配到房间，但缺少 room_player_token，暂时无法恢复。", "error");
                         return;
                     }
 
                     saveRoomIdentity(state.room_id, currentRoomPlayerToken, state.seat);
 
-                    document.getElementById("match-message").textContent =
-                        "你已经匹配到房间，正在为你恢复对局入口……";
+                    setMatchMessage("你已经匹配到房间，正在为你恢复对局入口……", "success");
                     document.getElementById("self-status").textContent =
                         `你已匹配成功，座位为 ${state.seat.toUpperCase()}。`;
 
@@ -356,8 +378,7 @@
                 const data = parsed.data;
 
                 if (!res.ok || !data.ok) {
-                    document.getElementById("match-message").textContent =
-                        data.error || "取消匹配失败。";
+                    setMatchMessage(data.error || "取消匹配失败。", "error");
                     return;
                 }
 
@@ -365,16 +386,14 @@
                 matchedRoomId = null;
                 currentSeat = null;
 
-                document.getElementById("match-message").textContent =
-                    data.message || "已取消匹配。";
+                setMatchMessage(data.message || "已取消匹配。", "success");
                 document.getElementById("self-status").textContent =
                     "你当前尚未加入匹配队列。";
 
                 setQueuedUi(false);
                 setResumeUi(false);
             } catch (error) {
-                document.getElementById("match-message").textContent =
-                    "取消匹配失败：" + error;
+                setMatchMessage("取消匹配失败：" + error, "error");
             }
         }
 
@@ -401,8 +420,7 @@
                 if (data.matched && data.room_id) {
                     matchedRoomId = data.room_id;
                     saveRoomIdentity(data.room_id, data.player_token, data.seat);
-                    document.getElementById("match-message").textContent =
-                        "匹配成功，正在跳转房间……";
+                    setMatchMessage("匹配成功，正在跳转房间……", "waiting");
                     window.location.href = `/room/${data.room_id}`;
                 }
             } catch (error) {

@@ -217,6 +217,31 @@
             transform: none;
         }
 
+        @media (max-width: 640px) {
+            .move-grid {
+                gap: 8px;
+            }
+
+            .move-btn {
+                min-height: 56px;
+                padding: 12px 8px 8px;
+                border-radius: 10px;
+            }
+
+            .move-label {
+                font-size: 14px;
+            }
+
+            .move-name {
+                font-size: 11px;
+            }
+
+            .shortcut-badge {
+                font-size: 10px;
+                padding: 2px 5px;
+            }
+        }
+
         .move-label {
             font-size: 15px;
             font-weight: bold;
@@ -862,6 +887,32 @@
             overflow-y: auto;
         }
 
+        .modal-icon {
+            width: 64px;
+            height: 64px;
+            border-radius: 999px;
+            margin: 0 auto 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            font-weight: bold;
+        }
+
+        .modal-icon.success {
+            background: linear-gradient(135deg, #dbeafe, #dcfce7);
+            color: #166534;
+        }
+
+        .modal-icon.warning {
+            background: linear-gradient(135deg, #fef3c7, #fee2e2);
+            color: #92400e;
+        }
+
+        .modal-centered {
+            text-align: center;
+        }
+
         .modal-title {
             font-size: 22px;
             font-weight: bold;
@@ -885,6 +936,33 @@
 
         .modal-actions.center {
             justify-content: center;
+        }
+
+        @media (max-width: 540px) {
+            .modal-card,
+            .modal-card.large {
+                width: min(100vw - 20px, 520px);
+                padding: 18px 14px;
+                border-radius: 18px;
+                max-height: calc(100vh - 24px);
+            }
+
+            .modal-title {
+                font-size: 20px;
+            }
+
+            .modal-body {
+                font-size: 13px;
+                line-height: 1.7;
+            }
+
+            .modal-actions {
+                flex-direction: column;
+            }
+
+            .modal-actions button {
+                width: 100%;
+            }
         }
 
         .settings-group {
@@ -1183,9 +1261,76 @@
             }
         }
 
+        @media (max-width: 640px) {
+            .container {
+                padding: 12px 10px 18px;
+            }
+
+            .top-row {
+                align-items: stretch;
+            }
+
+            .top-row h1 {
+                font-size: 24px;
+                margin-bottom: 0;
+            }
+
+            .top-actions {
+                width: 100%;
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 8px;
+            }
+
+            .top-actions .btn,
+            .top-actions button {
+                width: 100%;
+                text-align: center;
+                padding: 10px 8px;
+                font-size: 13px;
+            }
+        }
+
+        @media (max-width: 540px) {
+            .status-table-line {
+                padding: 10px;
+                border-radius: 14px;
+            }
+
+            .status-table-player-cell {
+                font-size: 16px;
+            }
+
+            .status-table-row:not(.full) {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .status-table-full-top,
+            .status-table-full-bottom {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                max-width: 100%;
+                margin: 0;
+            }
+
+            .status-table-cell {
+                padding: 8px 6px;
+            }
+
+            .status-table-key {
+                font-size: 11px;
+            }
+
+            .status-table-value {
+                font-size: 17px;
+            }
+        }
+
     </style>
 </head>
 <body>
+    <script>
+        const SERVER_BOOT_ID = "{{ server_boot_id }}";
+    </script>
     <div class="container">
         <div class="top-row">
             <h1>房间对战</h1>
@@ -1503,9 +1648,9 @@
 
     <div class="modal-mask" id="opponent-left-mask" style="z-index: 1004;">
         <div class="modal-card">
-            <div class="modal-title">对手已退出房间</div>
+            <div class="modal-title">房间已结束</div>
             <div class="modal-body">
-                对方已经退出当前房间。点击下方确认后，你也会退出房间并返回主菜单。
+                对手已经退出当前房间，本房间无法继续使用。点击下方确认后，将清除本地保存的房间入口，并返回主菜单。
             </div>
 
             <div class="modal-actions">

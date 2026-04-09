@@ -23,7 +23,10 @@ def rooms_mode():
 
 @page_bp.get("/match")
 def match_mode():
-    return render_template("match.html")
+    return render_template(
+        "match.html",
+        server_boot_id=current_app.config.get("SERVER_BOOT_ID", "")
+    )
 
 
 @page_bp.get("/ai")
@@ -37,10 +40,13 @@ def room_detail(room_id: str):
     if room is None:
         return render_template(
             "rooms.html",
-            error_message="房间不存在。"
+            error_message="房间不存在，可能是房主已退出、房间已失效，或服务刚刚重启。"
         )
-    return render_template("room_detail.html", room_id=room_id)
-
+    return render_template(
+        "room_detail.html",
+        room_id=room_id,
+        server_boot_id=current_app.config.get("SERVER_BOOT_ID", "")
+    )
 
 @page_bp.get("/favicon.ico")
 def favicon():

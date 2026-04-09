@@ -87,9 +87,43 @@
         }
 
         .message {
-            margin-top: 12px;
+            margin-top: 14px;
             min-height: 22px;
+            padding: 12px 14px;
+            border-radius: 12px;
+            border: 1px solid transparent;
+            background: #f8fafc;
             color: #374151;
+            line-height: 1.7;
+            white-space: pre-line;
+        }
+
+        .message:empty {
+            display: none;
+        }
+
+        .message.info {
+            background: #eff6ff;
+            color: #1d4ed8;
+            border-color: #bfdbfe;
+        }
+
+        .message.success {
+            background: #ecfdf5;
+            color: #166534;
+            border-color: #86efac;
+        }
+
+        .message.waiting {
+            background: #fffbeb;
+            color: #92400e;
+            border-color: #fcd34d;
+        }
+
+        .message.error {
+            background: #fef2f2;
+            color: #991b1b;
+            border-color: #fca5a5;
         }
 
         .muted {
@@ -168,6 +202,35 @@
             font-weight: bold;
         }
 
+        .action-row {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        
+        .modal-mask {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.34);
+            z-index: 999;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-mask.show {
+            display: flex;
+        }
+
+        .modal-card {
+            width: min(480px, calc(100vw - 32px));
+            background: white;
+            border: 1px solid #dbe2ea;
+            border-radius: 22px;
+            box-shadow: 0 24px 60px rgba(15, 23, 42, 0.20);
+            padding: 24px 20px;
+        }
+
         @keyframes pop-in {
             from {
                 opacity: 0;
@@ -178,9 +241,54 @@
                 transform: scale(1) translateY(0);
             }
         }
+
+        @media (max-width: 640px) {
+            .container {
+                padding: 20px 12px;
+            }
+
+            .card {
+                padding: 18px 14px;
+                border-radius: 16px;
+            }
+
+            .top-row h1 {
+                font-size: 24px;
+                margin-bottom: 0;
+            }
+
+            .action-row {
+                display: grid;
+                grid-template-columns: 1fr;
+                gap: 8px;
+            }
+
+            .action-row button {
+                width: 100%;
+            }
+
+            .match-success-card {
+                padding: 22px 16px;
+            }
+
+            .match-success-title {
+                font-size: 22px;
+            }
+
+            .match-success-subtitle {
+                font-size: 14px;
+            }
+
+            .match-success-countdown {
+                font-size: 14px;
+            }
+        }
     </style>
 </head>
 <body>
+    <script>
+        const SERVER_BOOT_ID = "{{ server_boot_id }}";
+    </script>
     <div class="container">
         <div class="top-row">
             <h1>双人联机对战</h1>
@@ -192,10 +300,11 @@
             <p>输入昵称后加入匹配队列。当另一位玩家也加入时，系统会自动为你们创建房间并跳转。</p>
 
             <input id="player-name" type="text" placeholder="输入你的昵称" />
-            <button id="join-match-btn">开始匹配</button>
-            <button id="cancel-match-btn" style="display: none; margin-left: 8px; background: #ef4444;">取消匹配</button>
-            <button id="resume-room-btn" style="display: none; margin-left: 8px; background: #16a34a;">回到房间</button>
-
+            <div class="action-row">
+                <button id="join-match-btn">开始匹配</button>
+                <button id="cancel-match-btn" style="display: none; background: #ef4444;">取消匹配</button>
+                <button id="resume-room-btn" style="display: none; background: #16a34a;">回到房间</button>
+            </div>
             <div class="message" id="match-message"></div>
 
             <div class="status-box">
@@ -208,8 +317,8 @@
 
     <script src="{{ url_for('static', filename='js/match.js') }}"></script>
 
-    <div class="match-success-mask" id="match-success-mask">
-        <div class="match-success-card">
+    <div class="modal-mask match-success-mask" id="match-success-mask">
+        <div class="modal-card match-success-card">
             <div class="match-success-icon">✓</div>
             <div class="match-success-title">匹配成功</div>
             <div class="match-success-subtitle" id="match-success-subtitle">

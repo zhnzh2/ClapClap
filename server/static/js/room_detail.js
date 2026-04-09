@@ -50,6 +50,8 @@
         let resolvePreviewTimer = null;
         let waitingManualRevealAdvance = false;
         let confirmAction = null;
+        let opponentOfflineSince = null;
+        let offlineNoticeShown = false;
 
         if (typeof io !== "function") {
             console.error("room_detail.js: Socket.IO 未加载成功");
@@ -195,6 +197,19 @@
             "c": "lie_yan",
             "v": "shining"
         };
+
+        function clearFrontendCacheForNewBoot() {
+            const savedBootId = localStorage.getItem("clapclap_server_boot_id");
+
+            if (savedBootId === SERVER_BOOT_ID) {
+                return false;
+            }
+
+            localStorage.clear();
+            sessionStorage.clear();
+            localStorage.setItem("clapclap_server_boot_id", SERVER_BOOT_ID);
+            return true;
+        }
 
         function normalizeMoveName(moveName) {
             return String(moveName || "").trim().toLowerCase();
@@ -1646,6 +1661,31 @@
                     highlightResolvedPreviewButtons(roundResolvePreview);
                 }
 
+                const onlineStatus = room.online_status || {};
+                let opponentOnline = true;
+
+                if (mySeat === "p1") {
+                    opponentOnline = !!onlineStatus.p2_online;
+                } else if (mySeat === "p2") {
+                    opponentOnline = !!onlineStatus.p1_online;
+                }
+
+                if (!isSpectatorMode() && room.is_full) {
+                    if (!opponentOnline) {
+                        if (!opponentOfflineSince) {
+                            opponentOfflineSince = Date.now();
+                        }
+
+                        if (!offlineNoticeShown && Date.now() - opponentOfflineSince >= 6000) {
+                            setRoomMessage("对手当前似乎已掉线或离开页面。你可以稍等片刻；若长时间未恢复，可退出房间重新匹配。", "waiting");
+                            offlineNoticeShown = true;
+                        }
+                    } else {
+                        opponentOfflineSince = null;
+                        offlineNoticeShown = false;
+                    }
+                }
+
                 renderHistory(room.game.history || []);
             } catch (error) {
                 console.error("renderRoom error:", error, room);
@@ -1666,6 +1706,19 @@
                 const data = await res.json();
 
                 if (!res.ok || !data.ok) {
+                    if (data?.error_code === "ROOM_NOT_FOUND") {
+                        clearAllRoomIdentity();
+                        openConfirmModal(
+                            "房间已失效",
+                            data.error || "当前房间已经不存在。你保存的本地房间入口也会一并清除，确认后返回主菜单。",
+                            () => {
+                                clearAllRoomIdentity();
+                                goHome();
+                            }
+                        );
+                        return;
+                    }
+
                     setRoomMessage(data.error || "房间状态获取失败。", "error");
                     return;
                 }
