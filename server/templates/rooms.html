@@ -164,110 +164,11 @@
             </div>
         </div>
     </div>
-
-    <script>
-        function saveRoomIdentity(roomId, playerToken, seat) {
-            localStorage.setItem(
-                `clapclap_room_${roomId}`,
-                JSON.stringify({
-                    player_token: playerToken,
-                    seat: seat
-                })
-            );
-
-            console.log("saveRoomIdentity:", roomId, playerToken, seat);
-        }
-
-        function saveMatchIdentity(playerName, playerToken) {
-            localStorage.setItem(
-                "clapclap_match_identity",
-                JSON.stringify({
-                    player_name: playerName,
-                    player_token: playerToken
-                })
-            );
-        }
-
-        async function createRoom() {
-            const playerName = document.getElementById("create-name").value.trim();
-            const msg = document.getElementById("create-message");
-
-            if (!playerName) {
-                msg.textContent = "请先输入昵称。";
-                return;
-            }
-
-            try {
-                const res = await fetch("/api/rooms", {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json"
-                    },
-                    body: JSON.stringify({
-                        player_name: playerName
-                    })
-                });
-
-                const data = await res.json();
-
-                if (!res.ok || !data.ok) {
-                    msg.textContent = data.error || "创建房间失败。";
-                    return;
-                }
-
-                msg.textContent = `房间创建成功，房间号：${data.room.room_id}`;
-
-                if (!data.player_token) {
-                    msg.textContent = "创建房间失败：服务端没有返回 player_token。";
-                    return;
-                }
-
-                saveRoomIdentity(data.room.room_id, data.player_token, data.seat);
-                console.log("创建房间后 localStorage =", localStorage.getItem(`clapclap_room_${data.room.room_id}`));
-                window.location.href = `/room/${data.room.room_id}`;
-            } catch (error) {
-                msg.textContent = "创建房间失败：" + error;
-            }
-        }
-
-        async function joinRoom() {
-            const playerName = document.getElementById("join-name").value.trim();
-            const roomId = document.getElementById("join-room-id").value.trim().toUpperCase();
-            const msg = document.getElementById("join-message");
-
-            if (!playerName || !roomId) {
-                msg.textContent = "请先输入昵称和房间号。";
-                return;
-            }
-
-            try {
-                const res = await fetch(`/api/rooms/${roomId}/join`, {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json"
-                    },
-                    body: JSON.stringify({
-                        player_name: playerName
-                    })
-                });
-
-                const data = await res.json();
-
-                if (!res.ok || !data.ok) {
-                    msg.textContent = data.error || "加入房间失败。";
-                    return;
-                }
-
-                msg.textContent = `加入成功，你的位置是 ${data.seat}`;
-                saveRoomIdentity(roomId, data.player_token, data.seat);
-                window.location.href = `/room/${roomId}`;
-            } catch (error) {
-                msg.textContent = "加入房间失败：" + error;
-            }
-        }
-
-        document.getElementById("create-room-btn").addEventListener("click", createRoom);
-        document.getElementById("join-room-btn").addEventListener("click", joinRoom);
-    </script>
+    <script src="{{ url_for('static', filename='js/core/storage_keys.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/core/storage.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/core/message.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/core/api.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/online/room_identity.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/pages/rooms_page.js') }}"></script>
 </body>
 </html>

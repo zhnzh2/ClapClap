@@ -909,6 +909,21 @@
             color: #92400e;
         }
 
+        .modal-icon.info {
+            background: linear-gradient(135deg, #dbeafe, #e0f2fe);
+            color: #1d4ed8;
+        }
+
+        .modal-icon.success {
+            background: linear-gradient(135deg, #dbeafe, #dcfce7);
+            color: #166534;
+        }
+
+        .modal-icon.warning {
+            background: linear-gradient(135deg, #fef3c7, #fee2e2);
+            color: #92400e;
+        }
+
         .modal-centered {
             text-align: center;
         }
@@ -1515,7 +1530,20 @@
     <script>
         window.CLAPCLAP_ROOM_ID = "{{ room_id }}";
     </script>
+    <script>
+        window.SERVER_BOOT_ID = "{{ server_boot_id }}";
+    </script>
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <script src="{{ url_for('static', filename='js/core/storage_keys.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/core/storage.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/core/message.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/core/api.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/core/modal.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/core/boot.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/online/room_identity.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/online/resume_room.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/online/room_state.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/pages/room_detail_page.js') }}"></script>
     <script src="{{ url_for('static', filename='js/room_detail.js') }}"></script>
 
     <div class="settling-mask" id="settling-mask">
@@ -1632,30 +1660,14 @@
                 <button type="button" class="secondary" id="close-help-btn">关闭</button>
             </div>
         </div>
-    </div>
+    </div>2
 
-    <div class="modal-mask" id="confirm-mask" style="z-index: 1004;">
-        <div class="modal-card">
-            <div class="modal-title" id="confirm-title">确认操作</div>
-            <div class="modal-body" id="confirm-message">你确定要继续吗？</div>
-
-            <div class="modal-actions">
-                <button type="button" class="secondary" id="confirm-cancel-btn">取消</button>
-                <button type="button" class="danger" id="confirm-ok-btn">确认</button>
-            </div>
-        </div>
-    </div>
-
-    <div class="modal-mask" id="opponent-left-mask" style="z-index: 1004;">
-        <div class="modal-card">
-            <div class="modal-title">房间已结束</div>
-            <div class="modal-body">
-                对手已经退出当前房间，本房间无法继续使用。点击下方确认后，将清除本地保存的房间入口，并返回主菜单。
-            </div>
-
-            <div class="modal-actions">
-                <button type="button" class="danger" id="opponent-left-ok-btn">确认</button>
-            </div>
+    <div class="modal-mask" id="global-modal-mask" style="z-index: 1010;">
+        <div class="modal-card" id="global-modal-card">
+            <div class="modal-icon" id="global-modal-icon" style="display: none;"></div>
+            <div class="modal-title" id="global-modal-title"></div>
+            <div class="modal-body" id="global-modal-body"></div>
+            <div class="modal-actions" id="global-modal-actions"></div>
         </div>
     </div>
 </body>
