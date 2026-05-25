@@ -108,6 +108,10 @@ class Room:
         self.updated_at = now
         self.persist()
 
+    def touch(self) -> None:
+        self.updated_at = datetime.utcnow()
+        self.persist()
+
     def is_seat_online(self, seat: str, *, ttl_seconds: int = 20) -> bool:
         now = datetime.utcnow()
 

@@ -239,7 +239,7 @@ class GameState:
     @classmethod
     def from_dict(cls, data: dict) -> "GameState":
         state = cls()
-        state.round_num = data.get("round_num", 1)
+        state.round_num = data.get("round_num", 0)
         state.winner = data.get("winner")
 
         p1_data = data.get("p1", {})

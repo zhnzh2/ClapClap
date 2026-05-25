@@ -155,7 +155,7 @@ def submit_room_move_service(
             else:
                 room.status = "playing"
 
-            room.persist()
+            room.touch()
             emit_room_state(room_id)
 
             return {

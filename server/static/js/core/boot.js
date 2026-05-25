@@ -1,5 +1,6 @@
 (function () {
-    function handleServerBootChange(serverBootId) {
+    function handleServerBootChange(serverBootId, options = {}) {
+        const shouldClearStorage = options.clearStorage === true;
         const savedBootId = localStorage.getItem(STORAGE_KEYS.SERVER_BOOT_ID);
 
         if (savedBootId === serverBootId) {
@@ -8,7 +9,9 @@
             };
         }
 
-        StorageUtils.clearAllClapClapStorage();
+        if (shouldClearStorage) {
+            StorageUtils.clearAllClapClapStorage();
+        }
         sessionStorage.clear();
         localStorage.setItem(STORAGE_KEYS.SERVER_BOOT_ID, serverBootId);
 

@@ -346,38 +346,27 @@ def get_match_status() -> dict:
             "waiting_player": MATCH_WAITING.player_name,
         }
 
-def get_player_match_result(player_token: str) -> dict:
-    with MATCH_LOCK:
-        result = PLAYER_MATCH_STATE.get(player_token)
-        if result is None:
-            return {
-                "matched": False,
-                "room_id": None,
-                "seat": None,
-                "player_token": None,
-            }
-
+def _build_match_result(state: dict | None) -> dict:
+    if state is None or state.get("status") != "matched":
         return {
-            "matched": True,
-            "room_id": result["room_id"],
-            "seat": result["seat"],
-            "player_token": result["player_token"],
+            "matched": False,
+            "room_id": None,
+            "seat": None,
+            "room_player_token": None,
         }
+
+    return {
+        "matched": True,
+        "room_id": state.get("room_id"),
+        "seat": state.get("seat"),
+        "room_player_token": state.get("room_player_token"),
+    }
+
+def get_player_match_result(player_token: str) -> dict:
+    """Deprecated compatibility wrapper; use pop_player_match_result."""
+    with MATCH_LOCK:
+        return _build_match_result(PLAYER_MATCH_STATE.get(player_token))
 
 def pop_player_match_result(player_token: str) -> dict:
     with MATCH_LOCK:
-        state = PLAYER_MATCH_STATE.get(player_token)
-        if state is None or state["status"] != "matched":
-            return {
-                "matched": False,
-                "room_id": None,
-                "seat": None,
-                "room_player_token": None,
-            }
-
-        return {
-            "matched": True,
-            "room_id": state["room_id"],
-            "seat": state["seat"],
-            "room_player_token": state.get("room_player_token"),
-        }
+        return _build_match_result(PLAYER_MATCH_STATE.get(player_token))

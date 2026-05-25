@@ -4,6 +4,7 @@ import unittest
 
 from app.constants import Move
 from app.game import GameEngine
+from app.matchmaking import PLAYER_MATCH_STATE, get_player_match_result
 from app.models import GameState
 
 
@@ -304,6 +305,30 @@ class TestClapClapLogic(unittest.TestCase):
         self.assertIsNone(state.winner)
         self.assertEqual(state.p1.flash_used, 2)
         self.assertEqual(state.p1.hp, 1)
+
+    def test_game_state_from_empty_dict_starts_at_round_zero(self):
+        state = GameState.from_dict({})
+
+        self.assertEqual(state.round_num, 0)
+
+    def test_match_result_returns_room_player_token(self):
+        PLAYER_MATCH_STATE["test_match_token"] = {
+            "status": "matched",
+            "player_name": "Tester",
+            "room_id": "ROOM42",
+            "seat": "p1",
+            "room_player_token": "room-token-42",
+            "updated_at": "2026-05-25T00:00:00",
+        }
+
+        try:
+            result = get_player_match_result("test_match_token")
+        finally:
+            PLAYER_MATCH_STATE.pop("test_match_token", None)
+
+        self.assertTrue(result["matched"])
+        self.assertEqual(result["room_player_token"], "room-token-42")
+        self.assertNotIn("player_token", result)
 
 if __name__ == "__main__":
     unittest.main()

@@ -453,6 +453,16 @@
             box-shadow: 0 0 0 3px rgba(156, 163, 175, 0.16);
         }
 
+        .online-dot.away {
+            background: var(--yellow);
+            box-shadow: 0 0 0 3px rgba(202, 138, 4, 0.16);
+        }
+
+        .online-dot.long-offline {
+            background: var(--danger);
+            box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.14);
+        }
+
         .invite-panel {
             margin-top: 0;
             background: var(--panel);
@@ -751,6 +761,32 @@
             font-size: 12px;
             color: var(--muted);
             line-height: 1.5;
+        }
+
+        .mobile-action-row {
+            display: none;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .mobile-action-row button {
+            width: 100%;
+        }
+
+        .reveal-card {
+            animation: reveal-pop 0.22s ease-out;
+        }
+
+        @keyframes reveal-pop {
+            from {
+                transform: scale(0.98);
+                opacity: 0.72;
+            }
+            to {
+                transform: scale(1);
+                opacity: 1;
+            }
         }
 
         .single-selection-grid {
@@ -1304,6 +1340,10 @@
                 padding: 10px 8px;
                 font-size: 13px;
             }
+
+            .mobile-action-row {
+                display: grid;
+            }
         }
 
         @media (max-width: 540px) {
@@ -1464,12 +1504,20 @@
                         <div id="p1-move-groups"></div>
                         <div class="message" id="p1-submit-msg"></div>
                         <div class="submit-confirm-hint">先选择动作，再按 Enter 确认；按 Backspace 可取消选择或撤回本回合提交。</div>
+                        <div class="mobile-action-row">
+                            <button type="button" class="primary confirm-selected-btn">确认提交</button>
+                            <button type="button" class="secondary cancel-selected-btn">撤回/取消</button>
+                        </div>
                     </div>
 
                     <div class="selection-box" id="p2-submit-box">
                         <div id="p2-move-groups"></div>
                         <div class="message" id="p2-submit-msg"></div>
                         <div class="submit-confirm-hint">先选择动作，再按 Enter 确认；按 Backspace 可取消选择或撤回本回合提交。</div>
+                        <div class="mobile-action-row">
+                            <button type="button" class="primary confirm-selected-btn">确认提交</button>
+                            <button type="button" class="secondary cancel-selected-btn">撤回/取消</button>
+                        </div>
                     </div>
                 </div>
 
@@ -1533,7 +1581,12 @@
     <script>
         window.SERVER_BOOT_ID = "{{ server_boot_id }}";
     </script>
-    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <script src="{{ url_for('static', filename='js/socket.io.min.js') }}"></script>
+    <script>
+        if (typeof io !== "function") {
+            document.write('<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"><\/script>');
+        }
+    </script>
     <script src="{{ url_for('static', filename='js/core/storage_keys.js') }}"></script>
     <script src="{{ url_for('static', filename='js/core/storage.js') }}"></script>
     <script src="{{ url_for('static', filename='js/core/message.js') }}"></script>

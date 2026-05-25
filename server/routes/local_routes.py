@@ -9,17 +9,21 @@ local_bp = Blueprint("local", __name__)
 
 @local_bp.get("/state")
 def get_state():
-    return jsonify(get_game_state_payload(runtime.CURRENT_STATE, include_history=True))
+    with runtime.CURRENT_STATE_LOCK:
+        payload = get_game_state_payload(runtime.CURRENT_STATE, include_history=True)
+    return jsonify(payload)
 
 
 @local_bp.post("/reset")
 def reset_game():
-    runtime.CURRENT_STATE = runtime.CURRENT_STATE.__class__()
+    with runtime.CURRENT_STATE_LOCK:
+        runtime.CURRENT_STATE = runtime.CURRENT_STATE.__class__()
+        payload = get_game_state_payload(runtime.CURRENT_STATE, include_history=True)
     return jsonify(
         {
             "ok": True,
             "message": "游戏已重置。",
-            "state": get_game_state_payload(runtime.CURRENT_STATE, include_history=True),
+            "state": payload,
         }
     )
 
@@ -57,13 +61,15 @@ def step_game():
             }
         ), 400
 
-    GameEngine.resolve_round(runtime.CURRENT_STATE, p1_move, p2_move)
+    with runtime.CURRENT_STATE_LOCK:
+        GameEngine.resolve_round(runtime.CURRENT_STATE, p1_move, p2_move)
+        payload = get_game_state_payload(runtime.CURRENT_STATE, include_history=True)
 
     return jsonify(
         {
             "ok": True,
             "message": "本回合已结算。",
-            "state": get_game_state_payload(runtime.CURRENT_STATE, include_history=True),
+            "state": payload,
         }
     )
 
@@ -76,3 +82,4 @@ def health_check():
             "message": "ClapClap server is running."
         }
     )
+

@@ -6,17 +6,9 @@ window.initRoomDetailPage = function () {
         return;
     }
 
-    const roomIdentity = RoomIdentityStorage.loadRoomIdentity(roomId);
-    let mySeat = roomIdentity.seat;
-    let myPlayerToken = roomIdentity.player_token;
-
-        console.log("roomId =", roomId);
-        console.log("mySeat =", mySeat);
-        console.log("myPlayerToken =", myPlayerToken);
-
-        if (!myPlayerToken) {
-            console.warn("当前没有找到本地房间身份，后续将按观战/未知身份处理。");
-        }
+    const roomIdentity = RoomIdentityStorage.loadRoomIdentity(roomId) || {};
+    let mySeat = roomIdentity.seat || null;
+    let myPlayerToken = roomIdentity.player_token || "";
 
         let currentSelectedMoveName = null;
         let currentSelectedOriginalMoveName = null;
@@ -24,14 +16,11 @@ window.initRoomDetailPage = function () {
         let lastRenderedRoundCount = -1;
         let opponentOfflineSince = null;
         let offlineNoticeShown = false;
+        let latestRoom = null;
         let roomStateController = null;
+        let serverBootChanged = false;
 
-        if (typeof io !== "function") {
-            console.error("room_detail.js: Socket.IO 未加载成功");
-            return;
-        }
-
-        const socket = io();
+        const socket = typeof io === "function" ? io() : null;
 
         const DEFAULT_ROOM_UI_SETTINGS = {
             showRoomInfo: false,
@@ -46,37 +35,59 @@ window.initRoomDetailPage = function () {
 
         let roomUiSettings = { ...DEFAULT_ROOM_UI_SETTINGS };
 
-        socket.on("connect", () => {
-            socket.emit("join_room", { room_id: roomId });
-        });
-
-        socket.on("room_state", (data) => {
-            if (!data || !data.ok) {
+        function emitRoomHeartbeat() {
+            if (!socket || !myPlayerToken) {
                 return;
             }
 
-            const result = roomStateController.applyIncomingRoomState(data.room);
+            socket.emit("room_heartbeat", {
+                room_id: roomId,
+                player_token: myPlayerToken
+            });
+        }
 
-            if (!result.handledResolvedPreview) {
-                setRoomMessage("房间状态已实时同步。", "info");
-            }
-        });
+        if (socket) {
+            socket.on("connect", () => {
+                socket.emit("join_room", {
+                    room_id: roomId,
+                    player_token: myPlayerToken
+                });
+                emitRoomHeartbeat();
+            });
 
-        socket.on("room_error", (data) => {
-            setRoomMessage(data?.error || "房间实时连接出错。", "error");
-        });
+            socket.on("room_state", (data) => {
+                if (!data || !data.ok) {
+                    return;
+                }
+                if (!roomStateController) {
+                    return;
+                }
 
-        socket.on("opponent_left", (data) => {
-            if (!data || !data.ok) {
-                return;
-            }
+                const result = roomStateController.applyIncomingRoomState(data.room);
 
-            if (data.left_seat === mySeat) {
-                return;
-            }
+                if (!result.handledResolvedPreview) {
+                    setRoomMessage("房间状态已实时同步。", "info");
+                }
+            });
 
-            openOpponentLeftModal();
-        });
+            socket.on("room_error", (data) => {
+                setRoomMessage(data?.error || "房间实时连接出错。", "error");
+            });
+
+            socket.on("opponent_left", (data) => {
+                if (!data || !data.ok) {
+                    return;
+                }
+
+                if (data.left_seat === mySeat) {
+                    return;
+                }
+
+                openOpponentLeftModal();
+            });
+        }
+
+        window.setInterval(emitRoomHeartbeat, 5000);
 
         const moveGroups = {
             resource_defense: ["QI", "SHIELD", "SHI_ZI", "BA_GUA"],
@@ -558,10 +569,19 @@ window.initRoomDetailPage = function () {
             }
 
             if (opponentOnline) {
+                opponentOfflineSince = null;
                 return "在线";
             }
 
-            return "离线";
+            if (!opponentOfflineSince) {
+                opponentOfflineSince = Date.now();
+            }
+
+            const offlineSeconds = Math.floor((Date.now() - opponentOfflineSince) / 1000);
+            if (offlineSeconds < 30) {
+                return `短暂离线 ${offlineSeconds}s`;
+            }
+            return `长时间离线 ${offlineSeconds}s`;
         }
 
         function renderInvitePanel() {
@@ -579,6 +599,10 @@ window.initRoomDetailPage = function () {
 
             if (opponentText === "在线" || opponentText.includes("两位玩家在线")) {
                 opponentOnlineEl.innerHTML = `<span class="online-dot online"></span>${opponentText}`;
+            } else if (opponentText.includes("短暂离线")) {
+                opponentOnlineEl.innerHTML = `<span class="online-dot away"></span>${opponentText}`;
+            } else if (opponentText.includes("长时间离线")) {
+                opponentOnlineEl.innerHTML = `<span class="online-dot long-offline"></span>${opponentText}`;
             } else if (opponentText === "离线" || opponentText.includes("离线")) {
                 opponentOnlineEl.innerHTML = `<span class="online-dot offline"></span>${opponentText}`;
             } else {
@@ -668,6 +692,19 @@ window.initRoomDetailPage = function () {
                 `P1 动作：${p1Move}`,
                 `P2 动作：${p2Move}`
             ];
+
+            if ((lastLog.p1_damage_taken ?? 0) > 0) {
+                chips.push(`P1 受到 ${lastLog.p1_damage_taken} 点伤害`);
+            }
+            if ((lastLog.p2_damage_taken ?? 0) > 0) {
+                chips.push(`P2 受到 ${lastLog.p2_damage_taken} 点伤害`);
+            }
+            if ((lastLog.p1_pickaxe_blocked ?? 0) > 0) {
+                chips.push(`P1 镐抵挡 ${lastLog.p1_pickaxe_blocked} 点`);
+            }
+            if ((lastLog.p2_pickaxe_blocked ?? 0) > 0) {
+                chips.push(`P2 镐抵挡 ${lastLog.p2_pickaxe_blocked} 点`);
+            }
 
             if (room.game?.winner === 1) {
                 chips.push("当前胜者：P1");
@@ -837,6 +874,7 @@ window.initRoomDetailPage = function () {
         function applySeatVisibility() {
             const actionSection = document.getElementById("action-section");
             const resetBtn = document.getElementById("reset-room-btn");
+            const leaveRoomBtn = document.getElementById("leave-room-btn");
             const p1SubmitBox = document.getElementById("p1-submit-box");
             const p2SubmitBox = document.getElementById("p2-submit-box");
 
@@ -846,6 +884,9 @@ window.initRoomDetailPage = function () {
                 }
                 if (resetBtn) {
                     resetBtn.disabled = false;
+                }
+                if (leaveRoomBtn) {
+                    leaveRoomBtn.style.display = "";
                 }
                 if (p1SubmitBox) {
                     p1SubmitBox.style.display = "";
@@ -863,6 +904,9 @@ window.initRoomDetailPage = function () {
                 if (resetBtn) {
                     resetBtn.disabled = false;
                 }
+                if (leaveRoomBtn) {
+                    leaveRoomBtn.style.display = "";
+                }
                 if (p1SubmitBox) {
                     p1SubmitBox.style.display = "none";
                 }
@@ -877,6 +921,9 @@ window.initRoomDetailPage = function () {
             }
             if (resetBtn) {
                 resetBtn.disabled = true;
+            }
+            if (leaveRoomBtn) {
+                leaveRoomBtn.style.display = "none";
             }
         }
 
@@ -1213,10 +1260,18 @@ window.initRoomDetailPage = function () {
 
         async function copyTextWithFeedback(text, successText) {
             try {
+                if (!navigator.clipboard || !navigator.clipboard.writeText) {
+                    throw new Error("Clipboard API unavailable");
+                }
                 await navigator.clipboard.writeText(text);
                 setRoomMessage(successText, "success");
             } catch (error) {
-                setRoomMessage("复制失败，请手动复制。", "error");
+                setRoomMessage("复制失败，已显示可手动复制的内容。", "error");
+                ModalUtils.showInfoModal({
+                    title: "手动复制",
+                    body: text,
+                    buttonText: "知道了"
+                });
             }
         }
 
@@ -1351,13 +1406,12 @@ window.initRoomDetailPage = function () {
             }
 
             try {
-                const result = await ApiUtils.apiPost(`/api/rooms/${roomId}/step`, {
-                    player_token: myPlayerToken,
-                    move_name: moveName
+                const result = await ApiUtils.apiPost(`/api/rooms/${roomId}/cancel-step`, {
+                    player_token: myPlayerToken
                 });
 
                 if (!result.ok) {
-                    setRoomMessage(result.error || "提交动作失败。", "error");
+                    setRoomMessage(result.error || "撤回提交失败。", "error");
                     return;
                 }
 
@@ -1482,6 +1536,7 @@ window.initRoomDetailPage = function () {
 
         function renderRoom(room) {
             try {
+                latestRoom = room;
                 document.getElementById("room-id").textContent = room.room_id;
                 applyRoomStatusBadge(room.status);
                 document.getElementById("p1-name").textContent = room.p1_name || "暂无";
@@ -1538,6 +1593,31 @@ window.initRoomDetailPage = function () {
                 if (pendingOpponentLabelEl) {
                     pendingOpponentLabelEl.textContent =
                         opponentPending ? "对方已选择" : "对方选择中";
+                }
+
+                if (!room.pending_p1_move) {
+                    const p1SubmitMsg = document.getElementById("p1-submit-msg");
+                    if (p1SubmitMsg) {
+                        p1SubmitMsg.textContent = "";
+                    }
+                }
+
+                if (!room.pending_p2_move) {
+                    const p2SubmitMsg = document.getElementById("p2-submit-msg");
+                    if (p2SubmitMsg) {
+                        p2SubmitMsg.textContent = "";
+                    }
+                }
+
+                if (!room.pending_p1_move && !room.pending_p2_move) {
+                    const roomMessageEl = document.getElementById("room-message");
+                    if (
+                        roomMessageEl &&
+                        roomMessageEl.textContent.includes("已提交动作，等待另一方")
+                    ) {
+                        roomMessageEl.textContent = "本回合已结算。";
+                        roomMessageEl.className = "message success";
+                    }
                 }
 
                 applyPendingHighlights(room);
@@ -1640,18 +1720,7 @@ window.initRoomDetailPage = function () {
 
         if (window.SERVER_BOOT_ID) {
             const bootResult = BootUtils.handleServerBootChange(window.SERVER_BOOT_ID);
-
-            if (bootResult.changed) {
-                ModalUtils.showInfoModal({
-                    title: "服务已重启",
-                    body: "检测到服务刚刚重启，之前保存的房间身份已自动清除。若该房间仍存在，请重新进入；若不存在，请重新创建或匹配。",
-                    buttonText: "返回主页",
-                    onClose: () => {
-                        goHome();
-                    }
-                });
-                return;
-            }
+            serverBootChanged = bootResult.changed;
         }
 
         async function fetchRoomState() {
@@ -1659,8 +1728,6 @@ window.initRoomDetailPage = function () {
                 if (!myPlayerToken) {
                     setRoomMessage("当前未检测到本地房间身份，可能只能以观战或未知身份进入。", "waiting");
                 }
-                console.log("fetchRoomState player_token =", myPlayerToken);
-                const queryPlayerToken = myPlayerToken || "";
                 const result = await ApiUtils.apiGet(
                     `/api/rooms/${roomId}?player_token=${encodeURIComponent(myPlayerToken || "")}`
                 );
@@ -1684,25 +1751,6 @@ window.initRoomDetailPage = function () {
 
                 const data = result.data;
 
-                if (!res.ok || !data.ok) {
-                    if (data?.error_code === "ROOM_NOT_FOUND") {
-                        RoomIdentityStorage.removeAllRoomIdentity();
-                        StorageUtils.clearStorageByPrefix("clapclap_room_ui_settings_");
-                        openConfirmModal(
-                            "房间已失效",
-                            data.error || "当前房间已经不存在。你保存的本地房间入口也会一并清除，确认后返回主菜单。",
-                            () => {
-                                ResumeRoomUtils.clearAllRoomRuntimeCache();
-                                goHome();
-                            }
-                        );
-                        return;
-                    }
-
-                    setRoomMessage(data.error || "房间状态获取失败。", "error");
-                    return;
-                }
-
                 if (data.room.requester_seat) {
                     mySeat = data.room.requester_seat;
                 }
@@ -1715,8 +1763,6 @@ window.initRoomDetailPage = function () {
         }
 
         function showResolvedPreview(preview, room) {
-            waitingManualRevealAdvance = false;
-
             const pendingSelfEl = document.getElementById("pending-self");
             const pendingOpponentEl = document.getElementById("pending-opponent");
             const pendingSelfLabelEl = document.getElementById("pending-self-label");
@@ -1754,13 +1800,13 @@ window.initRoomDetailPage = function () {
             }
 
             try {
-                console.log("submitMove:", seat, moveName, myPlayerToken);
-                const result = await ApiUtils.apiPost(`/api/rooms/${roomId}/cancel-step`, {
-                    player_token: myPlayerToken
+                const result = await ApiUtils.apiPost(`/api/rooms/${roomId}/step`, {
+                    player_token: myPlayerToken,
+                    move_name: moveName
                 });
 
                 if (!result.ok) {
-                    setRoomMessage(result.error || "撤回提交失败。", "error");
+                    setRoomMessage(result.error || "提交动作失败。", "error");
                     return;
                 }
 
@@ -1956,7 +2002,21 @@ window.initRoomDetailPage = function () {
                 applySeatHighlights();
                 renderInvitePanel();
                 renderSpectatorBanner();
-                setRoomMessage("正在连接房间并同步状态……", "info");
+                if (socket) {
+                    setRoomMessage(
+                        serverBootChanged
+                            ? "检测到服务已重启，正在尝试恢复房间身份并同步状态……"
+                            : "正在连接房间并同步状态……",
+                        "info"
+                    );
+                } else {
+                    setRoomMessage(
+                        serverBootChanged
+                            ? "检测到服务已重启，正在通过轮询尝试恢复房间状态。"
+                            : "实时连接不可用，已切换为轮询同步模式。",
+                        "waiting"
+                    );
+                }
                 fetchRoomState();
                 setInterval(fetchRoomState, 3000);
             } catch (error) {

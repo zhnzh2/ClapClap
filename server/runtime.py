@@ -1,8 +1,11 @@
+from threading import Lock
+
 from app.models import GameState
 from app.room_manager import cleanup_expired_rooms
 from app.matchmaking import cleanup_expired_match_state
 
 CURRENT_STATE = GameState()
+CURRENT_STATE_LOCK = Lock()
 
 
 def run_periodic_cleanup() -> None:
@@ -14,3 +17,4 @@ def run_periodic_cleanup() -> None:
 
     if match_cleanup["removed_tokens"]:
         print("[cleanup] cleaned match tokens:", match_cleanup["removed_tokens"])
+

@@ -1,36 +1,50 @@
-function setMessage(elementId, text, type = "info") {
-    const el = document.getElementById(elementId);
-    if (!el) {
-        return;
-    }
-
-    el.textContent = text || "";
-    el.className = `message ${type}`;
-}
-
-function clearMessage(elementId) {
-    const el = document.getElementById(elementId);
-    if (!el) {
-        return;
-    }
-
-    el.textContent = "";
-    el.className = "message";
-}
-
-function createMessageController(elementId) {
-    return {
-        set(text, type = "info") {
-            setMessage(elementId, text, type);
-        },
-        clear() {
-            clearMessage(elementId);
+(function () {
+    async function parseJsonResponse(response) {
+        try {
+            return await response.json();
+        } catch (error) {
+            return null;
         }
-    };
-}
+    }
 
-window.MessageUtils = {
-    setMessage,
-    clearMessage,
-    createMessageController
-};
+    function normalizeApiResult(response, data) {
+        const body = data && typeof data === "object" ? data : {};
+        const ok = response.ok && body.ok !== false;
+
+        return {
+            ok,
+            status: response.status,
+            data: body,
+            error: body.error || body.message || response.statusText || "请求失败。"
+        };
+    }
+
+    async function apiGet(url) {
+        const response = await fetch(url, {
+            method: "GET",
+            headers: {
+                "Accept": "application/json"
+            }
+        });
+        const data = await parseJsonResponse(response);
+        return normalizeApiResult(response, data);
+    }
+
+    async function apiPost(url, payload = {}) {
+        const response = await fetch(url, {
+            method: "POST",
+            headers: {
+                "Accept": "application/json",
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(payload)
+        });
+        const data = await parseJsonResponse(response);
+        return normalizeApiResult(response, data);
+    }
+
+    window.ApiUtils = {
+        apiGet,
+        apiPost
+    };
+})();

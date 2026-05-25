@@ -11,7 +11,7 @@ window.initMatchPage = function () {
             const bootResult = BootUtils.handleServerBootChange(window.SERVER_BOOT_ID);
 
             if (bootResult.changed) {
-                setMatchMessage("检测到服务已重启，之前保存的匹配与房间缓存已自动清除。", "info");
+                setMatchMessage("检测到服务已重启，正在尝试恢复匹配或房间入口。", "info");
             }
         }
 
@@ -192,15 +192,6 @@ window.initMatchPage = function () {
             }
         }
 
-        matchStateController.fetchMatchStatus();
-        matchStateController.syncMyMatchState();
-        ResumeRoomUtils.applyMatchResumeRoomEntry(setResumeUi);
-
-        setInterval(() => {
-            matchStateController.fetchMatchStatus();
-            matchStateController.syncMyMatchState();
-        }, 1000);
-
         matchStateController = createMatchStateController({
             ensureMatchIdentity,
             getPlayerName,
@@ -225,4 +216,14 @@ window.initMatchPage = function () {
             getOpponentNameFromMatchedData,
             getOpponentNameFromState
         });
+
+        ModalUtils.bindGlobalModalEvents();
+        matchStateController.fetchMatchStatus();
+        matchStateController.syncMyMatchState();
+        ResumeRoomUtils.applyMatchResumeRoomEntry(setResumeUi);
+
+        setInterval(() => {
+            matchStateController.fetchMatchStatus();
+            matchStateController.syncMyMatchState();
+        }, 1000);
 }
