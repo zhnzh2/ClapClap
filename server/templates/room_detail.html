@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>ClapClap 房间对战</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/room_detail.css') }}" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/room_detail_overlay.css') }}" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/room_detail_modals.css') }}" />
 </head>
 <body>
     <script>
@@ -205,13 +207,12 @@
     <script>
         window.SERVER_BOOT_ID = "{{ server_boot_id }}";
     </script>
-    <script src="{{ url_for('static', filename='js/socket.io.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/lib/socket.io.min.js') }}"></script>
     <script>
         if (typeof io !== "function") {
             document.write('<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"><\/script>');
         }
     </script>
-    <script src="{{ url_for('static', filename='js/core/storage_keys.js') }}"></script>
     <script src="{{ url_for('static', filename='js/core/storage.js') }}"></script>
     <script src="{{ url_for('static', filename='js/core/message.js') }}"></script>
     <script src="{{ url_for('static', filename='js/core/api.js') }}"></script>
@@ -223,8 +224,9 @@
     <script src="{{ url_for('static', filename='js/online/player_state_renderer.js') }}"></script>
     <script src="{{ url_for('static', filename='js/online/round_result_renderer.js') }}"></script>
     <script src="{{ url_for('static', filename='js/online/history_renderer.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/pages/room_detail_data.js') }}"></script>
     <script src="{{ url_for('static', filename='js/pages/room_detail_page.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/room_detail.js') }}"></script>
+    <script>if (typeof window.initRoomDetailPage === "function") { window.initRoomDetailPage(); }</script>
 
     <div class="settling-mask" id="settling-mask">
         <div class="settling-card">

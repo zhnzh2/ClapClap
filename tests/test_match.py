@@ -18,7 +18,6 @@ from app.storage import delete_kv
 from server.app import app
 from server.extensions import socketio
 
-
 class TestMatchmaking(unittest.TestCase):
     def setUp(self):
         self.created_room_ids: list[str] = []
@@ -95,6 +94,37 @@ class TestMatchmaking(unittest.TestCase):
         finally:
             client.disconnect()
 
+    def test_duplicate_enqueue_same_token(self):
+        """测试同一 token 重复排队：第二次应返回 already_queued。"""
+        first = enqueue_or_match("Alice", "match-a")
+        self.assertFalse(first["matched"])
+        self.assertTrue(first["already_queued"] is False)
+
+        second = enqueue_or_match("Alice", "match-a")
+        self.assertFalse(second["matched"])
+        self.assertTrue(second["already_queued"])
+
+    def test_already_matched_player_queues_again(self):
+        """测试已匹配的玩家再次排队：应返回 already_in_room。"""
+        enqueue_or_match("Alice", "match-a")
+        matched = enqueue_or_match("Bob", "match-b")
+        self.assertTrue(matched["matched"])
+        self.created_room_ids.append(matched["room_id"])
+
+        # Alice 已匹配，再次排队
+        retry = enqueue_or_match("Alice", "match-a")
+        self.assertTrue(retry["matched"])
+        self.assertTrue(retry.get("already_in_room"))
+
+    def test_self_match_prevented(self):
+        """测试自己不能匹配自己。"""
+        first = enqueue_or_match("Alice", "match-a")
+        self.assertFalse(first["matched"])
+
+        # 同一个 player_token 再次排队（在 MATCH_WAITING 中就是自己）
+        second = enqueue_or_match("Alice", "match-a")
+        self.assertFalse(second["matched"])
+        self.assertTrue(second["already_queued"])
 
 if __name__ == "__main__":
     unittest.main()

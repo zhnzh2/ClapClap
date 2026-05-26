@@ -1,26 +1,43 @@
+# Python
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
+*.egg-info/
+dist/
+build/
 
+# Virtual environments
 .env
 .venv/
 venv/
 
+# SQLite databases
 data/*.db
+data/*.db-journal
+data/*.db-wal
 *.db
+*.db-journal
+*.db-wal
 
+# IDE
 .vscode/
+.idea/
 
+# Logs
 *.log
+
+# LaTeX auxiliary files
 *.aux
 *.fls
 *.fdb_latexmk
 *.synctex.gz
 *.toc
 
+# OS files
 .DS_Store
 Thumbs.db
 
-server.zip
-Get-ChildItem
+# Temp / dev scripts
+_refactor_rdp.py
+task.txt

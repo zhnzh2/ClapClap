@@ -4,7 +4,7 @@ import unittest
 
 from app.constants import Move
 from app.game import GameEngine
-from app.matchmaking import PLAYER_MATCH_STATE, get_player_match_result
+from app.matchmaking import PLAYER_MATCH_STATE, pop_player_match_result
 from app.models import GameState
 
 
@@ -322,7 +322,7 @@ class TestClapClapLogic(unittest.TestCase):
         }
 
         try:
-            result = get_player_match_result("test_match_token")
+            result = pop_player_match_result("test_match_token")
         finally:
             PLAYER_MATCH_STATE.pop("test_match_token", None)
 

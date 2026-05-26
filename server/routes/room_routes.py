@@ -1,6 +1,6 @@
 from flask import Blueprint, jsonify, request
 
-from services.room_service import (
+from server.services.room_service import (
     create_room_service,
     join_room_service,
     get_room_service,

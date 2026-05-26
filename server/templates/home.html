@@ -184,14 +184,13 @@
     <script>
         window.SERVER_BOOT_ID = "{{ server_boot_id }}";
     </script>
-    <script src="{{ url_for('static', filename='js/core/storage_keys.js') }}"></script>
     <script src="{{ url_for('static', filename='js/core/storage.js') }}"></script>
     <script src="{{ url_for('static', filename='js/core/api.js') }}"></script>
     <script src="{{ url_for('static', filename='js/core/boot.js') }}"></script>
     <script src="{{ url_for('static', filename='js/online/room_identity.js') }}"></script>
     <script src="{{ url_for('static', filename='js/online/resume_room.js') }}"></script>
     <script src="{{ url_for('static', filename='js/pages/home_page.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/home.js') }}"></script>
+    <script>if (typeof window.initHomePage === "function") { window.initHomePage(); }</script>
 
 </body>
 </html>

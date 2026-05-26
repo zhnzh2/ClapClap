@@ -4,7 +4,6 @@ import unittest
 
 from server.app import app
 
-
 class TestStatusApi(unittest.TestCase):
     def test_modes_status_api(self):
         client = app.test_client()
@@ -14,7 +13,6 @@ class TestStatusApi(unittest.TestCase):
         self.assertEqual(result["modes"]["rooms"]["status"], "available")
         self.assertEqual(result["modes"]["match"]["status"], "available")
         self.assertEqual(result["modes"]["ai"]["status"], "planned")
-
 
 if __name__ == "__main__":
     unittest.main()

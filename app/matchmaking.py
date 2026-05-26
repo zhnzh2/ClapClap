@@ -362,11 +362,6 @@ def _build_match_result(state: dict | None) -> dict:
         "room_player_token": state.get("room_player_token"),
     }
 
-def get_player_match_result(player_token: str) -> dict:
-    """Deprecated compatibility wrapper; use pop_player_match_result."""
-    with MATCH_LOCK:
-        return _build_match_result(PLAYER_MATCH_STATE.get(player_token))
-
 def pop_player_match_result(player_token: str) -> dict:
     with MATCH_LOCK:
         return _build_match_result(PLAYER_MATCH_STATE.get(player_token))
