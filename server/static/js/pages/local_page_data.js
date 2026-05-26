@@ -56,3 +56,6 @@ const fixedKeyMap = {
 
     FIRE: "Z",
     SHAN_DIAN: "X",
+    LIE_YAN: "C",
+    SHINING: "V"
+};
