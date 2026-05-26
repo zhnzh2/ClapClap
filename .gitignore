@@ -21,3 +21,6 @@ data/*.db
 
 .DS_Store
 Thumbs.db
+
+server.zip
+Get-ChildItem

@@ -6,6 +6,7 @@ window.initMatchPage = function () {
         let currentRoomPlayerToken = "";
         let currentSeat = null;
         let matchStateController = null;
+        let matchSocket = null;
 
         if (window.SERVER_BOOT_ID) {
             const bootResult = BootUtils.handleServerBootChange(window.SERVER_BOOT_ID);
@@ -71,6 +72,18 @@ window.initMatchPage = function () {
             MessageUtils.setMessage("match-message", text, type);
         }
 
+        function applyMatchStatus(status) {
+            if (!status) {
+                return;
+            }
+
+            if (status.has_waiting_player) {
+                setQueueStatusText(`当前有玩家正在等待：${status.waiting_player}`);
+            } else {
+                setQueueStatusText("当前没有玩家在等待。");
+            }
+        }
+
         function ensureMatchIdentity(playerName) {
             const parsed = StorageUtils.getJsonStorage(STORAGE_KEYS.MATCH_IDENTITY, null);
 
@@ -101,6 +114,39 @@ window.initMatchPage = function () {
 
         function setResumeUi(showResume) {
             document.getElementById("resume-room-btn").style.display = showResume ? "" : "none";
+            const panel = document.getElementById("resume-panel");
+            if (panel) {
+                panel.classList.toggle("show", !!showResume);
+            }
+            renderResumePanel();
+        }
+
+        function renderResumePanel(opponentName = "") {
+            const roomEl = document.getElementById("resume-room-id");
+            const seatEl = document.getElementById("resume-seat");
+            const opponentEl = document.getElementById("resume-opponent");
+
+            if (roomEl) {
+                roomEl.textContent = matchedRoomId || "-";
+            }
+            if (seatEl) {
+                seatEl.textContent = currentSeat ? currentSeat.toUpperCase() : "-";
+            }
+            if (opponentEl) {
+                opponentEl.textContent = opponentName || opponentEl.textContent || "-";
+            }
+        }
+
+        function clearResumeState() {
+            if (matchedRoomId) {
+                RoomIdentityStorage.removeRoomIdentity(matchedRoomId);
+            }
+            setMatchedRoomId(null);
+            setCurrentSeat(null);
+            setCurrentRoomPlayerToken("");
+            setJoinedQueue(false);
+            setResumeUi(false);
+            setSelfStatusText("你当前尚未加入匹配队列。");
         }
 
         async function goToMatchedRoom() {
@@ -113,11 +159,7 @@ window.initMatchPage = function () {
             );
 
             if (!result.ok) {
-                RoomIdentityStorage.removeRoomIdentity(matchedRoomId);
-                setMatchedRoomId(null);
-                setCurrentSeat(null);
-                setCurrentRoomPlayerToken("");
-                setJoinedQueue(false);
+                clearResumeState();
 
                 setMatchMessage(
                     result.error || "检测到旧房间已失效，已清除无效恢复状态，请重新匹配。",
@@ -179,6 +221,25 @@ window.initMatchPage = function () {
             await goToMatchedRoom();
         });
 
+        document.getElementById("resume-continue-btn").addEventListener("click", async () => {
+            await goToMatchedRoom();
+        });
+
+        document.getElementById("resume-forget-btn").addEventListener("click", () => {
+            ModalUtils.showConfirmModal({
+                title: "放弃房间入口",
+                body: "这只会清除当前浏览器里的恢复入口，不会替你退出服务端房间。确认继续吗？",
+                confirmText: "放弃入口",
+                cancelText: "取消",
+                confirmClassName: "danger",
+                onConfirm: () => {
+                    clearResumeState();
+                    StorageUtils.removeStorage(STORAGE_KEYS.MATCH_IDENTITY);
+                    setMatchMessage("已清除本地恢复入口。", "info");
+                }
+            });
+        });
+
         const savedIdentity = StorageUtils.getJsonStorage(STORAGE_KEYS.MATCH_IDENTITY, null);
         if (savedIdentity) {
             try {
@@ -208,8 +269,10 @@ window.initMatchPage = function () {
             setQueueStatusText,
             setSelfStatusText,
             setMatchMessage,
+            applyMatchStatus,
             setQueuedUi,
             setResumeUi,
+            renderResumePanel,
             saveRoomIdentity: RoomIdentityStorage.saveRoomIdentity,
             goToMatchedRoom,
             delayedGoToMatchedRoom,
@@ -218,6 +281,19 @@ window.initMatchPage = function () {
         });
 
         ModalUtils.bindGlobalModalEvents();
+
+        if (typeof io === "function") {
+            matchSocket = io();
+            matchSocket.on("connect", () => {
+                matchSocket.emit("join_match_lobby");
+            });
+            matchSocket.on("match_status", (data) => {
+                if (data && data.ok) {
+                    applyMatchStatus(data.status);
+                }
+            });
+        }
+
         matchStateController.fetchMatchStatus();
         matchStateController.syncMyMatchState();
         ResumeRoomUtils.applyMatchResumeRoomEntry(setResumeUi);
@@ -225,5 +301,5 @@ window.initMatchPage = function () {
         setInterval(() => {
             matchStateController.fetchMatchStatus();
             matchStateController.syncMyMatchState();
-        }, 1000);
+        }, matchSocket ? 5000 : 1000);
 }

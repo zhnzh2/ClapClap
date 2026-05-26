@@ -149,11 +149,11 @@
             </div>
 
             <div class="mode-card">
-                <span class="badge muted-badge">正在调试</span>
+                <span class="badge" id="rooms-mode-badge">当前可用</span>
                 <h2>房间模式</h2>
-                <p>创建或加入房间，与指定玩家进行联机对战。</p>
+                <p id="rooms-mode-desc">创建或加入房间，与指定玩家进行联机对战。</p>
                 <div class="actions">
-                    <a class="btn secondary" href="/rooms">进入调试</a>
+                    <a class="btn" href="/rooms">进入模式</a>
                 </div>
             </div>
 
@@ -167,9 +167,9 @@
             </div>
 
             <div class="mode-card">
-                <span class="badge muted-badge">后续接入</span>
+                <span class="badge muted-badge" id="ai-mode-badge">后续接入</span>
                 <h2>和电脑 AI 对战</h2>
-                <p>等 AI 训练好后，就可以在这里和电脑进行正式对战。</p>
+                <p id="ai-mode-desc">等 AI 训练好后，就可以在这里和电脑进行正式对战。</p>
                 <div class="actions">
                     <a class="btn secondary" href="/ai">查看页面</a>
                 </div>
@@ -186,6 +186,7 @@
     </script>
     <script src="{{ url_for('static', filename='js/core/storage_keys.js') }}"></script>
     <script src="{{ url_for('static', filename='js/core/storage.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/core/api.js') }}"></script>
     <script src="{{ url_for('static', filename='js/core/boot.js') }}"></script>
     <script src="{{ url_for('static', filename='js/online/room_identity.js') }}"></script>
     <script src="{{ url_for('static', filename='js/online/resume_room.js') }}"></script>

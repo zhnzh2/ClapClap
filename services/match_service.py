@@ -15,6 +15,8 @@ def join_match_service(player_name: str, player_token: str) -> tuple[dict, int]:
         run_periodic_cleanup()
 
         result = enqueue_or_match(player_name.strip(), player_token.strip())
+        from server.socket_events import emit_match_status
+        emit_match_status()
 
         if result["matched"]:
             return {
@@ -66,6 +68,8 @@ def get_my_match_state_service(player_token: str) -> tuple[dict, int]:
 def cancel_match_service(player_token: str) -> tuple[dict, int]:
     run_periodic_cleanup()
     result = cancel_match(player_token.strip())
+    from server.socket_events import emit_match_status
+    emit_match_status()
     return result, 200
 
 

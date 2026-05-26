@@ -16,8 +16,10 @@
             setQueueStatusText,
             setSelfStatusText,
             setMatchMessage,
+            applyMatchStatus = null,
             setQueuedUi,
             setResumeUi,
+            renderResumePanel = null,
             saveRoomIdentity,
             goToMatchedRoom,
             delayedGoToMatchedRoom,
@@ -67,6 +69,9 @@
                 setSelfStatusText("你已匹配成功，正在准备进入房间。");
                 setQueuedUi(false);
                 setResumeUi(true);
+                if (typeof renderResumePanel === "function") {
+                    renderResumePanel(opponentName);
+                }
 
                 delayedGoToMatchedRoom(opponentName, data.seat);
                 return;
@@ -97,11 +102,16 @@
 
             const status = result.data.status;
 
-            if (status.has_waiting_player) {
-                setQueueStatusText(`当前有玩家正在等待：${status.waiting_player}`);
-            } else {
-                setQueueStatusText("当前没有玩家在等待。");
+            if (typeof applyMatchStatus === "function") {
+                applyMatchStatus(status);
+                return;
             }
+
+            setQueueStatusText(
+                status.has_waiting_player
+                    ? `当前有玩家正在等待：${status.waiting_player}`
+                    : "当前没有玩家在等待。"
+            );
         }
 
         async function syncMyMatchState() {
@@ -137,6 +147,9 @@
                 setSelfStatusText(`你已匹配成功，座位为 ${state.seat.toUpperCase()}。`);
                 setQueuedUi(false);
                 setResumeUi(true);
+                if (typeof renderResumePanel === "function") {
+                    renderResumePanel(getOpponentNameFromState(state));
+                }
 
                 delayedGoToMatchedRoom(getOpponentNameFromState(state), state.seat);
                 return;

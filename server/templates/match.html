@@ -135,6 +135,46 @@
             gap: 10px;
             flex-wrap: wrap;
         }
+
+        .resume-panel {
+            display: none;
+            margin-top: 14px;
+            padding: 14px;
+            border: 1px solid #86efac;
+            background: #ecfdf5;
+            border-radius: 14px;
+            color: #14532d;
+        }
+
+        .resume-panel.show {
+            display: block;
+        }
+
+        .resume-title {
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+
+        .resume-meta {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 8px;
+            margin-bottom: 10px;
+            font-size: 13px;
+        }
+
+        .resume-meta-item {
+            background: rgba(255, 255, 255, 0.72);
+            border: 1px solid #bbf7d0;
+            border-radius: 10px;
+            padding: 8px;
+        }
+
+        .resume-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
         
         .modal-mask {
             display: none;
@@ -193,6 +233,15 @@
 
             .action-row button {
                 width: 100%;
+            }
+
+            .resume-meta {
+                grid-template-columns: 1fr;
+            }
+
+            .resume-actions {
+                display: grid;
+                grid-template-columns: 1fr;
             }
 
             .match-success-card {
@@ -357,6 +406,19 @@
             </div>
             <div class="message" id="match-message"></div>
 
+            <div class="resume-panel" id="resume-panel">
+                <div class="resume-title">已找到可继续的房间</div>
+                <div class="resume-meta">
+                    <div class="resume-meta-item">房间号：<strong id="resume-room-id">-</strong></div>
+                    <div class="resume-meta-item">座位：<strong id="resume-seat">-</strong></div>
+                    <div class="resume-meta-item">对手：<strong id="resume-opponent">-</strong></div>
+                </div>
+                <div class="resume-actions">
+                    <button id="resume-continue-btn" type="button" style="background: #16a34a;">继续游戏</button>
+                    <button id="resume-forget-btn" type="button" style="background: #6b7280;">放弃入口</button>
+                </div>
+            </div>
+
             <div class="status-box">
                 <div class="status-line"><strong>当前队列状态：</strong></div>
                 <div class="status-line" id="queue-status">加载中</div>
@@ -367,6 +429,12 @@
 
     <script>
         window.SERVER_BOOT_ID = "{{ server_boot_id }}";
+    </script>
+    <script src="{{ url_for('static', filename='js/socket.io.min.js') }}"></script>
+    <script>
+        if (typeof io !== "function") {
+            document.write('<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"><\/script>');
+        }
     </script>
     <script src="{{ url_for('static', filename='js/core/storage_keys.js') }}"></script>
     <script src="{{ url_for('static', filename='js/core/storage.js') }}"></script>

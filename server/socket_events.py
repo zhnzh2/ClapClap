@@ -2,6 +2,7 @@ from flask_socketio import emit, join_room as socket_join_room
 
 from app.room_manager import get_room, get_room_runtime_lock
 from app.state_api import get_room_payload
+from app.matchmaking import get_match_status
 from server.extensions import socketio
 
 
@@ -28,6 +29,16 @@ def emit_opponent_left(room_id: str, left_seat: str) -> None:
             "left_seat": left_seat,
         },
         to=room_id,
+    )
+
+def emit_match_status() -> None:
+    socketio.emit(
+        "match_status",
+        {
+            "ok": True,
+            "status": get_match_status(),
+        },
+        to="match_lobby",
     )
 
 @socketio.on("join_room")
@@ -70,3 +81,14 @@ def handle_room_heartbeat(data):
 
     with get_room_runtime_lock(room_id):
         room.mark_seen(seat)
+
+@socketio.on("join_match_lobby")
+def handle_join_match_lobby():
+    socket_join_room("match_lobby")
+    emit(
+        "match_status",
+        {
+            "ok": True,
+            "status": get_match_status(),
+        },
+    )

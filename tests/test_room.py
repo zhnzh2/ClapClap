@@ -60,6 +60,15 @@ class TestRoomAndLocalApi(unittest.TestCase):
         state = self.client.get("/state").get_json()
         self.assertEqual(state["round_num"], 3)
 
+        api_state = self.client.get("/api/local/state").get_json()
+        self.assertEqual(api_state["round_num"], 3)
+
+        api_step = self.client.post(
+            "/api/local/step",
+            json={"p1_move": "QI", "p2_move": "QI"},
+        ).get_json()
+        self.assertTrue(api_step["ok"], api_step)
+
     def test_room_create_join_submit_cancel_and_resolve(self):
         room_id, p1_token, p2_token = self.create_joined_room()
 

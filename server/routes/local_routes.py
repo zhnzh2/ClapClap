@@ -8,6 +8,7 @@ local_bp = Blueprint("local", __name__)
 
 
 @local_bp.get("/state")
+@local_bp.get("/api/local/state")
 def get_state():
     with runtime.CURRENT_STATE_LOCK:
         payload = get_game_state_payload(runtime.CURRENT_STATE, include_history=True)
@@ -15,6 +16,7 @@ def get_state():
 
 
 @local_bp.post("/reset")
+@local_bp.post("/api/local/reset")
 def reset_game():
     with runtime.CURRENT_STATE_LOCK:
         runtime.CURRENT_STATE = runtime.CURRENT_STATE.__class__()
@@ -29,6 +31,7 @@ def reset_game():
 
 
 @local_bp.post("/step")
+@local_bp.post("/api/local/step")
 def step_game():
     data = request.get_json(silent=True)
     if data is None:

@@ -653,71 +653,13 @@ window.initRoomDetailPage = function () {
         }
 
         function renderRoundResultBanner(room) {
-            const banner = document.getElementById("round-result-section");
-            const titleEl = document.getElementById("round-result-title");
-            const bodyEl = document.getElementById("round-result-body");
-            const chipsEl = document.getElementById("round-result-chips");
-
-            if (!banner || !titleEl || !bodyEl || !chipsEl) {
+            if (!window.RoomRoundResultRenderer) {
                 return;
             }
-
-            chipsEl.innerHTML = "";
-
-            const history = room.game?.history || [];
-            if (!Array.isArray(history) || history.length === 0) {
-                banner.classList.remove("show");
-                return;
-            }
-
-            const lastLog = history[history.length - 1];
-            const roundIndex = history.length;
-
-            if (lastRenderedRoundCount === roundIndex && room.status !== "finished") {
-                return;
-            }
-
-            banner.classList.add("show");
-            lastRenderedRoundCount = roundIndex;
-
-            titleEl.textContent = `本回合结果 · 第 ${roundIndex} 回合`;
-
-            const p1Move = lastLog.p1_move_label || lastLog.p1_move || "未知";
-            const p2Move = lastLog.p2_move_label || lastLog.p2_move || "未知";
-            const summaryText = lastLog.summary || "本回合已完成结算。";
-
-            bodyEl.textContent = `P1：${p1Move}　|　P2：${p2Move}　|　${summaryText}`;
-
-            const chips = [
-                `P1 动作：${p1Move}`,
-                `P2 动作：${p2Move}`
-            ];
-
-            if ((lastLog.p1_damage_taken ?? 0) > 0) {
-                chips.push(`P1 受到 ${lastLog.p1_damage_taken} 点伤害`);
-            }
-            if ((lastLog.p2_damage_taken ?? 0) > 0) {
-                chips.push(`P2 受到 ${lastLog.p2_damage_taken} 点伤害`);
-            }
-            if ((lastLog.p1_pickaxe_blocked ?? 0) > 0) {
-                chips.push(`P1 镐抵挡 ${lastLog.p1_pickaxe_blocked} 点`);
-            }
-            if ((lastLog.p2_pickaxe_blocked ?? 0) > 0) {
-                chips.push(`P2 镐抵挡 ${lastLog.p2_pickaxe_blocked} 点`);
-            }
-
-            if (room.game?.winner === 1) {
-                chips.push("当前胜者：P1");
-            } else if (room.game?.winner === 2) {
-                chips.push("当前胜者：P2");
-            }
-
-            chips.forEach((text) => {
-                const chip = document.createElement("span");
-                chip.className = "result-chip";
-                chip.textContent = text;
-                chipsEl.appendChild(chip);
-            });
+            lastRenderedRoundCount = window.RoomRoundResultRenderer.renderRoundResultBanner(
+                room,
+                lastRenderedRoundCount
+            );
         }
 
         function renderFinishModal(room) {
@@ -936,92 +878,12 @@ window.initRoomDetailPage = function () {
             return "其他";
         }
 
-        function resourceItem(label, value) {
-            return `
-                <div class="resource-item">
-                    <div class="resource-label">${label}</div>
-                    <div class="resource-value">${value}</div>
-                </div>
-            `;
-        }
-
-        function renderPlayerState(player) {
-            return `
-                ${resourceItem("生命", player.hp)}
-                ${resourceItem("气", player.qi)}
-                ${resourceItem("盾", player.shield)}
-                ${resourceItem("火种", player.spark)}
-                ${resourceItem("电池", player.battery)}
-                ${resourceItem("镐", player.pickaxe)}
-                ${resourceItem("闪次数", player.flash_used)}
-            `;
-        }
-
         function renderPlayerStateFull(player, side = "self") {
-            const sideClass = side === "self" ? "state-side-self" : "state-side-opponent";
-
-            return `
-                <div class="status-table-row full ${sideClass}">
-                    <div class="status-table-full-top">
-                        <div class="status-table-cell status-table-cell-stat">
-                            <span class="status-table-key">生命</span>
-                            <span class="status-table-value">${player.hp ?? 0}</span>
-                        </div>
-                        <div class="status-table-cell status-table-cell-stat">
-                            <span class="status-table-key">镐</span>
-                            <span class="status-table-value">${player.pickaxe ?? 0}</span>
-                        </div>
-                        <div class="status-table-cell status-table-cell-stat">
-                            <span class="status-table-key">气</span>
-                            <span class="status-table-value">${player.qi ?? 0}</span>
-                        </div>
-                        <div class="status-table-cell status-table-cell-stat">
-                            <span class="status-table-key">盾</span>
-                            <span class="status-table-value">${player.shield ?? 0}</span>
-                        </div>
-                    </div>
-
-                    <div class="status-table-full-bottom">
-                        <div class="status-table-cell status-table-cell-stat">
-                            <span class="status-table-key">火种</span>
-                            <span class="status-table-value">${player.spark ?? 0}</span>
-                        </div>
-                        <div class="status-table-cell status-table-cell-stat">
-                            <span class="status-table-key">电池</span>
-                            <span class="status-table-value">${player.battery ?? 0}</span>
-                        </div>
-                        <div class="status-table-cell status-table-cell-stat">
-                            <span class="status-table-key">闪次数</span>
-                            <span class="status-table-value">${player.flash_used ?? 0}</span>
-                        </div>
-                    </div>
-                </div>
-            `;
+            return window.RoomPlayerStateRenderer.renderPlayerStateFull(player, side);
         }
 
         function renderPlayerStateCompact(player, side = "self") {
-            const sideClass = side === "self" ? "state-side-self" : "state-side-opponent";
-
-            return `
-                <div class="status-table-row ${sideClass}">
-                    <div class="status-table-cell status-table-cell-stat">
-                        <span class="status-table-key">生命</span>
-                        <span class="status-table-value">${player.hp ?? 0}</span>
-                    </div>
-                    <div class="status-table-cell status-table-cell-stat">
-                        <span class="status-table-key">镐</span>
-                        <span class="status-table-value">${player.pickaxe ?? 0}</span>
-                    </div>
-                    <div class="status-table-cell status-table-cell-stat">
-                        <span class="status-table-key">气</span>
-                        <span class="status-table-value">${player.qi ?? 0}</span>
-                    </div>
-                    <div class="status-table-cell status-table-cell-stat">
-                        <span class="status-table-key">盾</span>
-                        <span class="status-table-value">${player.shield ?? 0}</span>
-                    </div>
-                </div>
-            `;
+            return window.RoomPlayerStateRenderer.renderPlayerStateCompact(player, side);
         }
 
         function bindSettingsEvents() {
@@ -1076,6 +938,37 @@ window.initRoomDetailPage = function () {
         function moveLabel(moveName, catalog) {
             const item = catalog.find(x => x.name === moveName);
             return item ? item.label : moveName;
+        }
+
+        function moveButtonStateText({ legal, actionLocked, seat, moveName }) {
+            if (isSpectatorMode()) {
+                return "观战模式不可操作";
+            }
+
+            if (seat !== mySeat) {
+                return "非当前座位";
+            }
+
+            if (!legal) {
+                return "资源不足或动作当前不可用";
+            }
+
+            const myPending = latestRoom ? getMyPendingMove(latestRoom) : null;
+            const opponentPending = latestRoom ? getOpponentPendingMove(latestRoom) : null;
+
+            if (myPending) {
+                return opponentPending ? "双方已提交，等待结算" : "你已提交，等待对方";
+            }
+
+            if (currentSelectedMoveName === normalizeMoveName(moveName)) {
+                return "已选择，等待确认提交";
+            }
+
+            if (actionLocked) {
+                return "当前不可操作";
+            }
+
+            return "可选择";
         }
 
         function renderMoveGroups(containerId, legalMoves, catalog, seat) {
@@ -1141,10 +1034,23 @@ window.initRoomDetailPage = function () {
                 if (!legal || actionLocked) {
                     btn.classList.add("locked");
                 }
+                if (!legal) {
+                    btn.classList.add("state-insufficient");
+                }
+                if (isSpectatorMode()) {
+                    btn.classList.add("state-spectator");
+                }
 
                 btn.dataset.moveName = normalizedMoveName;
                 btn.dataset.originalMoveName = moveName;
                 btn.dataset.seat = seat;
+                btn.dataset.stateText = moveButtonStateText({
+                    legal,
+                    actionLocked,
+                    seat,
+                    moveName
+                });
+                btn.title = btn.dataset.stateText;
 
                 if (
                     seat === mySeat &&
@@ -1153,6 +1059,8 @@ window.initRoomDetailPage = function () {
                     !isMyActionLocked(latestRoom)
                 ) {
                     btn.classList.add("pending-confirm-p1");
+                    btn.dataset.stateText = "已选择，等待确认提交";
+                    btn.title = btn.dataset.stateText;
                 }
 
                 btn.addEventListener("click", async () => {
@@ -1203,59 +1111,10 @@ window.initRoomDetailPage = function () {
         }
 
         function renderHistory(logs) {
-            const historyEl = document.getElementById("history");
-            if (!historyEl) {
+            if (!window.RoomHistoryRenderer) {
                 return;
             }
-
-            historyEl.innerHTML = "";
-
-            if (!logs || logs.length === 0) {
-                historyEl.innerHTML = "<div class='muted' style='padding: 12px;'>当前还没有历史记录。</div>";
-                return;
-            }
-
-            const rowsHtml = logs.slice().reverse().map((log) => {
-                const p1Move = log.p1_move_label || log.p1_move || "";
-                const p2Move = log.p2_move_label || log.p2_move || "";
-
-                const damageParts = [];
-                if ((log.p1_damage_taken ?? 0) > 0) {
-                    damageParts.push(`1号位受到${log.p1_damage_taken}点伤害`);
-                }
-                if ((log.p2_damage_taken ?? 0) > 0) {
-                    damageParts.push(`2号位受到${log.p2_damage_taken}点伤害`);
-                }
-
-                const summaryText = damageParts.length > 0
-                    ? damageParts.join("，")
-                    : "";
-
-                return `
-                    <tr>
-                        <td class="history-table-col-round">${log.round_num}</td>
-                        <td class="history-table-col-move">${p1Move}</td>
-                        <td class="history-table-col-move">${p2Move}</td>
-                        <td class="history-table-col-summary">${summaryText}</td>
-                    </tr>
-                `;
-            }).join("");
-
-            historyEl.innerHTML = `
-                <table class="history-table">
-                    <thead>
-                        <tr>
-                            <th class="history-table-col-round">回合数</th>
-                            <th class="history-table-col-move">1号位动作</th>
-                            <th class="history-table-col-move">2号位动作</th>
-                            <th class="history-table-col-summary">总结</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${rowsHtml}
-                    </tbody>
-                </table>
-            `;
+            window.RoomHistoryRenderer.renderHistory("history", logs);
         }
 
         async function copyTextWithFeedback(text, successText) {
@@ -1700,11 +1559,7 @@ window.initRoomDetailPage = function () {
                         if (!opponentOfflineSince) {
                             opponentOfflineSince = Date.now();
                         }
-
-                        if (!offlineNoticeShown && Date.now() - opponentOfflineSince >= 6000) {
-                            setRoomMessage("对手当前似乎已掉线或离开页面。你可以稍等片刻；若长时间未恢复，可退出房间重新匹配。", "waiting");
-                            offlineNoticeShown = true;
-                        }
+                        offlineNoticeShown = true;
                     } else {
                         opponentOfflineSince = null;
                         offlineNoticeShown = false;
@@ -1767,9 +1622,18 @@ window.initRoomDetailPage = function () {
             const pendingOpponentEl = document.getElementById("pending-opponent");
             const pendingSelfLabelEl = document.getElementById("pending-self-label");
             const pendingOpponentLabelEl = document.getElementById("pending-opponent-label");
+            const pendingSelfBox = document.getElementById("pending-self-box");
+            const pendingOpponentBox = document.getElementById("pending-opponent-box");
 
             if (!preview || !room) {
                 return;
+            }
+
+            if (pendingSelfBox) {
+                pendingSelfBox.classList.add("reveal-card");
+            }
+            if (pendingOpponentBox) {
+                pendingOpponentBox.classList.add("reveal-card");
             }
 
             const myMove = mySeat === "p1" ? preview.p1_move : preview.p2_move;
@@ -1967,6 +1831,22 @@ window.initRoomDetailPage = function () {
                 if (finishResetBtn) {
                     finishResetBtn.addEventListener("click", resetRoomGame);
                 }
+
+                document.querySelectorAll(".confirm-selected-btn").forEach((button) => {
+                    button.addEventListener("click", confirmSelectedMove);
+                });
+
+                document.querySelectorAll(".cancel-selected-btn").forEach((button) => {
+                    button.addEventListener("click", async () => {
+                        if (currentSelectedMoveName && currentSelectedSeat === mySeat) {
+                            clearMoveSelection();
+                            setRoomMessage("已取消当前选择。", "info");
+                            return;
+                        }
+
+                        await cancelSubmittedMove();
+                    });
+                });
 
                 document.addEventListener("keydown", handleGlobalKeyboard);
                 document.addEventListener("click", (event) => {

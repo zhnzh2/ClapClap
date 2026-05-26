@@ -15,6 +15,8 @@ from app.matchmaking import (
 )
 from app.room_manager import delete_room_by_id
 from app.storage import delete_kv
+from server.app import app
+from server.extensions import socketio
 
 
 class TestMatchmaking(unittest.TestCase):
@@ -80,6 +82,18 @@ class TestMatchmaking(unittest.TestCase):
         restored = get_player_match_state("match-a")
         self.assertEqual(restored["status"], "queued")
         self.assertEqual(restored["player_name"], "Alice")
+
+    def test_match_lobby_socket_receives_status(self):
+        client = socketio.test_client(app)
+        try:
+            client.emit("join_match_lobby")
+            received = client.get_received()
+            self.assertTrue(
+                any(item["name"] == "match_status" for item in received),
+                received,
+            )
+        finally:
+            client.disconnect()
 
 
 if __name__ == "__main__":
