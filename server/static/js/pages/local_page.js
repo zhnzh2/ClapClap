@@ -245,91 +245,99 @@ function bindSettings() {
     });
 }
 
-document.addEventListener("keydown", (event) => {
-    if (event.target && ["INPUT", "TEXTAREA", "SELECT"].includes(event.target.tagName)) {
-        return;
-    }
-
-    const key = event.key;
-
-    if (/^[1-4]$/.test(key) || /^[qwerasdfgzxcv]$/i.test(key)) {
-        handleKeyboardMoveSelection(key);
-        return;
-    }
-
-    if (key === "Enter") {
-        if (document.getElementById("end-modal-mask").classList.contains("show")) {
-            closeEndModal();
-            resetGame();
+function initLocalPage() {
+    document.addEventListener("keydown", (event) => {
+        if (event.target && ["INPUT", "TEXTAREA", "SELECT"].includes(event.target.tagName)) {
             return;
         }
 
-        if (selectedP1Move && selectedP2Move && latestState && latestState.winner === null) {
-            stepGame();
+        const key = event.key;
+
+        if (/^[1-4]$/.test(key) || /^[qwerasdfgzxcv]$/i.test(key)) {
+            handleKeyboardMoveSelection(key);
+            return;
         }
-        return;
-    }
 
-    if (key === "Backspace") {
-        event.preventDefault();
+        if (key === "Enter") {
+            if (document.getElementById("end-modal-mask").classList.contains("show")) {
+                closeEndModal();
+                resetGame();
+                return;
+            }
 
-        if (document.getElementById("help-modal-mask").classList.contains("show") ||
-            document.getElementById("settings-modal-mask").classList.contains("show") ||
-            document.getElementById("end-modal-mask").classList.contains("show")) {
+            if (selectedP1Move && selectedP2Move && latestState && latestState.winner === null) {
+                stepGame();
+            }
+            return;
+        }
+
+        if (key === "Backspace") {
+            event.preventDefault();
+
+            if (document.getElementById("help-modal-mask").classList.contains("show") ||
+                document.getElementById("settings-modal-mask").classList.contains("show") ||
+                document.getElementById("end-modal-mask").classList.contains("show")) {
+                closeHelp();
+                closeSettings();
+                closeEndModal();
+                return;
+            }
+
+            undoLastSelection();
+            return;
+        }
+
+        if (key === "Escape") {
             closeHelp();
             closeSettings();
             closeEndModal();
-            return;
         }
+    });
 
-        undoLastSelection();
-        return;
-    }
+    document.getElementById("refresh-btn").addEventListener("click", fetchState);
+    document.getElementById("reset-btn").addEventListener("click", resetGame);
+    document.getElementById("step-btn").addEventListener("click", stepGame);
+    document.getElementById("clear-selection-btn").addEventListener("click", clearSelection);
 
-    if (key === "Escape") {
-        closeHelp();
-        closeSettings();
+    document.getElementById("help-open-btn").addEventListener("click", openHelp);
+    document.getElementById("help-close-btn").addEventListener("click", closeHelp);
+
+    document.getElementById("settings-open-btn").addEventListener("click", openSettings);
+    document.getElementById("settings-close-btn").addEventListener("click", closeSettings);
+
+    document.getElementById("end-close-btn").addEventListener("click", closeEndModal);
+    document.getElementById("end-reset-btn").addEventListener("click", async () => {
         closeEndModal();
-    }
-});
+        await resetGame();
+    });
 
-document.getElementById("refresh-btn").addEventListener("click", fetchState);
-document.getElementById("reset-btn").addEventListener("click", resetGame);
-document.getElementById("step-btn").addEventListener("click", stepGame);
-document.getElementById("clear-selection-btn").addEventListener("click", clearSelection);
+    document.getElementById("help-modal-mask").addEventListener("click", (event) => {
+        if (event.target.id === "help-modal-mask") {
+            closeHelp();
+        }
+    });
 
-document.getElementById("help-open-btn").addEventListener("click", openHelp);
-document.getElementById("help-close-btn").addEventListener("click", closeHelp);
+    document.getElementById("settings-modal-mask").addEventListener("click", (event) => {
+        if (event.target.id === "settings-modal-mask") {
+            closeSettings();
+        }
+    });
 
-document.getElementById("settings-open-btn").addEventListener("click", openSettings);
-document.getElementById("settings-close-btn").addEventListener("click", closeSettings);
+    document.getElementById("end-modal-mask").addEventListener("click", (event) => {
+        if (event.target.id === "end-modal-mask") {
+            closeEndModal();
+        }
+    });
 
-document.getElementById("end-close-btn").addEventListener("click", closeEndModal);
-document.getElementById("end-reset-btn").addEventListener("click", async () => {
-    closeEndModal();
-    await resetGame();
-});
+    loadSettings();
+    applyCompactMode();
+    syncSettingsUI();
+    bindSettings();
+    fetchState();
+}
 
-document.getElementById("help-modal-mask").addEventListener("click", (event) => {
-    if (event.target.id === "help-modal-mask") {
-        closeHelp();
-    }
-});
-
-document.getElementById("settings-modal-mask").addEventListener("click", (event) => {
-    if (event.target.id === "settings-modal-mask") {
-        closeSettings();
-    }
-});
-
-document.getElementById("end-modal-mask").addEventListener("click", (event) => {
-    if (event.target.id === "end-modal-mask") {
-        closeEndModal();
-    }
-});
-
-loadSettings();
-applyCompactMode();
-syncSettingsUI();
-bindSettings();
-fetchState();
+if (!window.SessionUtils || !window.SessionUtils.isLoggedIn()) {
+    window.location.href = "/login";
+} else {
+    initLocalPage();
+}

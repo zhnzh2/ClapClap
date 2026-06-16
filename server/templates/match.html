@@ -5,22 +5,21 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>ClapClap 联机匹配</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/match.css') }}" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/auth.css') }}" />
 </head>
 <body>
-    <script>
-        const SERVER_BOOT_ID = "{{ server_boot_id }}";
-    </script>
     <div class="container">
         <div class="top-row">
             <h1>双人联机对战</h1>
             <a class="back-link" href="/">返回模式大厅</a>
         </div>
+        <button class="header-account-btn" id="header-account-btn">账号</button>
+        <button class="header-account-btn" id="header-admin-btn" style="display:none;right:100px;">查看用户</button>
 
         <div class="card">
             <h2>开始匹配</h2>
-            <p>输入昵称后加入匹配队列。当另一位玩家也加入时，系统会自动为你们创建房间并跳转。</p>
+            <p>使用你的登录账号加入匹配队列。当另一位玩家也加入时，系统会自动为你们创建房间并跳转。</p>
 
-            <input id="player-name" type="text" placeholder="输入你的昵称" />
             <div class="action-row">
                 <button id="join-match-btn">开始匹配</button>
                 <button id="cancel-match-btn" style="display: none; background: #ef4444;">取消匹配</button>
@@ -52,13 +51,14 @@
     <script>
         window.SERVER_BOOT_ID = "{{ server_boot_id }}";
     </script>
-    <script src="{{ url_for('static', filename='js/lib/socket.io.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/socket.io.min.js') }}"></script>
     <script>
         if (typeof io !== "function") {
             document.write('<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"><\/script>');
         }
     </script>
     <script src="{{ url_for('static', filename='js/core/storage.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/core/session.js') }}"></script>
     <script src="{{ url_for('static', filename='js/core/message.js') }}"></script>
     <script src="{{ url_for('static', filename='js/core/api.js') }}"></script>
     <script src="{{ url_for('static', filename='js/core/modal.js') }}"></script>
@@ -66,10 +66,11 @@
     <script src="{{ url_for('static', filename='js/online/room_identity.js') }}"></script>
     <script src="{{ url_for('static', filename='js/online/resume_room.js') }}"></script>
     <script src="{{ url_for('static', filename='js/online/match_state.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/pages/account_modal.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/pages/admin_users_modal.js') }}"></script>
     <script src="{{ url_for('static', filename='js/pages/match_page.js') }}"></script>
-    <script>if (typeof window.initMatchPage === "function") { window.initMatchPage(); }</script>
 
-    <div class="modal-mask" id="global-modal-mask">
+    <div class="modal-mask" id="global-modal-mask" style="z-index: 1100;">
         <div class="modal-card" id="global-modal-card">
             <div class="modal-icon" id="global-modal-icon" style="display: none;"></div>
             <div class="modal-title" id="global-modal-title"></div>
@@ -77,6 +78,18 @@
             <div class="modal-actions" id="global-modal-actions"></div>
         </div>
     </div>
+
+    <script>
+        if (!window.SessionUtils || !window.SessionUtils.isLoggedIn()) {
+            window.location.href = "/login";
+        } else {
+            var btn = document.getElementById("header-account-btn");
+            if (btn && window.AccountModal) {
+                btn.addEventListener("click", function () { AccountModal.open(); });
+            }
+            if (typeof window.initMatchPage === "function") { window.initMatchPage(); }
+        }
+    </script>
 
 </body>
 </html>

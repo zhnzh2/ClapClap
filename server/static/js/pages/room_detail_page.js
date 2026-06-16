@@ -54,6 +54,11 @@ window.initRoomDetailPage = function () {
 
                 const result = roomStateController.applyIncomingRoomState(data.room);
 
+                // 加载聊天记录
+                if (data.room.chat_messages) {
+                    loadChatHistory(data.room.chat_messages);
+                }
+
                 if (!result.handledResolvedPreview) {
                     setRoomMessage("房间状态已实时同步。", "info");
                 }
@@ -74,6 +79,72 @@ window.initRoomDetailPage = function () {
 
                 openOpponentLeftModal();
             });
+
+            // ── 聊天事件 ──────────────────────────
+            socket.on("chat_broadcast", (data) => {
+                if (data && data.ok && data.message) {
+                    appendChatMessage(data.message);
+                }
+            });
+
+            socket.on("chat_error", (data) => {
+                setRoomMessage(data?.error || "聊天消息发送失败。", "error");
+            });
+        }
+
+        // ── 聊天发送 ──────────────────────────
+        function sendChatMessage() {
+            var input = document.getElementById("chat-input");
+            var message = (input.value || "").trim();
+            if (!message) return;
+            if (message.length > 50) {
+                setRoomMessage("消息不能超过 50 个字符。", "error");
+                return;
+            }
+            socket.emit("chat_message", {
+                room_id: roomId,
+                player_token: myPlayerToken,
+                message: message
+            });
+            input.value = "";
+        }
+
+        document.getElementById("chat-send-btn").addEventListener("click", sendChatMessage);
+        document.getElementById("chat-input").addEventListener("keydown", function (e) {
+            if (e.key === "Enter") {
+                e.preventDefault();
+                sendChatMessage();
+            }
+        });
+
+        function appendChatMessage(msg) {
+            var container = document.getElementById("chat-messages");
+            if (!container) return;
+            var div = document.createElement("div");
+            div.className = "chat-message-item";
+            div.innerHTML =
+                '<span class="chat-sender">' + _escChat(msg.sender || "未知") + '</span>' +
+                '<span class="chat-time">' + _escChat(msg.timestamp || "") + '</span>' +
+                '<br><span class="chat-text">' + _escChat(msg.message || "") + '</span>';
+            container.appendChild(div);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function _escChat(text) {
+            if (text === undefined || text === null) return "";
+            return String(text).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+        }
+
+        // 加载已有聊天记录
+        function loadChatHistory(messages) {
+            var container = document.getElementById("chat-messages");
+            if (!container) return;
+            container.innerHTML = "";
+            if (messages && messages.length) {
+                messages.forEach(function (msg) {
+                    appendChatMessage(msg);
+                });
+            }
         }
 
         window.setInterval(emitRoomHeartbeat, 5000);

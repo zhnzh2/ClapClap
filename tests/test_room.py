@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from uuid import uuid4
 import unittest
 
+from app import users
 from app.room_manager import (
     ROOMS,
     ROOM_RUNTIME_LOCKS,
@@ -19,15 +21,37 @@ class TestRoomAndLocalApi(unittest.TestCase):
     def setUp(self):
         self.client = app.test_client()
         self.room_ids: list[str] = []
+        self.user_ids: list[int] = []
 
     def tearDown(self):
         for room_id in self.room_ids:
             delete_room_by_id(room_id)
+        for uid in self.user_ids:
+            users.delete_user(uid)
+
+    def auth_headers_for(self, username: str) -> dict[str, str]:
+        password = "test-password"
+        unique_name = f"{username}-{uuid4().hex[:8]}"
+        registered = users.register(
+            unique_name,
+            password,
+            verified="1",
+            role="user",
+        )
+        self.assertTrue(registered["ok"], registered)
+        self.user_ids.append(registered["user"]["uid"])
+
+        logged_in = users.login(unique_name, password)
+        self.assertTrue(logged_in["ok"], logged_in)
+        return {"X-Session-Token": logged_in["session_token"]}
 
     def create_joined_room(self):
+        alice_headers = self.auth_headers_for("Alice")
+        bob_headers = self.auth_headers_for("Bob")
         created = self.client.post(
             "/api/rooms",
-            json={"player_name": "Alice"},
+            json={},
+            headers=alice_headers,
         ).get_json()
         self.assertTrue(created["ok"], created)
         room_id = created["room"]["room_id"]
@@ -35,7 +59,8 @@ class TestRoomAndLocalApi(unittest.TestCase):
 
         joined = self.client.post(
             f"/api/rooms/{room_id}/join",
-            json={"player_name": "Bob"},
+            json={},
+            headers=bob_headers,
         ).get_json()
         self.assertTrue(joined["ok"], joined)
 
@@ -211,7 +236,8 @@ class TestRoomAndLocalApi(unittest.TestCase):
         """测试房间未满时提交动作被拒绝。"""
         created = self.client.post(
             "/api/rooms",
-            json={"player_name": "Solo"},
+            json={},
+            headers=self.auth_headers_for("Solo"),
         ).get_json()
         self.assertTrue(created["ok"], created)
         room_id = created["room"]["room_id"]

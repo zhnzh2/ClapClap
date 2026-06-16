@@ -4,6 +4,7 @@ from server.routes.room_routes import room_bp
 from server.routes.match_routes import match_bp
 from server.routes.status_routes import status_bp
 from server.routes.export_routes import export_bp
+from server.routes.auth_routes import auth_bp
 
 __all__ = [
     "page_bp",
@@ -12,4 +13,5 @@ __all__ = [
     "match_bp",
     "status_bp",
     "export_bp",
+    "auth_bp",
 ]

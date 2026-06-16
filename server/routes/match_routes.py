@@ -8,21 +8,17 @@ from app.matchmaking import (
     cancel_match,
 )
 from server.runtime import run_periodic_cleanup
+from server.auth_middleware import require_auth, get_current_username
 
 match_bp = Blueprint("match", __name__)
 
 
 @match_bp.post("/api/match/join")
+@require_auth
 def api_match_join():
-    data = request.get_json(silent=True)
-    if data is None:
-        return jsonify({"ok": False, "error": "请求体必须是 JSON。"}), 400
-
-    player_name = data.get("player_name")
+    player_name = get_current_username()
+    data = request.get_json(silent=True) or {}
     player_token = data.get("player_token")
-
-    if not isinstance(player_name, str) or not player_name.strip():
-        return jsonify({"ok": False, "error": "player_name 不能为空。"}), 400
 
     if not isinstance(player_token, str) or not player_token.strip():
         return jsonify({"ok": False, "error": "player_token 不能为空。"}), 400

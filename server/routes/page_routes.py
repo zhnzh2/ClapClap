@@ -4,6 +4,11 @@ from app.room_manager import get_room
 
 page_bp = Blueprint("page", __name__)
 
+@page_bp.get("/login")
+def login_page():
+    return render_template("login.html")
+
+
 @page_bp.get("/")
 def home():
     return render_template(

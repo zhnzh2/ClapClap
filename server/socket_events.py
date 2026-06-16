@@ -3,6 +3,7 @@ from flask_socketio import emit, join_room as socket_join_room
 from app.room_manager import get_room, get_room_runtime_lock
 from app.state_api import get_room_payload
 from app.matchmaking import get_match_status
+from app.battle_recorder import record_chat
 from server.extensions import socketio
 
 
@@ -92,3 +93,50 @@ def handle_join_match_lobby():
             "status": get_match_status(),
         },
     )
+
+
+@socketio.on("chat_message")
+def handle_chat_message(data):
+    """聊天消息: {room_id, message}。发送者从 player_token 推断。"""
+    room_id = data.get("room_id")
+    message = (data.get("message") or "").strip()
+    player_token = (data.get("player_token") or "").strip()
+
+    if not isinstance(room_id, str) or not message:
+        emit("chat_error", {"ok": False, "error": "消息不能为空。"})
+        return
+
+    if len(message) > 50:
+        emit("chat_error", {"ok": False, "error": "消息不能超过 50 个字符。"})
+        return
+
+    room = get_room(room_id)
+    if room is None:
+        emit("chat_error", {"ok": False, "error": "房间不存在。"})
+        return
+
+    # 确定发送者
+    sender = None
+    if player_token:
+        seat = room.get_seat_by_token(player_token)
+        if seat == "p1":
+            sender = room.p1_name
+        elif seat == "p2":
+            sender = room.p2_name
+
+    if sender is None:
+        sender = player_token or "未知"
+
+    # 保存到房间
+    with get_room_runtime_lock(room_id):
+        msg = room.add_chat_message(sender, message)
+
+    # 同步到对局记录
+    if room.battle_id:
+        try:
+            record_chat(room.battle_id, msg["timestamp"], msg["sender"], msg["message"])
+        except Exception:
+            pass
+
+    # 广播给房间内所有人
+    emit("chat_broadcast", {"ok": True, "message": msg}, to=room_id)

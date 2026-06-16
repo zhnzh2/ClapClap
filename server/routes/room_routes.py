@@ -9,35 +9,25 @@ from server.services.room_service import (
     cancel_room_move_service,
     leave_room_service,
 )
+from server.auth_middleware import require_auth, get_current_username
 
 room_bp = Blueprint("room", __name__)
 
+
 @room_bp.post("/api/rooms")
+@require_auth
 def api_create_room():
-    data = request.get_json(silent=True)
-    if data is None:
-        return jsonify({"ok": False, "error": "请求体必须是 JSON。"}), 400
-
-    player_name = data.get("player_name")
-    if not isinstance(player_name, str) or not player_name.strip():
-        return jsonify({"ok": False, "error": "player_name 不能为空。"}), 400
-
-    result = create_room_service(player_name.strip())
+    player_name = get_current_username()
+    result = create_room_service(player_name)
     return jsonify(result)
 
 
 @room_bp.post("/api/rooms/<room_id>/join")
+@require_auth
 def api_join_room(room_id: str):
-    data = request.get_json(silent=True)
-    if data is None:
-        return jsonify({"ok": False, "error": "请求体必须是 JSON。"}), 400
-
-    player_name = data.get("player_name")
-    if not isinstance(player_name, str) or not player_name.strip():
-        return jsonify({"ok": False, "error": "player_name 不能为空。"}), 400
-
+    player_name = get_current_username()
     try:
-        result = join_room_service(room_id, player_name.strip())
+        result = join_room_service(room_id, player_name)
         return jsonify(result)
     except ValueError as exc:
         return jsonify({"ok": False, "error": str(exc)}), 400

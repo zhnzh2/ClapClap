@@ -1,5 +1,19 @@
 window.initHomePage = function () {
+    // 未登录则跳转到登录页
+    if (!window.SessionUtils || !window.SessionUtils.isLoggedIn()) {
+        window.location.href = "/login";
+        return;
+    }
+
     const SERVER_BOOT_ID = window.SERVER_BOOT_ID || "";
+
+    // 右上角账号按钮
+    var accountBtn = document.getElementById("header-account-btn");
+    if (accountBtn && window.AccountModal) {
+        accountBtn.addEventListener("click", function () {
+            AccountModal.open();
+        });
+    }
 
     BootUtils.handleServerBootChange(SERVER_BOOT_ID);
     ResumeRoomUtils.applyHomeResumeRoomEntry({

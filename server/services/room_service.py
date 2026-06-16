@@ -10,8 +10,16 @@ from app.room_manager import (
 )
 from app.state_api import get_room_payload, parse_move_name
 from app.matchmaking import clear_match_state_by_room
+from app.battle_recorder import create_battle, record_round, end_battle
 from server.runtime import run_periodic_cleanup
 from server.socket_events import emit_room_state
+
+
+def _lookup_uid(username: str) -> int:
+    """根据用户名查找 UID。用于对局记录。"""
+    from app.users import lookup_uid
+    return lookup_uid(username)
+
 
 def create_room_service(player_name: str) -> dict:
     room, seat, player_token = create_room(player_name.strip())
@@ -148,12 +156,34 @@ def submit_room_move_service(
             p2_move = parse_move_name(resolved_p2_move_name)
 
             GameEngine.resolve_round(room.state, p1_move, p2_move)
+            round_num = room.state.round_num
             room.clear_pending_moves()
 
             if room.state.winner is not None:
                 room.status = "finished"
             else:
                 room.status = "playing"
+
+            # ── 对局记录 ──────────────────────────────────
+            # 首次结算时创建对局记录
+            if room.battle_id is None:
+                participants = {}
+                if room.p1_name:
+                    participants["p1"] = {"username": room.p1_name, "uid": _lookup_uid(room.p1_name)}
+                if room.p2_name:
+                    participants["p2"] = {"username": room.p2_name, "uid": _lookup_uid(room.p2_name)}
+                if participants:
+                    room.battle_id = create_battle(participants)
+
+            # 记录回合
+            if room.battle_id:
+                record_round(room.battle_id, round_num, resolved_p1_move_name, resolved_p2_move_name)
+
+                # 如果游戏结束
+                if room.status == "finished":
+                    winner = room.state.winner  # 1, 2, 0, None
+                    end_battle(room.battle_id, winner)
+            # ── 对局记录结束 ──────────────────────────────
 
             room.touch()
             emit_room_state(room_id)

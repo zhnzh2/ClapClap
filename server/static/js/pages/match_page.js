@@ -210,7 +210,15 @@ window.initMatchPage = function () {
         }
 
         document.getElementById("join-match-btn").addEventListener("click", () => {
-            setPlayerName(document.getElementById("player-name").value.trim());
+            // 从 session 获取用户名
+            var sessionUser = window.SessionUtils ? window.SessionUtils.getSessionUser() : null;
+            var name = sessionUser ? sessionUser.username : "";
+            if (!name) {
+                setMatchMessage("登录信息丢失，请重新登录。", "error");
+                window.location.href = "/login";
+                return;
+            }
+            setPlayerName(name);
             matchStateController.joinMatchQueue();
         });
 
@@ -240,14 +248,16 @@ window.initMatchPage = function () {
             });
         });
 
+        // 从 session 恢复玩家名称
+        var sessionUser = window.SessionUtils ? window.SessionUtils.getSessionUser() : null;
+        if (sessionUser && sessionUser.username) {
+            setPlayerName(sessionUser.username);
+        }
+
         const savedIdentity = StorageUtils.getJsonStorage(STORAGE_KEYS.MATCH_IDENTITY, null);
         if (savedIdentity) {
             try {
-                setPlayerName(savedIdentity.player_name || "");
                 setPlayerToken(savedIdentity.player_token || "");
-                if (currentPlayerName) {
-                    document.getElementById("player-name").value = getPlayerName();
-                }
             } catch (error) {
                 console.error(error);
             }

@@ -27,6 +27,10 @@ class Room:
     p2_last_seen_at: datetime | None = None
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    # 聊天记录: [{"timestamp": "...", "sender": "...", "message": "..."}, ...]
+    chat_messages: list[dict] = field(default_factory=list)
+    # 对局记录 ID
+    battle_id: str | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -44,6 +48,8 @@ class Room:
             "p2_last_seen_at": self.p2_last_seen_at.isoformat() if self.p2_last_seen_at else None,
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),
+            "chat_messages": self.chat_messages,
+            "battle_id": self.battle_id,
         }
 
     @classmethod
@@ -68,6 +74,8 @@ class Room:
             p1_last_seen_at=_ensure_utc(datetime.fromisoformat(data["p1_last_seen_at"]) if data.get("p1_last_seen_at") else None),
             p2_last_seen_at=_ensure_utc(datetime.fromisoformat(data["p2_last_seen_at"]) if data.get("p2_last_seen_at") else None),
             created_at=_ensure_utc(datetime.fromisoformat(data["created_at"])),
+            chat_messages=data.get("chat_messages", []),
+            battle_id=data.get("battle_id"),
             updated_at=_ensure_utc(datetime.fromisoformat(data["updated_at"])),
         )
         room.state = GameState.from_dict(data["state"])
@@ -225,6 +233,19 @@ class Room:
         self.pending_p2_move = None
         self.updated_at = datetime.now(timezone.utc)
         self.persist()
+
+    def add_chat_message(self, sender: str, message: str) -> dict:
+        """添加一条聊天消息。返回消息 dict。发送者和观战者均可发言。"""
+        now = datetime.now(timezone.utc)
+        ts = now.strftime("%Y-%m-%dT%H:%M:%S.") + f"{now.microsecond // 1000:03d}Z"
+        msg = {
+            "timestamp": ts,
+            "sender": sender,
+            "message": message,
+        }
+        self.chat_messages.append(msg)
+        self.persist()
+        return msg
 
     def persist(self) -> None:
         save_room(self.room_id, self.to_dict())

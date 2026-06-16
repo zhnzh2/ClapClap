@@ -1,17 +1,8 @@
 (function () {
 
     async function createRoom() {
-        const playerName = document.getElementById("create-name").value.trim();
-
-        if (!playerName) {
-            MessageUtils.setMessage("create-message", "请先输入昵称。", "error");
-            return;
-        }
-
         try {
-            const result = await ApiUtils.apiPost("/api/rooms", {
-                player_name: playerName
-            });
+            const result = await ApiUtils.apiPost("/api/rooms", {});
 
             if (!result.ok) {
                 MessageUtils.setMessage("create-message", result.error || "创建房间失败。", "error");
@@ -34,18 +25,15 @@
     }
 
     async function joinRoom() {
-        const playerName = document.getElementById("join-name").value.trim();
         const roomId = document.getElementById("join-room-id").value.trim().toUpperCase();
 
-        if (!playerName || !roomId) {
-            MessageUtils.setMessage("join-message", "请先输入昵称和房间号。", "error");
+        if (!roomId) {
+            MessageUtils.setMessage("join-message", "请先输入房间号。", "error");
             return;
         }
 
         try {
-            const result = await ApiUtils.apiPost(`/api/rooms/${roomId}/join`, {
-                player_name: playerName
-            });
+            const result = await ApiUtils.apiPost(`/api/rooms/${roomId}/join`, {});
 
             if (!result.ok) {
                 MessageUtils.setMessage("join-message", result.error || "加入房间失败。", "error");

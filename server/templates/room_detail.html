@@ -7,14 +7,14 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/room_detail.css') }}" />
     <link rel="stylesheet" href="{{ url_for('static', filename='css/room_detail_overlay.css') }}" />
     <link rel="stylesheet" href="{{ url_for('static', filename='css/room_detail_modals.css') }}" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/auth.css') }}" />
 </head>
 <body>
-    <script>
-        const SERVER_BOOT_ID = "{{ server_boot_id }}";
-    </script>
     <div class="container">
         <div class="top-row">
             <h1>房间对战</h1>
+                <button class="header-account-btn" id="header-account-btn" style="position:static;box-shadow:none;margin-right:8px;">账号</button>
+                <button class="header-account-btn" id="header-admin-btn" style="display:none;position:static;box-shadow:none;margin-right:8px;">查看用户</button>
                 <div class="top-actions">
                     <button class="secondary" id="open-help-btn" type="button">帮助</button>
                     <button class="secondary" id="open-settings-btn" type="button">设置</button>
@@ -193,6 +193,19 @@
                     </div>
             </div>
 
+            <!-- 聊天区域 -->
+            <div class="card" id="chat-section">
+                <div class="chat-header-row">
+                    <h2 style="margin:0;">聊天</h2>
+                    <span style="font-size:12px;color:var(--muted);">最多 50 字</span>
+                </div>
+                <div id="chat-messages" class="chat-messages-list"></div>
+                <div class="chat-input-row">
+                    <input type="text" id="chat-input" placeholder="输入消息，按 Enter 发送" maxlength="50" />
+                    <button type="button" id="chat-send-btn">发送</button>
+                </div>
+            </div>
+
             <div class="card" id="history-section">
                 <h2>历史记录</h2>
                 <div id="history" class="history-table-wrapper"></div>
@@ -207,13 +220,14 @@
     <script>
         window.SERVER_BOOT_ID = "{{ server_boot_id }}";
     </script>
-    <script src="{{ url_for('static', filename='js/lib/socket.io.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/socket.io.min.js') }}"></script>
     <script>
         if (typeof io !== "function") {
             document.write('<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"><\/script>');
         }
     </script>
     <script src="{{ url_for('static', filename='js/core/storage.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/core/session.js') }}"></script>
     <script src="{{ url_for('static', filename='js/core/message.js') }}"></script>
     <script src="{{ url_for('static', filename='js/core/api.js') }}"></script>
     <script src="{{ url_for('static', filename='js/core/modal.js') }}"></script>
@@ -226,8 +240,20 @@
     <script src="{{ url_for('static', filename='js/online/history_renderer.js') }}"></script>
     <script src="{{ url_for('static', filename='js/online/room_detail_settings.js') }}"></script>
     <script src="{{ url_for('static', filename='js/pages/room_detail_data.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/pages/account_modal.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/pages/admin_users_modal.js') }}"></script>
     <script src="{{ url_for('static', filename='js/pages/room_detail_page.js') }}"></script>
-    <script>if (typeof window.initRoomDetailPage === "function") { window.initRoomDetailPage(); }</script>
+    <script>
+        if (!window.SessionUtils || !window.SessionUtils.isLoggedIn()) {
+            window.location.href = "/login";
+        } else {
+            var btn = document.getElementById("header-account-btn");
+            if (btn && window.AccountModal) {
+                btn.addEventListener("click", function () { AccountModal.open(); });
+            }
+            if (typeof window.initRoomDetailPage === "function") { window.initRoomDetailPage(); }
+        }
+    </script>
 
     <div class="settling-mask" id="settling-mask">
         <div class="settling-card">
@@ -345,7 +371,7 @@
         </div>
     </div>
 
-    <div class="modal-mask" id="global-modal-mask" style="z-index: 1010;">
+    <div class="modal-mask" id="global-modal-mask" style="z-index: 1100;">
         <div class="modal-card" id="global-modal-card">
             <div class="modal-icon" id="global-modal-icon" style="display: none;"></div>
             <div class="modal-title" id="global-modal-title"></div>

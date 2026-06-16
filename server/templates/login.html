@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ClapClap 登录</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/auth.css') }}" />
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-card">
+            <div class="login-hero">
+                <h1>ClapClap</h1>
+                <p>双人手势对战游戏</p>
+            </div>
+
+            <!-- 登录表单 -->
+            <div id="login-form">
+                <div class="form-group">
+                    <label>用户名</label>
+                    <input type="text" id="login-username" placeholder="输入用户名" autocomplete="username" />
+                </div>
+                <div class="form-group">
+                    <label>密码</label>
+                    <input type="password" id="login-password" placeholder="输入密码" autocomplete="current-password" />
+                </div>
+                <div id="login-message" class="message"></div>
+                <button id="login-btn" class="btn-primary">登录</button>
+
+                <div class="divider">
+                    <span>或</span>
+                </div>
+
+                <button id="show-register-btn" class="btn-secondary">注册新账号</button>
+                <button id="guest-login-btn" class="btn-ghost">访客登录</button>
+            </div>
+
+            <!-- 注册表单 -->
+            <div id="register-form" style="display: none;">
+                <div class="form-group">
+                    <label>用户名</label>
+                    <input type="text" id="reg-username" placeholder="输入用户名（最长 32 字符）" />
+                </div>
+                <div class="form-group">
+                    <label>密码</label>
+                    <input type="password" id="reg-password" placeholder="输入密码（至少 4 字符）" />
+                </div>
+                <div class="form-group">
+                    <label>确认密码</label>
+                    <input type="password" id="reg-confirm-password" placeholder="再次输入密码" />
+                </div>
+                <div class="form-group">
+                    <label>介绍信 <span class="optional">（选填）</span></label>
+                    <textarea id="reg-intro" placeholder="简单介绍一下自己吧" rows="3"></textarea>
+                </div>
+                <div id="register-message" class="message"></div>
+                <button id="register-btn" class="btn-primary">注册</button>
+                <button id="back-to-login-btn" class="btn-ghost">返回登录</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 成功弹窗 -->
+    <div class="modal-mask" id="success-mask">
+        <div class="modal-card">
+            <div class="modal-icon success">✓</div>
+            <div class="modal-title" id="success-title">注册成功</div>
+            <div class="modal-body" id="success-body"></div>
+            <div class="modal-actions">
+                <button class="primary" id="success-ok-btn">进入大厅</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/core/storage.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/core/session.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/core/api.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/pages/login_page.js') }}"></script>
+    <script>if (typeof window.initLoginPage === "function") { window.initLoginPage(); }</script>
+</body>
+</html>

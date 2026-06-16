@@ -1,0 +1,404 @@
+/* 登录/注册页面 & 账号管理弹窗样式 */
+
+:root {
+    --bg: #f4f6fb;
+    --card: #ffffff;
+    --text: #1f2937;
+    --muted: #6b7280;
+    --shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+    --blue: #2563eb;
+    --blue-hover: #1d4ed8;
+    --border: #e5e7eb;
+    --danger: #ef4444;
+    --danger-hover: #dc2626;
+    --green: #16a34a;
+    --green-hover: #15803d;
+    --input-bg: #f9fafb;
+    --input-focus: #eff6ff;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: Arial, "Microsoft YaHei", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+}
+
+/* ── 登录页面 ───────────────────────────────── */
+
+.login-container {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px 12px;
+}
+
+.login-card {
+    width: min(400px, calc(100vw - 24px));
+    background: var(--card);
+    border-radius: 18px;
+    padding: 28px 22px 24px;
+    box-shadow: var(--shadow);
+    border: 1px solid var(--border);
+}
+
+.login-hero {
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+.login-hero h1 {
+    margin: 0 0 4px 0;
+    font-size: 32px;
+}
+
+.login-hero p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 14px;
+}
+
+/* ── 表单 ──────────────────────────────────── */
+
+.form-group {
+    margin-bottom: 14px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 4px;
+    font-size: 14px;
+    font-weight: bold;
+    color: #374151;
+}
+
+.form-group label .optional {
+    font-weight: normal;
+    color: var(--muted);
+    font-size: 13px;
+}
+
+.form-group input,
+.form-group textarea {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    font-size: 15px;
+    font-family: inherit;
+    background: var(--input-bg);
+    color: var(--text);
+    transition: border-color 0.15s, background 0.15s;
+}
+
+.form-group input:focus,
+.form-group textarea:focus {
+    outline: none;
+    border-color: var(--blue);
+    background: var(--input-focus);
+}
+
+.form-group textarea {
+    resize: vertical;
+    min-height: 60px;
+}
+
+/* ── 消息 ──────────────────────────────────── */
+
+.message {
+    font-size: 13px;
+    min-height: 20px;
+    margin-bottom: 10px;
+    line-height: 1.6;
+}
+
+.message.error {
+    color: var(--danger);
+}
+
+.message.success {
+    color: var(--green);
+}
+
+.message.info {
+    color: var(--muted);
+}
+
+/* ── 按钮 ──────────────────────────────────── */
+
+.btn-primary,
+.btn-secondary,
+.btn-ghost,
+.btn-danger {
+    display: block;
+    width: 100%;
+    padding: 11px 16px;
+    border: none;
+    border-radius: 12px;
+    font-size: 15px;
+    font-weight: bold;
+    cursor: pointer;
+    text-align: center;
+    transition: background 0.15s;
+}
+
+.btn-primary {
+    background: var(--blue);
+    color: white;
+}
+
+.btn-primary:hover {
+    background: var(--blue-hover);
+}
+
+.btn-secondary {
+    background: #6b7280;
+    color: white;
+}
+
+.btn-secondary:hover {
+    background: #4b5563;
+}
+
+.btn-ghost {
+    background: transparent;
+    color: var(--muted);
+    border: 1px solid var(--border);
+    margin-top: 8px;
+}
+
+.btn-ghost:hover {
+    background: var(--input-bg);
+}
+
+.btn-danger {
+    background: var(--danger);
+    color: white;
+}
+
+.btn-danger:hover {
+    background: var(--danger-hover);
+}
+
+.divider {
+    display: flex;
+    align-items: center;
+    margin: 16px 0;
+    color: var(--muted);
+    font-size: 13px;
+}
+
+.divider::before,
+.divider::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+}
+
+.divider span {
+    padding: 0 10px;
+}
+
+/* ── 弹窗（复用现有风格） ────────────────────── */
+
+.modal-mask {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.34);
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+/* 全局确认弹窗必须在所有动态弹窗之上 */
+#global-modal-mask {
+    z-index: 1100;
+}
+
+.modal-mask.show {
+    display: flex;
+}
+
+.modal-card {
+    width: min(440px, calc(100vw - 32px));
+    background: white;
+    border-radius: 22px;
+    box-shadow: 0 24px 60px rgba(15, 23, 42, 0.20);
+    padding: 24px 20px;
+    text-align: center;
+    max-height: calc(100vh - 64px);
+    overflow-y: auto;
+}
+
+.modal-icon {
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 26px;
+    font-weight: bold;
+    margin: 0 auto 12px auto;
+}
+
+.modal-icon.success {
+    background: #ecfdf5;
+    color: var(--green);
+}
+
+.modal-icon.warning {
+    background: #fffbeb;
+    color: #d97706;
+}
+
+.modal-icon.info {
+    background: #eff6ff;
+    color: var(--blue);
+}
+
+.modal-title {
+    font-size: 20px;
+    font-weight: bold;
+    margin-bottom: 10px;
+    color: var(--text);
+}
+
+.modal-body {
+    font-size: 14px;
+    color: #374151;
+    line-height: 1.8;
+    margin-bottom: 18px;
+    white-space: pre-wrap;
+    text-align: left;
+    background: var(--input-bg);
+    border-radius: 10px;
+    padding: 12px 14px;
+}
+
+.modal-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.modal-actions button {
+    padding: 10px 22px;
+    border: none;
+    border-radius: 12px;
+    font-size: 15px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.modal-actions button.primary {
+    background: var(--blue);
+    color: white;
+}
+
+.modal-actions button.primary:hover {
+    background: var(--blue-hover);
+}
+
+.modal-actions button.secondary {
+    background: #6b7280;
+    color: white;
+}
+
+.modal-actions button.secondary:hover {
+    background: #4b5563;
+}
+
+.modal-actions button.danger {
+    background: var(--danger);
+    color: white;
+}
+
+.modal-actions button.danger:hover {
+    background: var(--danger-hover);
+}
+
+/* ── 账号管理弹窗内联样式补丁 ──────────────── */
+
+.account-field-row {
+    margin-bottom: 14px;
+    text-align: left;
+}
+
+.account-field-row label {
+    display: block;
+    margin-bottom: 4px;
+    font-size: 14px;
+    font-weight: bold;
+    color: #374151;
+}
+
+.account-field-row input,
+.account-field-row textarea {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    font-size: 15px;
+    font-family: inherit;
+    background: var(--input-bg);
+}
+
+.account-field-row input:focus,
+.account-field-row textarea:focus {
+    outline: none;
+    border-color: var(--blue);
+    background: var(--input-focus);
+}
+
+.account-field-row textarea {
+    resize: vertical;
+    min-height: 60px;
+}
+
+.account-save-msg {
+    font-size: 13px;
+    min-height: 20px;
+    margin-bottom: 10px;
+    line-height: 1.6;
+}
+
+.account-save-msg.error {
+    color: var(--danger);
+}
+
+.account-save-msg.success {
+    color: var(--green);
+}
+
+/* ── 右上角按钮 ────────────────────────────── */
+
+.header-account-btn {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    z-index: 100;
+    padding: 8px 16px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: white;
+    font-size: 14px;
+    font-weight: bold;
+    color: var(--text);
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    transition: background 0.15s;
+}
+
+.header-account-btn:hover {
+    background: var(--input-focus);
+}

@@ -74,4 +74,6 @@ def get_room_payload(room) -> dict:
         "game": get_game_state_payload(room.state, include_history=True),
         "reset_requested_by": room.reset_requested_by,
         "online_status": room.get_online_status_payload(),
+        "chat_messages": getattr(room, "chat_messages", []),
+        "battle_id": getattr(room, "battle_id", None),
     }

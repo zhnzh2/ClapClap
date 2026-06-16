@@ -19,24 +19,35 @@
         };
     }
 
+    function _authHeaders() {
+        var headers = {
+            "Accept": "application/json"
+        };
+        if (window.SessionUtils) {
+            var token = window.SessionUtils.getSessionToken();
+            if (token) {
+                headers["X-Session-Token"] = token;
+            }
+        }
+        return headers;
+    }
+
     async function apiGet(url) {
+        var headers = _authHeaders();
         const response = await fetch(url, {
             method: "GET",
-            headers: {
-                "Accept": "application/json"
-            }
+            headers: headers
         });
         const data = await parseJsonResponse(response);
         return normalizeApiResult(response, data);
     }
 
     async function apiPost(url, payload = {}) {
+        var headers = _authHeaders();
+        headers["Content-Type"] = "application/json";
         const response = await fetch(url, {
             method: "POST",
-            headers: {
-                "Accept": "application/json",
-                "Content-Type": "application/json"
-            },
+            headers: headers,
             body: JSON.stringify(payload)
         });
         const data = await parseJsonResponse(response);
