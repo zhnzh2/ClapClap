@@ -95,37 +95,34 @@ function renderState(state) {
 }
 
 async function fetchState() {
-    try {
-        const res = await fetch("/api/local/state");
-        const data = await res.json();
-        renderState(data);
-        document.getElementById("message").textContent = "状态已刷新。";
-    } catch (error) {
+    const result = await ApiUtils.apiGet("/api/local/state");
+    if (!result.ok) {
         document.getElementById("message").textContent =
-            "获取状态失败：" + error;
+            "获取状态失败：" + result.error;
+        return;
     }
+    renderState(result.data);
+    document.getElementById("message").textContent = "状态已刷新。";
 }
 
 async function resetGame() {
-    try {
-        const res = await fetch("/api/local/reset", {
-            method: "POST"
-        });
-        const data = await res.json();
+    const result = await ApiUtils.apiPost("/api/local/reset");
 
-        selectedP1Move = null;
-        selectedP2Move = null;
-        keyboardTarget = "p1";
-        endModalShownForWinner = null;
-        closeEndModal();
-
-        renderState(data.state);
+    if (!result.ok) {
         document.getElementById("message").textContent =
-            data.message || "游戏已重置。";
-    } catch (error) {
-        document.getElementById("message").textContent =
-            "重置失败：" + error;
+            "重置失败：" + result.error;
+        return;
     }
+
+    selectedP1Move = null;
+    selectedP2Move = null;
+    keyboardTarget = "p1";
+    endModalShownForWinner = null;
+    closeEndModal();
+
+    renderState(result.data.state);
+    document.getElementById("message").textContent =
+        result.data.message || "游戏已重置。";
 }
 
 async function stepGame() {
@@ -135,37 +132,24 @@ async function stepGame() {
         return;
     }
 
-    try {
-        const res = await fetch("/api/local/step", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-                p1_move: selectedP1Move,
-                p2_move: selectedP2Move
-            })
-        });
+    const result = await ApiUtils.apiPost("/api/local/step", {
+        p1_move: selectedP1Move,
+        p2_move: selectedP2Move
+    });
 
-        const data = await res.json();
-
-        if (!res.ok || !data.ok) {
-            document.getElementById("message").textContent =
-                data.error || "提交失败。";
-            return;
-        }
-
-        selectedP1Move = null;
-        selectedP2Move = null;
-        keyboardTarget = "p1";
-
-        renderState(data.state);
+    if (!result.ok) {
         document.getElementById("message").textContent =
-            data.message || "本回合已结算。";
-    } catch (error) {
-        document.getElementById("message").textContent =
-            "提交失败：" + error;
+            result.error || "提交失败。";
+        return;
     }
+
+    selectedP1Move = null;
+    selectedP2Move = null;
+    keyboardTarget = "p1";
+
+    renderState(result.data.state);
+    document.getElementById("message").textContent =
+        result.data.message || "本回合已结算。";
 }
 
 function undoLastSelection() {

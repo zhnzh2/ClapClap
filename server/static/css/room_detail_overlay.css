@@ -199,6 +199,17 @@
             pointer-events: none;
         }
 
+        .move-btn.resource-insufficient {
+            opacity: 0.55;
+            cursor: not-allowed;
+            background: #fef2f2;
+            border-color: #fecaca;
+            color: #991b1b;
+            box-shadow: none;
+            transform: none;
+            pointer-events: none;
+        }
+
         .move-btn.pending-confirm-p1 {
             border: 2px solid var(--blue);
             background: var(--blue-soft);
@@ -275,16 +286,20 @@
         }
 
         .reveal-card {
-            animation: reveal-pop 0.22s ease-out;
+            animation: reveal-flip 0.4s ease-out;
         }
 
-        @keyframes reveal-pop {
-            from {
-                transform: scale(0.98);
-                opacity: 0.72;
+        @keyframes reveal-flip {
+            0% {
+                transform: scale(0.92) rotateY(10deg);
+                opacity: 0.5;
             }
-            to {
-                transform: scale(1);
+            60% {
+                transform: scale(1.03);
+                opacity: 1;
+            }
+            100% {
+                transform: scale(1) rotateY(0deg);
                 opacity: 1;
             }
         }
@@ -314,6 +329,15 @@
             background: var(--red-soft);
             border-color: var(--red-border);
             color: #991b1b;
+        }
+
+        .pending-opponent-waiting {
+            animation: pending-pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pending-pulse {
+            0%, 100% { opacity: 0.5; }
+            50% { opacity: 1; }
         }
 
         @media (max-width: 980px) {
@@ -347,6 +371,15 @@
             background: var(--red-soft);
             border-color: var(--red-border);
             color: #991b1b;
+        }
+
+        .pending-opponent-waiting {
+            animation: pending-pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pending-pulse {
+            0%, 100% { opacity: 0.5; }
+            50% { opacity: 1; }
         }
 
         @media (max-width: 980px) {

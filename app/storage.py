@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-DATA_DIR = BASE_DIR / "data"
+# 本地开发用默认路径 data/，生产环境通过环境变量 DATA_DIR 指向持久卷
+DATA_DIR = Path(os.environ.get("DATA_DIR", BASE_DIR / "data"))
 DB_PATH = DATA_DIR / "clapclap.db"
 
 def get_connection() -> sqlite3.Connection:

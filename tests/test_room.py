@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import unittest
 
 from app.room_manager import (
@@ -151,7 +151,7 @@ class TestRoomAndLocalApi(unittest.TestCase):
     def test_socket_join_and_heartbeat_mark_player_seen(self):
         room, _, token = create_room("SocketUser")
         self.room_ids.append(room.room_id)
-        old_time = datetime.utcnow() - timedelta(minutes=10)
+        old_time = datetime.now(timezone.utc) - timedelta(minutes=10)
         room.p1_last_seen_at = old_time
         room.updated_at = old_time
         room.persist()
@@ -165,7 +165,7 @@ class TestRoomAndLocalApi(unittest.TestCase):
             updated = get_room(room.room_id)
             self.assertGreater(updated.p1_last_seen_at, old_time)
 
-            old_time = datetime.utcnow() - timedelta(minutes=10)
+            old_time = datetime.now(timezone.utc) - timedelta(minutes=10)
             updated.p1_last_seen_at = old_time
             updated.updated_at = old_time
             updated.persist()
@@ -243,7 +243,7 @@ class TestRoomAndLocalApi(unittest.TestCase):
     def test_room_touch_prevents_active_room_from_expiring(self):
         room_id, p1_token, p2_token = self.create_joined_room()
         room = get_room(room_id)
-        old_time = datetime.utcnow() - timedelta(hours=13)
+        old_time = datetime.now(timezone.utc) - timedelta(hours=13)
         room.updated_at = old_time
         room.p1_last_seen_at = old_time
         room.p2_last_seen_at = old_time

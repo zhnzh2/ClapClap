@@ -1,13 +1,22 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from threading import RLock
 from typing import Optional
 import traceback
 
 from app.room_manager import create_room, join_room
 from app.storage import load_kv, save_kv, delete_kv
+
+
+def _ensure_utc(dt):
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
+
 
 @dataclass
 class WaitingPlayer:
@@ -57,7 +66,7 @@ def load_match_state() -> None:
             MATCH_WAITING = WaitingPlayer(
                 player_name=waiting["player_name"],
                 player_token=waiting["player_token"],
-                joined_at=datetime.fromisoformat(waiting["joined_at"]),
+                joined_at=_ensure_utc(datetime.fromisoformat(waiting["joined_at"])),
             )
     except Exception as exc:
         print(f"[load_match_state] 跳过无法兼容的旧匹配状态: {exc}")
@@ -80,7 +89,7 @@ def set_player_match_state(
         "room_id": room_id,
         "seat": seat,
         "room_player_token": room_player_token,
-        "updated_at": datetime.utcnow().isoformat(),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
     }
 
 def clear_match_state_by_room(room_id: str) -> None:
@@ -101,7 +110,7 @@ def clear_match_state_by_room(room_id: str) -> None:
                 "room_id": None,
                 "seat": None,
                 "room_player_token": None,
-                "updated_at": datetime.utcnow().isoformat(),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
             }
 
         persist_match_state()
@@ -134,7 +143,7 @@ def enqueue_or_match(player_name: str, player_token: str) -> dict:
             MATCH_WAITING = WaitingPlayer(
                 player_name=player_name,
                 player_token=player_token,
-                joined_at=datetime.utcnow(),
+                joined_at=datetime.now(timezone.utc),
             )
 
             set_player_match_state(
@@ -260,7 +269,7 @@ def cancel_match(player_token: str) -> dict:
             "room_id": None,
             "seat": None,
             "room_player_token": None,
-            "updated_at": datetime.utcnow().isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
         }
         persist_match_state()
 
@@ -277,7 +286,7 @@ def cleanup_expired_match_state(
 ) -> dict:
     global MATCH_WAITING
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     removed_tokens: list[str] = []
 
     with MATCH_LOCK:
@@ -314,7 +323,7 @@ def cleanup_expired_match_state(
             created_at_str = state.get("updated_at")
             if created_at_str:
                 try:
-                    updated_at = datetime.fromisoformat(created_at_str)
+                    updated_at = _ensure_utc(datetime.fromisoformat(created_at_str))
                     if updated_at < now - timedelta(hours=matched_hours):
                         to_delete.append(player_token)
                 except Exception:

@@ -22,18 +22,7 @@ window.initRoomDetailPage = function () {
 
         const socket = typeof io === "function" ? io() : null;
 
-        const DEFAULT_ROOM_UI_SETTINGS = {
-            showRoomInfo: false,
-            showRoomStatus: false,
-            showInvite: false,
-            showRoundResult: false,
-            showHistory: true,
-            showMoveSubtitles: false,
-            playerStateMode: "compact",
-            revealAdvanceMode: "auto"
-        };
-
-        let roomUiSettings = { ...DEFAULT_ROOM_UI_SETTINGS };
+        let roomUiSettings = { ...window.CLAPCLAP_DEFAULT_ROOM_UI_SETTINGS };
 
         function emitRoomHeartbeat() {
             if (!socket || !myPlayerToken) {
@@ -89,13 +78,6 @@ window.initRoomDetailPage = function () {
 
         window.setInterval(emitRoomHeartbeat, 5000);
 
-        const moveGroups = {
-            resource_defense: ["QI", "SHIELD", "SHI_ZI", "BA_GUA"],
-            attack_qi: ["GI", "PO", "LENG_FENG", "RU_LAI", "HEI_DONG"],
-            attack_shield: ["FIRE", "SHAN_DIAN", "LIE_YAN", "SHINING"],
-            trick: ["CHI", "SHUANG_CHI", "SHAN", "GAO"]
-        };
-
         function seatDisplayText(seat) {
             if (seat === "p1") return "1号位";
             if (seat === "p2") return "2号位";
@@ -139,52 +121,6 @@ window.initRoomDetailPage = function () {
             return mySeat !== "p1" && mySeat !== "p2";
         }
 
-        const MOVE_SHORTCUTS = {
-            "chi": "1",
-            "shuang_chi": "2",
-            "shan": "3",
-            "gao": "4",
-
-            "qi": "Q",
-            "shield": "W",
-            "shi_zi": "E",
-            "ba_gua": "R",
-
-            "gi": "A",
-            "po": "S",
-            "leng_feng": "D",
-            "ru_lai": "F",
-            "hei_dong": "G",
-
-            "fire": "Z",
-            "shan_dian": "X",
-            "lie_yan": "C",
-            "shining": "V"
-        };
-
-        const KEY_TO_MOVE_NAME = {
-            "1": "chi",
-            "2": "shuang_chi",
-            "3": "shan",
-            "4": "gao",
-
-            "q": "qi",
-            "w": "shield",
-            "e": "shi_zi",
-            "r": "ba_gua",
-
-            "a": "gi",
-            "s": "po",
-            "d": "leng_feng",
-            "f": "ru_lai",
-            "g": "hei_dong",
-
-            "z": "fire",
-            "x": "shan_dian",
-            "c": "lie_yan",
-            "v": "shining"
-        };
-
         function clearFrontendCacheForNewBoot() {
             const savedBootId = localStorage.getItem("clapclap_server_boot_id");
 
@@ -200,103 +136,6 @@ window.initRoomDetailPage = function () {
 
         function normalizeMoveName(moveName) {
             return String(moveName || "").trim().toLowerCase();
-        }
-
-        function getRoomSettingsStorageKey() {
-            return STORAGE_KEYS.roomUiSettings(roomId);
-        }
-
-        function loadRoomUiSettings() {
-            try {
-                const parsed = StorageUtils.getJsonStorage(getRoomSettingsStorageKey(), null);
-                if (!parsed) {
-                    roomUiSettings = { ...DEFAULT_ROOM_UI_SETTINGS };
-                    return;
-                }
-                roomUiSettings = {
-                    ...DEFAULT_ROOM_UI_SETTINGS,
-                    ...parsed
-                };
-            } catch (error) {
-                console.error("loadRoomUiSettings error:", error);
-                roomUiSettings = { ...DEFAULT_ROOM_UI_SETTINGS };
-            }
-        }
-
-        function saveRoomUiSettings() {
-            StorageUtils.setJsonStorage(
-                getRoomSettingsStorageKey(),
-                roomUiSettings
-            );
-        }
-
-        function syncSettingsControls() {
-            document.getElementById("toggle-room-info").checked = !!roomUiSettings.showRoomInfo;
-            document.getElementById("toggle-room-status").checked = !!roomUiSettings.showRoomStatus;
-            document.getElementById("toggle-invite-section").checked = !!roomUiSettings.showInvite;
-            document.getElementById("toggle-round-result").checked = !!roomUiSettings.showRoundResult;
-            document.getElementById("toggle-history-section").checked = !!roomUiSettings.showHistory;
-            document.getElementById("toggle-move-subtitles").checked = !!roomUiSettings.showMoveSubtitles;
-            document.getElementById("player-state-mode-select").value = roomUiSettings.playerStateMode || "compact";
-            document.getElementById("reveal-advance-mode-select").value = roomUiSettings.revealAdvanceMode || "auto";
-        }
-
-        function applyRoomUiSettings() {
-            const roomInfoSection = document.getElementById("room-info-section");
-            const roomStatusSection = document.getElementById("room-status-section");
-            const inviteSection = document.getElementById("invite-section");
-            const roundResultSection = document.getElementById("round-result-section");
-            const historySection = document.getElementById("history-section");
-            const playerStateModeFull = document.getElementById("player-state-mode-full");
-            const playerStateModeCompact = document.getElementById("player-state-mode-compact");
-
-            if (roomInfoSection) {
-                roomInfoSection.style.display = roomUiSettings.showRoomInfo ? "" : "none";
-            }
-
-            if (roomStatusSection) {
-                roomStatusSection.style.display = roomUiSettings.showRoomStatus ? "" : "none";
-            }
-
-            if (inviteSection) {
-                inviteSection.style.display = roomUiSettings.showInvite ? "" : "none";
-            }
-
-            if (roundResultSection) {
-                roundResultSection.style.display = roomUiSettings.showRoundResult ? "" : "none";
-            }
-
-            if (historySection) {
-                historySection.style.display = roomUiSettings.showHistory ? "" : "none";
-            }
-
-            if (playerStateModeFull && playerStateModeCompact) {
-                if (roomUiSettings.playerStateMode === "full") {
-                    playerStateModeFull.style.display = "";
-                    playerStateModeCompact.style.display = "none";
-                } else {
-                    playerStateModeFull.style.display = "none";
-                    playerStateModeCompact.style.display = "";
-                }
-            }
-            updateOverviewCardVisibility();
-        }
-
-        function updateOverviewCardVisibility() {
-            const overviewCard = document.getElementById("overview-card");
-            const spectatorBanner = document.getElementById("spectator-banner");
-
-            if (!overviewCard) {
-                return;
-            }
-
-            const showAnything =
-                !!roomUiSettings.showRoomInfo ||
-                !!roomUiSettings.showRoomStatus ||
-                !!roomUiSettings.showInvite ||
-                (spectatorBanner && spectatorBanner.style.display !== "none");
-
-            overviewCard.style.display = showAnything ? "" : "none";
         }
 
         function openHelpModal() {
@@ -726,7 +565,7 @@ window.initRoomDetailPage = function () {
         function renderSpectatorBanner() {
             const banner = document.getElementById("spectator-banner");
             banner.style.display = isSpectatorMode() ? "" : "none";
-            updateOverviewCardVisibility();
+            RoomDetailSettings.updateOverviewCardVisibility(roomUiSettings);
         }
 
         function setSettlingMask(show) {
@@ -799,7 +638,11 @@ window.initRoomDetailPage = function () {
             }
 
             selfBox.classList.remove("pending-self-ready");
-            opponentBox.classList.remove("pending-opponent-ready");
+            opponentBox.classList.remove("pending-opponent-ready", "pending-opponent-waiting");
+
+            if (isSpectatorMode() || room.status !== "playing") {
+                return;
+            }
 
             const myPending = getMyPendingMove(room);
             const opponentPending = getOpponentPendingMove(room);
@@ -810,6 +653,8 @@ window.initRoomDetailPage = function () {
 
             if (opponentPending) {
                 opponentBox.classList.add("pending-opponent-ready");
+            } else {
+                opponentBox.classList.add("pending-opponent-waiting");
             }
         }
 
@@ -889,49 +734,49 @@ window.initRoomDetailPage = function () {
         function bindSettingsEvents() {
             document.getElementById("toggle-room-info").addEventListener("change", (event) => {
                 roomUiSettings.showRoomInfo = event.target.checked;
-                saveRoomUiSettings();
-                applyRoomUiSettings();
+                RoomDetailSettings.saveSettings(roomId, roomUiSettings);
+                RoomDetailSettings.applySettings(roomUiSettings);
             });
 
             document.getElementById("toggle-room-status").addEventListener("change", (event) => {
                 roomUiSettings.showRoomStatus = event.target.checked;
-                saveRoomUiSettings();
-                applyRoomUiSettings();
+                RoomDetailSettings.saveSettings(roomId, roomUiSettings);
+                RoomDetailSettings.applySettings(roomUiSettings);
             });
 
             document.getElementById("toggle-invite-section").addEventListener("change", (event) => {
                 roomUiSettings.showInvite = event.target.checked;
-                saveRoomUiSettings();
-                applyRoomUiSettings();
+                RoomDetailSettings.saveSettings(roomId, roomUiSettings);
+                RoomDetailSettings.applySettings(roomUiSettings);
             });
 
             document.getElementById("toggle-round-result").addEventListener("change", (event) => {
                 roomUiSettings.showRoundResult = event.target.checked;
-                saveRoomUiSettings();
-                applyRoomUiSettings();
+                RoomDetailSettings.saveSettings(roomId, roomUiSettings);
+                RoomDetailSettings.applySettings(roomUiSettings);
             });
 
             document.getElementById("toggle-history-section").addEventListener("change", (event) => {
                 roomUiSettings.showHistory = event.target.checked;
-                saveRoomUiSettings();
-                applyRoomUiSettings();
+                RoomDetailSettings.saveSettings(roomId, roomUiSettings);
+                RoomDetailSettings.applySettings(roomUiSettings);
             });
 
             document.getElementById("toggle-move-subtitles").addEventListener("change", (event) => {
                 roomUiSettings.showMoveSubtitles = event.target.checked;
-                saveRoomUiSettings();
+                RoomDetailSettings.saveSettings(roomId, roomUiSettings);
                 renderRoom(latestRoom);
             });
 
             document.getElementById("player-state-mode-select").addEventListener("change", (event) => {
                 roomUiSettings.playerStateMode = event.target.value;
-                saveRoomUiSettings();
-                applyRoomUiSettings();
+                RoomDetailSettings.saveSettings(roomId, roomUiSettings);
+                RoomDetailSettings.applySettings(roomUiSettings);
             });
 
             document.getElementById("reveal-advance-mode-select").addEventListener("change", (event) => {
                 roomUiSettings.revealAdvanceMode = event.target.value;
-                saveRoomUiSettings();
+                RoomDetailSettings.saveSettings(roomId, roomUiSettings);
             });
         }
 
@@ -986,22 +831,22 @@ window.initRoomDetailPage = function () {
                 {
                     title: "资源 / 防御",
                     className: "move-grid resource-defense-grid",
-                    moveNames: moveGroups.resource_defense
+                    moveNames: window.CLAPCLAP_MOVE_GROUPS.resource_defense
                 },
                 {
                     title: "气系攻击",
                     className: "move-grid qi-attack-grid",
-                    moveNames: moveGroups.attack_qi
+                    moveNames: window.CLAPCLAP_MOVE_GROUPS.attack_qi
                 },
                 {
                     title: "盾系攻击",
                     className: "move-grid shield-attack-grid",
-                    moveNames: moveGroups.attack_shield
+                    moveNames: window.CLAPCLAP_MOVE_GROUPS.attack_shield
                 },
                 {
                     title: "锦囊",
                     className: "move-grid trick-grid",
-                    moveNames: moveGroups.trick
+                    moveNames: window.CLAPCLAP_MOVE_GROUPS.trick
                 }
             ];
 
@@ -1021,7 +866,7 @@ window.initRoomDetailPage = function () {
                 `;
 
                 const normalizedMoveName = normalizeMoveName(moveName);
-                const shortcutKey = MOVE_SHORTCUTS[normalizedMoveName];
+                const shortcutKey = window.CLAPCLAP_MOVE_SHORTCUTS[normalizedMoveName];
 
                 if (shortcutKey) {
                     const shortcutEl = document.createElement("div");
@@ -1031,14 +876,12 @@ window.initRoomDetailPage = function () {
                 }
 
                 const actionLocked = isMyActionLocked(latestRoom);
-                if (!legal || actionLocked) {
-                    btn.classList.add("locked");
-                }
-                if (!legal) {
-                    btn.classList.add("state-insufficient");
-                }
                 if (isSpectatorMode()) {
-                    btn.classList.add("state-spectator");
+                    btn.classList.add("locked");
+                } else if (!legal) {
+                    btn.classList.add("resource-insufficient");
+                } else if (actionLocked) {
+                    btn.classList.add("locked");
                 }
 
                 btn.dataset.moveName = normalizedMoveName;
@@ -1297,13 +1140,13 @@ window.initRoomDetailPage = function () {
             if (latestRoom.status !== "playing") return;
 
             const key = String(event.key || "").toLowerCase();
-            const moveName = KEY_TO_MOVE_NAME[key];
+            const moveName = window.CLAPCLAP_KEY_TO_MOVE_NAME[key];
 
             if (!moveName) return;
 
             const btn = findMoveButtonByMoveName(moveName);
             if (!btn) return;
-            if (btn.classList.contains("locked") || btn.classList.contains("disabled")) return;
+            if (btn.classList.contains("locked") || btn.classList.contains("resource-insufficient") || btn.classList.contains("disabled")) return;
 
             event.preventDefault();
             selectMoveForConfirm(mySeat, btn.dataset.originalMoveName || moveName);
@@ -1589,14 +1432,15 @@ window.initRoomDetailPage = function () {
 
                 if (!result.ok) {
                     if (result.data?.error_code === "ROOM_NOT_FOUND") {
-                        openConfirmModal(
-                            "房间已失效",
-                            result.error || "当前房间已经不存在。你保存的本地房间入口也会一并清除，确认后返回主菜单。",
-                            () => {
+                        ModalUtils.showInfoModal({
+                            title: "房间已失效",
+                            body: result.error || "当前房间已经不存在，可能是房主已退出或房间已过期。",
+                            buttonText: "返回主菜单",
+                            onClose: () => {
                                 ResumeRoomUtils.clearAllRoomRuntimeCache();
                                 goHome();
                             }
-                        );
+                        });
                         return;
                     }
 
@@ -1873,10 +1717,10 @@ window.initRoomDetailPage = function () {
 
                 ModalUtils.bindGlobalModalEvents();
 
-                loadRoomUiSettings();
-                syncSettingsControls();
+                roomUiSettings = RoomDetailSettings.loadSettings(roomId);
+                RoomDetailSettings.syncSettingsControls(roomUiSettings);
                 bindSettingsEvents();
-                applyRoomUiSettings();
+                RoomDetailSettings.applySettings(roomUiSettings);
 
                 applySeatVisibility();
                 applySeatHighlights();

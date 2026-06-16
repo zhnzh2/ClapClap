@@ -126,5 +126,60 @@ class TestMatchmaking(unittest.TestCase):
         self.assertFalse(second["matched"])
         self.assertTrue(second["already_queued"])
 
+    def test_e2e_match_to_room_resolve(self):
+        """端到端：匹配成功 → 进入房间 → 双方提交动作 → 结算回合。"""
+        from app.room_manager import get_room
+
+        # 1. 排队配对
+        enqueue_or_match("Alice", "e2e-a")
+        matched = enqueue_or_match("Bob", "e2e-b")
+        self.assertTrue(matched["matched"], matched)
+        room_id = matched["room_id"]
+        self.created_room_ids.append(room_id)
+
+        alice_state = get_player_match_state("e2e-a")
+        bob_state = get_player_match_state("e2e-b")
+
+        # 2. 验证双方在同一房间
+        self.assertEqual(alice_state["room_id"], room_id)
+        self.assertEqual(bob_state["room_id"], room_id)
+
+        room = get_room(room_id)
+        self.assertIsNotNone(room)
+        self.assertEqual(room.status, "playing")
+
+        # 3. 用 Flask test client 模拟双方提交动作
+        from server.app import app as flask_app
+        client = flask_app.test_client()
+
+        # P1 (Alice) 提交
+        p1_result = client.post(
+            f"/api/rooms/{room_id}/step",
+            json={
+                "player_token": alice_state["room_player_token"],
+                "move_name": "QI",
+            },
+        ).get_json()
+        self.assertTrue(p1_result["ok"], p1_result)
+        self.assertFalse(p1_result["resolved"])
+
+        # P2 (Bob) 提交，触发结算
+        p2_result = client.post(
+            f"/api/rooms/{room_id}/step",
+            json={
+                "player_token": bob_state["room_player_token"],
+                "move_name": "QI",
+            },
+        ).get_json()
+        self.assertTrue(p2_result["ok"], p2_result)
+        self.assertTrue(p2_result["resolved"])
+        self.assertEqual(p2_result["room"]["game"]["round_num"], 1)
+
+        # 4. 验证房间状态
+        updated_room = get_room(room_id)
+        self.assertEqual(updated_room.state.round_num, 1)
+        self.assertEqual(len(updated_room.state.history), 1)
+
+
 if __name__ == "__main__":
     unittest.main()

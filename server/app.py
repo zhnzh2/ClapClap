@@ -15,7 +15,7 @@ from app.room_manager import load_rooms_from_storage
 from app.storage import init_storage
 
 from server.extensions import socketio
-from server.routes import page_bp, local_bp, room_bp, match_bp, status_bp
+from server.routes import page_bp, local_bp, room_bp, match_bp, status_bp, export_bp
 
 app = Flask(__name__)
 app.config["SERVER_BOOT_ID"] = uuid4().hex
@@ -31,8 +31,11 @@ app.register_blueprint(local_bp)
 app.register_blueprint(room_bp)
 app.register_blueprint(match_bp)
 app.register_blueprint(status_bp)
+app.register_blueprint(export_bp)
 
 import server.socket_events  # noqa: F401
+import server.backup         # noqa: F401; 在 Flask 就绪后启动备份线程
+server.backup.start_backup_thread()
 
 if __name__ == "__main__":
     socketio.run(app, debug=True)

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import random
 import string
 from threading import RLock
@@ -25,8 +25,8 @@ class Room:
     reset_requested_by: str | None = None
     p1_last_seen_at: datetime | None = None
     p2_last_seen_at: datetime | None = None
-    created_at: datetime = field(default_factory=datetime.utcnow)
-    updated_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     def to_dict(self) -> dict:
         return {
@@ -48,6 +48,13 @@ class Room:
 
     @classmethod
     def from_dict(cls, data: dict) -> "Room":
+        def _ensure_utc(dt):
+            if dt is None:
+                return None
+            if dt.tzinfo is None:
+                return dt.replace(tzinfo=timezone.utc)
+            return dt
+
         room = cls(
             room_id=data["room_id"],
             p1_name=data.get("p1_name"),
@@ -58,10 +65,10 @@ class Room:
             pending_p1_move=data.get("pending_p1_move"),
             pending_p2_move=data.get("pending_p2_move"),
             reset_requested_by=data.get("reset_requested_by"),
-            p1_last_seen_at=datetime.fromisoformat(data["p1_last_seen_at"]) if data.get("p1_last_seen_at") else None,
-            p2_last_seen_at=datetime.fromisoformat(data["p2_last_seen_at"]) if data.get("p2_last_seen_at") else None,
-            created_at=datetime.fromisoformat(data["created_at"]),
-            updated_at=datetime.fromisoformat(data["updated_at"]),
+            p1_last_seen_at=_ensure_utc(datetime.fromisoformat(data["p1_last_seen_at"]) if data.get("p1_last_seen_at") else None),
+            p2_last_seen_at=_ensure_utc(datetime.fromisoformat(data["p2_last_seen_at"]) if data.get("p2_last_seen_at") else None),
+            created_at=_ensure_utc(datetime.fromisoformat(data["created_at"])),
+            updated_at=_ensure_utc(datetime.fromisoformat(data["updated_at"])),
         )
         room.state = GameState.from_dict(data["state"])
         return room
@@ -73,8 +80,8 @@ class Room:
         if self.p1_name is None:
             self.p1_name = player_name
             self.p1_token = uuid4().hex
-            self.p1_last_seen_at = datetime.utcnow()
-            self.updated_at = datetime.utcnow()
+            self.p1_last_seen_at = datetime.now(timezone.utc)
+            self.updated_at = datetime.now(timezone.utc)
             if self.is_full():
                 self.status = "playing"
             return "p1", self.p1_token
@@ -82,8 +89,8 @@ class Room:
         if self.p2_name is None:
             self.p2_name = player_name
             self.p2_token = uuid4().hex
-            self.p2_last_seen_at = datetime.utcnow()
-            self.updated_at = datetime.utcnow()
+            self.p2_last_seen_at = datetime.now(timezone.utc)
+            self.updated_at = datetime.now(timezone.utc)
             if self.is_full():
                 self.status = "playing"
             return "p2", self.p2_token
@@ -98,7 +105,7 @@ class Room:
         return None
 
     def mark_seen(self, seat: str) -> None:
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         if seat == "p1":
             self.p1_last_seen_at = now
@@ -109,11 +116,11 @@ class Room:
         self.persist()
 
     def touch(self) -> None:
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
         self.persist()
 
     def is_seat_online(self, seat: str, *, ttl_seconds: int = 20) -> bool:
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         if seat == "p1":
             last_seen = self.p1_last_seen_at
@@ -136,7 +143,7 @@ class Room:
     def request_reset(self, seat: str) -> tuple[bool, str]:
         if self.reset_requested_by is None:
             self.reset_requested_by = seat
-            self.updated_at = datetime.utcnow()
+            self.updated_at = datetime.now(timezone.utc)
             self.persist()
             return False, f"{seat} 已发起重置请求，等待另一方确认。"
 
@@ -147,18 +154,18 @@ class Room:
         self.pending_p1_move = None
         self.pending_p2_move = None
         self.reset_requested_by = None
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
         self.status = "playing" if self.is_full() else "waiting"
         self.persist()
         return True, "双方已确认，房间对局已重置。"
 
     def clear_reset_request(self) -> None:
         self.reset_requested_by = None
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
         self.persist()
 
     def is_expired(self, *, waiting_minutes: int = 180, finished_minutes: int = 360) -> bool:
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         if self.status == "finished":
             return self.updated_at < now - timedelta(minutes=finished_minutes)
@@ -175,7 +182,7 @@ class Room:
         self.pending_p1_move = None
         self.pending_p2_move = None
         self.reset_requested_by = None
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
         self.status = "playing" if self.is_full() else "waiting"
         self.persist()
 
@@ -188,7 +195,7 @@ class Room:
             raise ValueError("未知座位。")
 
         self.reset_requested_by = None
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
         self.persist()
 
     def cancel_submitted_move(self, seat: str) -> tuple[bool, str]:
@@ -209,14 +216,14 @@ class Room:
         else:
             raise ValueError("未知座位。")
 
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
         self.persist()
         return True, "已撤回本回合提交动作。"
 
     def clear_pending_moves(self) -> None:
         self.pending_p1_move = None
         self.pending_p2_move = None
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
         self.persist()
 
     def persist(self) -> None:
