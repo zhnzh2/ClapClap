@@ -169,15 +169,20 @@ def submit_room_move_service(
             if room.battle_id is None:
                 participants = {}
                 if room.p1_name:
-                    participants["p1"] = {"username": room.p1_name, "uid": _lookup_uid(room.p1_name)}
+                    p1_uid = _lookup_uid(room.p1_name)
+                    if p1_uid >= 0:
+                        participants["p1"] = {"username": room.p1_name, "uid": p1_uid}
                 if room.p2_name:
-                    participants["p2"] = {"username": room.p2_name, "uid": _lookup_uid(room.p2_name)}
-                if participants:
+                    p2_uid = _lookup_uid(room.p2_name)
+                    if p2_uid >= 0:
+                        participants["p2"] = {"username": room.p2_name, "uid": p2_uid}
+                if len(participants) == 2:
                     room.battle_id = create_battle(participants)
 
-            # 记录回合
+            # 记录回合（传入完整 RoundLog 数据以支持回放）
             if room.battle_id:
-                record_round(room.battle_id, round_num, resolved_p1_move_name, resolved_p2_move_name)
+                latest_log = room.state.history[-1]
+                record_round(room.battle_id, latest_log.to_dict())
 
                 # 如果游戏结束
                 if room.status == "finished":

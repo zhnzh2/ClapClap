@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import csv
 import hashlib
+import hmac
 import secrets
 import shutil
 import threading
@@ -40,6 +41,10 @@ CSV_PATH = USERS_DIR / "users.csv"
 UNVERIFIED_MAX_DAYS = 30
 
 _csv_lock = threading.Lock()
+_session_lock = threading.RLock()
+_session_to_uid: dict[str, int] = {}
+_uid_to_session: dict[int, str] = {}
+_session_index_source: str | None = None
 
 # ── CSV 列定义 ──────────────────────────────────────────────
 CSV_FIELDS = ["UID", "用户名", "密码", "创建时间", "已验证", "权限"]
@@ -74,6 +79,40 @@ def _read_file(filepath: Path) -> str:
 
 def _hash_password(password: str, uid: int) -> str:
     return hashlib.sha256((password + "clapclap" + str(uid)).encode("utf-8")).hexdigest()
+
+
+def _ensure_session_index() -> None:
+    """Load persisted sessions once, rebuilding when the storage root changes."""
+    global _session_index_source
+    source = str(USERS_DIR.resolve())
+    with _session_lock:
+        if _session_index_source == source:
+            return
+        _session_to_uid.clear()
+        _uid_to_session.clear()
+        if USERS_DIR.exists():
+            for user_dir in USERS_DIR.glob("User_*"):
+                try:
+                    uid = int(user_dir.name.removeprefix("User_"))
+                except ValueError:
+                    continue
+                token = _read_file(user_dir / "session")
+                if token:
+                    _session_to_uid[token] = uid
+                    _uid_to_session[uid] = token
+        _session_index_source = source
+
+
+def _set_session(uid: int, token: str) -> None:
+    _ensure_session_index()
+    with _session_lock:
+        previous = _uid_to_session.pop(uid, "")
+        if previous:
+            _session_to_uid.pop(previous, None)
+        if token:
+            _uid_to_session[uid] = token
+            _session_to_uid[token] = uid
+        (_user_dir(uid) / "session").write_text(token, encoding="utf-8")
 
 
 def _migrate_csv_row(row: dict) -> dict:
@@ -266,13 +305,13 @@ def login(username: str, password: str) -> dict:
         return {"ok": False, "error": "用户名或密码错误。"}
 
     expected_hash = _hash_password(password, uid)
-    if stored_hash != expected_hash:
+    if not hmac.compare_digest(stored_hash or "", expected_hash):
         return {"ok": False, "error": "用户名或密码错误。"}
 
     session_token = secrets.token_hex(32)
 
     user_dir = _user_dir(uid)
-    (user_dir / "session").write_text(session_token, encoding="utf-8")
+    _set_session(uid, session_token)
 
     intro = _read_file(user_dir / "intro")
     created_at = _read_file(user_dir / "created_at")
@@ -292,28 +331,21 @@ def get_user_by_session_token(token: str) -> dict | None:
     if not token:
         return None
 
-    rows = _read_csv()
-    for row in rows:
-        try:
-            uid = int(row["UID"])
-        except (ValueError, KeyError):
-            continue
+    _ensure_session_index()
+    with _session_lock:
+        uid = _session_to_uid.get(token)
+    if uid is None:
+        return None
+    return get_user_by_uid(uid)
 
-        user_dir = _user_dir(uid)
-        session_file = user_dir / "session"
-        if session_file.exists():
-            stored = session_file.read_text(encoding="utf-8").strip()
-            if stored and stored == token:
-                return _build_user_dict(
-                    uid,
-                    _read_file(user_dir / "username"),
-                    _read_file(user_dir / "intro"),
-                    _read_file(user_dir / "created_at"),
-                    _read_file(user_dir / "verified"),
-                    _read_file(user_dir / "role"),
-                )
 
-    return None
+def verify_password(uid: int, password: str) -> bool:
+    """Validate a user's current password without exposing its stored hash."""
+    if not password:
+        return False
+    stored_hash = _read_file(_user_dir(uid) / "password")
+    expected_hash = _hash_password(password, uid)
+    return bool(stored_hash) and hmac.compare_digest(stored_hash, expected_hash)
 
 
 def update_user(uid: int, username: str | None = None, password: str | None = None,
@@ -335,14 +367,18 @@ def update_user(uid: int, username: str | None = None, password: str | None = No
         for row in rows:
             if int(row["UID"]) != uid and row["用户名"] == username:
                 return {"ok": False, "error": "该用户名已被使用。"}
-        (user_dir / "username").write_text(username, encoding="utf-8")
-        _update_csv_row(uid, **{"用户名": username})
 
     if password is not None:
         if len(password) < 4:
             return {"ok": False, "error": "密码至少需要 4 个字符。"}
         if len(password) > 128:
             return {"ok": False, "error": "密码不能超过 128 个字符。"}
+
+    if username is not None:
+        (user_dir / "username").write_text(username, encoding="utf-8")
+        _update_csv_row(uid, **{"用户名": username})
+
+    if password is not None:
         pw_hash = _hash_password(password, uid)
         (user_dir / "password").write_text(pw_hash, encoding="utf-8")
         _update_csv_row(uid, **{"密码": pw_hash})
@@ -378,6 +414,12 @@ def delete_user(uid: int) -> bool:
 
     # 读取用户名，用于清理关联的游戏数据
     username = _read_file(user_dir / "username")
+
+    _ensure_session_index()
+    with _session_lock:
+        token = _uid_to_session.pop(uid, "")
+        if token:
+            _session_to_uid.pop(token, None)
 
     # 删除用户文件夹
     shutil.rmtree(user_dir)
@@ -443,20 +485,16 @@ def logout_token(token: str) -> bool:
     token = token.strip()
     if not token:
         return False
-    rows = _read_csv()
-    for row in rows:
-        try:
-            uid = int(row["UID"])
-        except (ValueError, KeyError):
-            continue
-        user_dir = _user_dir(uid)
-        session_file = user_dir / "session"
+    _ensure_session_index()
+    with _session_lock:
+        uid = _session_to_uid.pop(token, None)
+        if uid is None:
+            return False
+        _uid_to_session.pop(uid, None)
+        session_file = _user_dir(uid) / "session"
         if session_file.exists():
-            stored = session_file.read_text(encoding="utf-8").strip()
-            if stored == token:
-                session_file.write_text("", encoding="utf-8")
-                return True
-    return False
+            session_file.write_text("", encoding="utf-8")
+        return True
 
 
 # ── 验证 ──────────────────────────────────────────────────────
@@ -593,3 +631,47 @@ def lookup_uid(username: str) -> int:
             except (ValueError, KeyError):
                 pass
     return -1
+
+
+def get_user_by_uid(uid: int) -> dict | None:
+    """根据 UID 获取用户公开信息。"""
+    if not user_exists(uid):
+        return None
+    rows = _read_csv()
+    for row in rows:
+        try:
+            if int(row["UID"]) == uid:
+                user_dir = _user_dir(uid)
+                return _build_user_dict(
+                    uid=uid,
+                    username=row.get("用户名", ""),
+                    intro=_read_file(user_dir / "intro"),
+                    created_at=row.get("创建时间", ""),
+                    verified=row.get("已验证", "0"),
+                    role=row.get("权限", "user"),
+                )
+        except (ValueError, KeyError):
+            continue
+    return None
+
+
+def get_user_battle_ids(uid: int) -> list[str]:
+    """获取用户参与的所有对局 ID 列表（按时间倒序）。"""
+    user_dir = _user_dir(uid)
+    battles_file = user_dir / "battles"
+    if not battles_file.is_file():
+        return []
+    text = _read_file(battles_file).strip()
+    if not text:
+        return []
+    # 每行一个 battle_id，倒序（最新的在前）
+    ids = [line.strip() for line in text.splitlines() if line.strip()]
+    ids.reverse()
+    return ids
+
+
+def get_user_battle_page(uid: int, limit: int, offset: int = 0) -> tuple[list[str], int]:
+    """Return one newest-first page of battle IDs and the unpaged total."""
+    ids = get_user_battle_ids(uid)
+    total = len(ids)
+    return ids[offset:offset + limit], total

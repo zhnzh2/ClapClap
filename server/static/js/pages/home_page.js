@@ -9,10 +9,14 @@ window.initHomePage = function () {
 
     // 右上角账号按钮
     var accountBtn = document.getElementById("header-account-btn");
-    if (accountBtn && window.AccountModal) {
-        accountBtn.addEventListener("click", function () {
-            AccountModal.open();
-        });
+    if (accountBtn) {
+        var sessionUser = window.SessionUtils.getSessionUser();
+        if (sessionUser) {
+            accountBtn.textContent = sessionUser.username;
+            accountBtn.addEventListener("click", function () {
+                window.location.href = "/user/" + sessionUser.uid;
+            });
+        }
     }
 
     BootUtils.handleServerBootChange(SERVER_BOOT_ID);

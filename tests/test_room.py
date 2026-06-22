@@ -5,6 +5,7 @@ from uuid import uuid4
 import unittest
 
 from app import users
+from app.battle_recorder import delete_battle
 from app.room_manager import (
     ROOMS,
     ROOM_RUNTIME_LOCKS,
@@ -24,8 +25,17 @@ class TestRoomAndLocalApi(unittest.TestCase):
         self.user_ids: list[int] = []
 
     def tearDown(self):
+        battle_ids = set()
+        for room_id in self.room_ids:
+            room = get_room(room_id)
+            if room and room.battle_id:
+                battle_ids.add(room.battle_id)
+        for uid in self.user_ids:
+            battle_ids.update(users.get_user_battle_ids(uid))
         for room_id in self.room_ids:
             delete_room_by_id(room_id)
+        for battle_id in battle_ids:
+            delete_battle(battle_id)
         for uid in self.user_ids:
             users.delete_user(uid)
 

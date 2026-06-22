@@ -230,8 +230,14 @@
     <script>
         // session 检查已在 local_page.js 的 IIFE 中完成
         var btn = document.getElementById("header-account-btn");
-        if (btn && window.AccountModal) {
-            btn.addEventListener("click", function () { AccountModal.open(); });
+        if (btn) {
+            var user = window.SessionUtils.getSessionUser();
+            if (user) {
+                btn.textContent = user.username;
+                btn.addEventListener("click", function () {
+                    window.location.href = "/user/" + user.uid;
+                });
+            }
         }
         if (typeof ModalUtils !== "undefined" && ModalUtils.bindGlobalModalEvents) {
             ModalUtils.bindGlobalModalEvents();

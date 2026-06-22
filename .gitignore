@@ -46,4 +46,5 @@ Thumbs.db
 
 # Temp / dev scripts
 _refactor_rdp.py
+tests/tmp*/
 task.txt

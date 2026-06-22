@@ -37,7 +37,8 @@ app.register_blueprint(export_bp)
 app.register_blueprint(auth_bp)
 
 import server.socket_events  # noqa: F401
-import server.backup         # noqa: F401; 在 Flask 就绪后启动备份线程
+import server.backup
+
 server.backup.start_backup_thread()
 
 if __name__ == "__main__":

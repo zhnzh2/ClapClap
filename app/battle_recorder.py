@@ -44,7 +44,7 @@ from app.storage import DATA_DIR
 BATTLES_DIR = DATA_DIR / "battles"
 RUB_DIR = BATTLES_DIR / "rub"
 
-_lock = threading.Lock()
+_lock = threading.RLock()
 
 
 def _ensure_dirs() -> None:
@@ -61,6 +61,8 @@ def _rub_path(battle_id: str) -> Path:
 
 
 def _read_battle(battle_id: str) -> dict | None:
+    if len(battle_id) != 17 or not battle_id.isdigit():
+        return None
     path = _battle_path(battle_id)
     rub = _rub_path(battle_id)
     target = path if path.exists() else (rub if rub.exists() else None)
@@ -74,10 +76,13 @@ def _read_battle(battle_id: str) -> dict | None:
 
 def _write_battle(battle_id: str, data: dict) -> None:
     _ensure_dirs()
-    _battle_path(battle_id).write_text(
+    target = _battle_path(battle_id)
+    temporary = target.with_suffix(".json.tmp")
+    temporary.write_text(
         json.dumps(data, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
+    os.replace(temporary, target)
 
 
 # ── 命名 ──────────────────────────────────────────────────────
@@ -138,77 +143,78 @@ def create_battle(participants: dict, start_time: datetime | None = None) -> str
     if start_time is None:
         start_time = datetime.now(timezone.utc)
 
-    base_name = _timestamp_name(start_time)
-    battle_id = _resolve_battle_name(base_name, participants)
+    with _lock:
+        base_name = _timestamp_name(start_time)
+        battle_id = _resolve_battle_name(base_name, participants)
 
-    data = {
-        "battle_id": battle_id,
-        "start_time": start_time.strftime("%Y-%m-%dT%H:%M:%S.") + f"{start_time.microsecond // 1000:03d}Z",
-        "end_time": None,
-        "participants": {
-            seat: {"username": info["username"], "uid": info["uid"], "status": "active"}
-            for seat, info in participants.items()
-        },
-        "spectators": [],
-        "rounds": [],
-        "chat": [],
-    }
+        data = {
+            "battle_id": battle_id,
+            "start_time": start_time.strftime("%Y-%m-%dT%H:%M:%S.") + f"{start_time.microsecond // 1000:03d}Z",
+            "end_time": None,
+            "participants": {
+                seat: {"username": info["username"], "uid": info["uid"], "status": "active"}
+                for seat, info in participants.items()
+            },
+            "spectators": [],
+            "rounds": [],
+            "chat": [],
+        }
 
-    _write_battle(battle_id, data)
+        _write_battle(battle_id, data)
 
-    # 为每位参与者追加到其 battles 文件
-    for info in participants.values():
-        _append_user_battle(info["uid"], battle_id)
+        for info in participants.values():
+            _append_user_battle(info["uid"], battle_id)
 
     return battle_id
 
 
-def record_round(battle_id: str, round_num: int, p1_move: str, p2_move: str) -> None:
-    """记录一回合的动作。"""
-    data = _read_battle(battle_id)
-    if data is None:
-        return
-    data.setdefault("rounds", []).append({
-        "round_num": round_num,
-        "p1_move": p1_move,
-        "p2_move": p2_move,
-    })
-    _write_battle(battle_id, data)
+def record_round(battle_id: str, round_data: dict) -> None:
+    """记录一回合的完整数据。round_data 来自 RoundLog.to_dict()，包含双方动作、
+    资源快照、伤害、格挡、备注、回合胜者等完整信息。"""
+    with _lock:
+        data = _read_battle(battle_id)
+        if data is None:
+            return
+        data.setdefault("rounds", []).append(round_data)
+        _write_battle(battle_id, data)
 
 
 def record_chat(battle_id: str, timestamp: str, sender: str, message: str) -> None:
     """追加一条聊天记录。"""
-    data = _read_battle(battle_id)
-    if data is None:
-        return
-    data.setdefault("chat", []).append({
-        "timestamp": timestamp,
-        "sender": sender,
-        "message": message,
-    })
-    _write_battle(battle_id, data)
+    with _lock:
+        data = _read_battle(battle_id)
+        if data is None:
+            return
+        data.setdefault("chat", []).append({
+            "timestamp": timestamp,
+            "sender": sender,
+            "message": message,
+        })
+        _write_battle(battle_id, data)
 
 
 def end_battle(battle_id: str, winner: int | None) -> None:
     """标记对局结束。winner: 1=P1胜, 2=P2胜, 0=平局, None=未知。"""
-    data = _read_battle(battle_id)
-    if data is None:
-        return
-    now = datetime.now(timezone.utc)
-    data["end_time"] = now.strftime("%Y-%m-%dT%H:%M:%S.") + f"{now.microsecond // 1000:03d}Z"
-    data["winner"] = winner
-    _write_battle(battle_id, data)
+    with _lock:
+        data = _read_battle(battle_id)
+        if data is None:
+            return
+        now = datetime.now(timezone.utc)
+        data["end_time"] = now.strftime("%Y-%m-%dT%H:%M:%S.") + f"{now.microsecond // 1000:03d}Z"
+        data["winner"] = winner
+        _write_battle(battle_id, data)
 
 
 def add_spectator(battle_id: str, spectator_name: str) -> None:
     """添加观战者。"""
-    data = _read_battle(battle_id)
-    if data is None:
-        return
-    spectators = data.setdefault("spectators", [])
-    if spectator_name not in spectators:
-        spectators.append(spectator_name)
-        _write_battle(battle_id, data)
+    with _lock:
+        data = _read_battle(battle_id)
+        if data is None:
+            return
+        spectators = data.setdefault("spectators", [])
+        if spectator_name not in spectators:
+            spectators.append(spectator_name)
+            _write_battle(battle_id, data)
 
 
 # ── 用户 battles 索引 ─────────────────────────────────────────
@@ -245,6 +251,30 @@ def _rename_in_user_battles(old_id: str, new_id: str) -> None:
         lines = path.read_text(encoding="utf-8").strip().splitlines()
         new_lines = [new_id if line.strip() == old_id else line for line in lines]
         path.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
+
+
+def delete_battle(battle_id: str) -> bool:
+    """Delete a battle and remove it from participant indexes."""
+    with _lock:
+        data = _read_battle(battle_id)
+        if data is None:
+            return False
+        for info in data.get("participants", {}).values():
+            uid = info.get("uid")
+            if uid is None:
+                continue
+            path = _user_battles_file(uid)
+            if not path.exists():
+                continue
+            lines = [
+                line.strip()
+                for line in path.read_text(encoding="utf-8").splitlines()
+                if line.strip() and line.strip() != battle_id
+            ]
+            path.write_text(("\n".join(lines) + "\n") if lines else "", encoding="utf-8")
+        _battle_path(battle_id).unlink(missing_ok=True)
+        _rub_path(battle_id).unlink(missing_ok=True)
+        return True
 
 
 # ── 用户注销处理 ─────────────────────────────────────────────

@@ -7,6 +7,21 @@ window.initMatchPage = function () {
         let currentSeat = null;
         let matchStateController = null;
         let matchSocket = null;
+        let matchPollTimer = null;
+
+        function startMatchFallbackPolling() {
+            if (matchPollTimer) return;
+            matchPollTimer = window.setInterval(() => {
+                matchStateController.fetchMatchStatus();
+                matchStateController.syncMyMatchState();
+            }, 5000);
+        }
+
+        function stopMatchFallbackPolling() {
+            if (!matchPollTimer) return;
+            window.clearInterval(matchPollTimer);
+            matchPollTimer = null;
+        }
 
         if (window.SERVER_BOOT_ID) {
             const bootResult = BootUtils.handleServerBootChange(window.SERVER_BOOT_ID);
@@ -295,8 +310,11 @@ window.initMatchPage = function () {
         if (typeof io === "function") {
             matchSocket = io();
             matchSocket.on("connect", () => {
+                stopMatchFallbackPolling();
                 matchSocket.emit("join_match_lobby");
             });
+            matchSocket.on("disconnect", startMatchFallbackPolling);
+            matchSocket.on("connect_error", startMatchFallbackPolling);
             matchSocket.on("match_status", (data) => {
                 if (data && data.ok) {
                     applyMatchStatus(data.status);
@@ -306,10 +324,8 @@ window.initMatchPage = function () {
 
         matchStateController.fetchMatchStatus();
         matchStateController.syncMyMatchState();
+        if (!matchSocket || !matchSocket.connected) {
+            startMatchFallbackPolling();
+        }
         ResumeRoomUtils.applyMatchResumeRoomEntry(setResumeUi);
-
-        setInterval(() => {
-            matchStateController.fetchMatchStatus();
-            matchStateController.syncMyMatchState();
-        }, matchSocket ? 5000 : 1000);
 }

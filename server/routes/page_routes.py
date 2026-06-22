@@ -56,3 +56,15 @@ def room_detail(room_id: str):
 @page_bp.get("/favicon.ico")
 def favicon():
     return "", 204
+
+
+@page_bp.get("/user/<int:uid>")
+def user_page(uid: int):
+    """用户主页。"""
+    return render_template("user.html", uid=uid)
+
+
+@page_bp.get("/record/<battle_id>")
+def record_page(battle_id: str):
+    """对局回放页面。"""
+    return render_template("record.html", battle_id=battle_id)

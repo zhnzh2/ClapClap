@@ -19,6 +19,7 @@ window.initRoomDetailPage = function () {
         let latestRoom = null;
         let roomStateController = null;
         let serverBootChanged = false;
+        let roomPollTimer = null;
 
         const socket = typeof io === "function" ? io() : null;
 
@@ -35,14 +36,35 @@ window.initRoomDetailPage = function () {
             });
         }
 
+        function startRoomFallbackPolling() {
+            if (roomPollTimer) return;
+            roomPollTimer = window.setInterval(fetchRoomState, 5000);
+        }
+
+        function stopRoomFallbackPolling() {
+            if (!roomPollTimer) return;
+            window.clearInterval(roomPollTimer);
+            roomPollTimer = null;
+        }
+
         if (socket) {
             socket.on("connect", () => {
+                stopRoomFallbackPolling();
                 socket.emit("join_room", {
                     room_id: roomId,
                     player_token: myPlayerToken
                 });
                 emitRoomHeartbeat();
             });
+
+            socket.on("disconnect", () => {
+                if (!socket || !socket.connected) {
+                    startRoomFallbackPolling();
+                }
+                setRoomMessage("实时连接暂时中断，已切换为低频同步。", "waiting");
+            });
+
+            socket.on("connect_error", startRoomFallbackPolling);
 
             socket.on("room_state", (data) => {
                 if (!data || !data.ok) {
@@ -1807,13 +1829,13 @@ window.initRoomDetailPage = function () {
                 } else {
                     setRoomMessage(
                         serverBootChanged
-                            ? "检测到服务已重启，正在通过轮询尝试恢复房间状态。"
-                            : "实时连接不可用，已切换为轮询同步模式。",
+                            ? "检测到服务已重启，正在尝试恢复房间状态。"
+                            : "实时连接不可用，已切换为低频同步。",
                         "waiting"
                     );
                 }
                 fetchRoomState();
-                setInterval(fetchRoomState, 3000);
+                startRoomFallbackPolling();
             } catch (error) {
                 console.error("room_detail.js init error:", error);
             }

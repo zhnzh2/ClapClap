@@ -44,6 +44,10 @@
             '  <input type="text" id="am-username" value="' + _esc(user.username) + '" placeholder="输入新用户名" />' +
             '</div>' +
             '<div class="account-field-row">' +
+            '  <label>当前密码</label>' +
+            '  <input type="password" id="am-current-password" placeholder="修改密码时必填" />' +
+            '</div>' +
+            '<div class="account-field-row">' +
             '  <label>新密码</label>' +
             '  <input type="password" id="am-password" placeholder="输入新密码" />' +
             '</div>' +
@@ -73,6 +77,7 @@
         // 保存
         document.getElementById("am-save-btn").addEventListener("click", async function () {
             var newUsername = (document.getElementById("am-username").value || "").trim();
+            var currentPassword = document.getElementById("am-current-password").value || "";
             var newPassword = document.getElementById("am-password").value || "";
             var confirmPw = document.getElementById("am-confirm-password").value || "";
             var newIntro = (document.getElementById("am-intro").value || "").trim();
@@ -83,12 +88,17 @@
                 payload.username = newUsername;
             }
             if (newPassword) {
+                if (!currentPassword) {
+                    _setSaveMsg("修改密码前请输入当前密码。", "error");
+                    return;
+                }
                 if (newPassword !== confirmPw) {
                     _setSaveMsg("两次输入的新密码不一致。", "error");
                     return;
                 }
                 payload.password = newPassword;
                 payload.confirm_password = confirmPw;
+                payload.current_password = currentPassword;
             }
             if (newIntro !== (user.intro || "")) {
                 payload.intro = newIntro;

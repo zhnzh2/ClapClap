@@ -248,8 +248,14 @@
             window.location.href = "/login";
         } else {
             var btn = document.getElementById("header-account-btn");
-            if (btn && window.AccountModal) {
-                btn.addEventListener("click", function () { AccountModal.open(); });
+            if (btn) {
+                var user = window.SessionUtils.getSessionUser();
+                if (user) {
+                    btn.textContent = user.username;
+                    btn.addEventListener("click", function () {
+                        window.location.href = "/user/" + user.uid;
+                    });
+                }
             }
             if (typeof window.initRoomDetailPage === "function") { window.initRoomDetailPage(); }
         }
