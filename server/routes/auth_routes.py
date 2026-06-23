@@ -3,7 +3,7 @@ from __future__ import annotations
 from flask import Blueprint, g, jsonify, request
 
 from app import users
-from app.battle_recorder import _read_battle
+from app.battle_recorder import read_battle
 from server.auth_middleware import require_auth
 
 auth_bp = Blueprint("auth", __name__)
@@ -231,7 +231,7 @@ def api_user_battles(uid: int):
     battles: list[dict] = []
 
     for bid in battle_ids:
-        data = _read_battle(bid)
+        data = read_battle(bid)
         if data is None:
             continue
 
@@ -288,7 +288,7 @@ def api_user_battles(uid: int):
 @require_auth
 def api_battle_detail(battle_id: str):
     """获取单个对局的完整记录。"""
-    data = _read_battle(battle_id)
+    data = read_battle(battle_id)
     if data is None:
         return jsonify({"ok": False, "error": "对局不存在。"}), 404
     return jsonify({"ok": True, "battle": data}), 200

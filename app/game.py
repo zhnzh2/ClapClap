@@ -3,11 +3,13 @@ from __future__ import annotations
 from app.constants import (
     ATTACK_MOVES,
     ATTACK_POWER,
+    CHI_TARGETS,
     DAMAGE_VALUE,
     DEFENSE_POWER,
     MOVE_COSTS,
     Move,
     Resource,
+    SHUANG_CHI_TARGETS,
 )
 from app.models import GameState, PlayerState, RoundLog
 
@@ -63,20 +65,20 @@ class GameEngine:
     @staticmethod
     def _chi_hits(chi_move: Move, target_move: Move) -> bool:
         if chi_move == Move.CHI:
-            return target_move in {Move.PO, Move.SHAN_DIAN}
+            return target_move in CHI_TARGETS
 
         if chi_move == Move.SHUANG_CHI:
-            return target_move in {Move.PO, Move.SHAN_DIAN, Move.SHINING}
+            return target_move in SHUANG_CHI_TARGETS
 
         return False
 
     @staticmethod
     def _attack_is_canceled_by_trick(attack_move: Move, trick_move: Move) -> bool:
         if trick_move == Move.CHI:
-            return attack_move in {Move.PO, Move.SHAN_DIAN}
+            return attack_move in CHI_TARGETS
 
         if trick_move == Move.SHUANG_CHI:
-            return attack_move in {Move.PO, Move.SHAN_DIAN, Move.SHINING}
+            return attack_move in SHUANG_CHI_TARGETS
 
         return False
 
@@ -174,42 +176,42 @@ class GameEngine:
         if not p1_flash and p1_move in {Move.CHI, Move.SHUANG_CHI} and not p2_flash:
             if GameEngine._chi_hits(p1_move, p2_move):
                 if p2_move == Move.PO:
-                    log.p1_note += f"{p1_move.value}命中破，对方反噬 1 点伤害。"
-                    log.p2_note += f"破被{p1_move.value}命中，反噬 1 点伤害。"
+                    log.p1_note = GameEngine._append_note(log.p1_note, f"{p1_move.value}命中破，对方反噬 1 点伤害。")
+                    log.p2_note = GameEngine._append_note(log.p2_note, f"破被{p1_move.value}命中，反噬 1 点伤害。")
                     log.p2_damage_taken += 1
                 elif p2_move == Move.SHAN_DIAN:
                     p2_lightning_eaten = True
-                    log.p1_note += f"{p1_move.value}命中闪电。"
-                    log.p2_note += f"闪电被{p1_move.value}命中，失效且不获得电池。"
+                    log.p1_note = GameEngine._append_note(log.p1_note, f"{p1_move.value}命中闪电。")
+                    log.p2_note = GameEngine._append_note(log.p2_note, f"闪电被{p1_move.value}命中，失效且不获得电池。")
                 elif p2_move == Move.SHINING:
-                    log.p1_note += "双吃命中 Shining，使其失效。"
-                    log.p2_note += "Shining 被双吃命中，失效。"
+                    log.p1_note = GameEngine._append_note(log.p1_note, "双吃命中 Shining，使其失效。")
+                    log.p2_note = GameEngine._append_note(log.p2_note, "Shining 被双吃命中，失效。")
 
         if not p2_flash and p2_move in {Move.CHI, Move.SHUANG_CHI} and not p1_flash:
             if GameEngine._chi_hits(p2_move, p1_move):
                 if p1_move == Move.PO:
-                    log.p2_note += f"{p2_move.value}命中破，对方反噬 1 点伤害。"
-                    log.p1_note += f"破被{p2_move.value}命中，反噬 1 点伤害。"
+                    log.p2_note = GameEngine._append_note(log.p2_note, f"{p2_move.value}命中破，对方反噬 1 点伤害。")
+                    log.p1_note = GameEngine._append_note(log.p1_note, f"破被{p2_move.value}命中，反噬 1 点伤害。")
                     log.p1_damage_taken += 1
                 elif p1_move == Move.SHAN_DIAN:
                     p1_lightning_eaten = True
-                    log.p2_note += f"{p2_move.value}命中闪电。"
-                    log.p1_note += f"闪电被{p2_move.value}命中，失效且不获得电池。"
+                    log.p2_note = GameEngine._append_note(log.p2_note, f"{p2_move.value}命中闪电。")
+                    log.p1_note = GameEngine._append_note(log.p1_note, f"闪电被{p2_move.value}命中，失效且不获得电池。")
                 elif p1_move == Move.SHINING:
-                    log.p2_note += "双吃命中 Shining，使其失效。"
-                    log.p1_note += "Shining 被双吃命中，失效。"
+                    log.p2_note = GameEngine._append_note(log.p2_note, "双吃命中 Shining，使其失效。")
+                    log.p1_note = GameEngine._append_note(log.p1_note, "Shining 被双吃命中，失效。")
 
         # gi 抢镐：只限对方本回合出镐
         if not p1_flash and not p2_flash:
             if p1_move == Move.GI and p2_move == Move.GAO:
                 p1_gi_steal_got = True
-                log.p1_note += "gi 抢镐成功，自己获得 1 个镐。"
-                log.p2_note += "镐被 gi 抢走，本回合无法获得镐。"
+                log.p1_note = GameEngine._append_note(log.p1_note, "gi 抢镐成功，自己获得 1 个镐。")
+                log.p2_note = GameEngine._append_note(log.p2_note, "镐被 gi 抢走，本回合无法获得镐。")
 
             elif p2_move == Move.GI and p1_move == Move.GAO:
                 p2_gi_steal_got = True
-                log.p2_note += "gi 抢镐成功，自己获得 1 个镐。"
-                log.p1_note += "镐被 gi 抢走，本回合无法获得镐。"
+                log.p2_note = GameEngine._append_note(log.p2_note, "gi 抢镐成功，自己获得 1 个镐。")
+                log.p1_note = GameEngine._append_note(log.p1_note, "镐被 gi 抢走，本回合无法获得镐。")
 
         # 正常获得镐
         if not p1_flash and p1_move == Move.GAO and p2_move != Move.GI:
@@ -259,10 +261,10 @@ class GameEngine:
         # -------------------------
         if p1.pickaxe >= 2:
             p1.hp = 0
-            log.p1_note += "触发爆镐。"
+            log.p1_note = GameEngine._append_note(log.p1_note, "触发爆镐。")
         if p2.pickaxe >= 2:
             p2.hp = 0
-            log.p2_note += "触发爆镐。"
+            log.p2_note = GameEngine._append_note(log.p2_note, "触发爆镐。")
 
         # -------------------------
         # 9. 普通攻防结算
@@ -284,8 +286,7 @@ class GameEngine:
                     f"攻击成立，对 P2 造成 {DAMAGE_VALUE[p1_move]} 点伤害。"
                 )
             elif p1_power == p2_def and p2_move in ATTACK_MOVES:
-                log.p1_note += "与对方攻击对掉。"
-
+                log.p1_note = GameEngine._append_note(log.p1_note, "与对方攻击对掉。")
         if (
             not p2_flash
             and p2_move in ATTACK_MOVES
@@ -302,7 +303,7 @@ class GameEngine:
                     f"攻击成立，对 P1 造成 {DAMAGE_VALUE[p2_move]} 点伤害。"
                 )
             elif p2_power == p1_def and p1_move in ATTACK_MOVES:
-                log.p2_note += "与对方攻击对掉。"
+                log.p2_note = GameEngine._append_note(log.p2_note, "与对方攻击对掉。")
 
         # -------------------------
         # 10. 镐挡伤

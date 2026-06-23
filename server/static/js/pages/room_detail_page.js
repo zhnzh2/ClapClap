@@ -139,6 +139,23 @@ window.initRoomDetailPage = function () {
             }
         });
 
+        // 快捷聊天按钮
+        document.querySelectorAll(".quick-chat-btn").forEach(function (btn) {
+            btn.addEventListener("click", function () {
+                var msg = this.getAttribute("data-msg") || "";
+                if (!msg) return;
+                if (!socket || !socket.connected) {
+                    setRoomMessage("实时连接已中断，无法发送消息。", "error");
+                    return;
+                }
+                socket.emit("chat_message", {
+                    room_id: roomId,
+                    player_token: myPlayerToken,
+                    message: msg
+                });
+            });
+        });
+
         function appendChatMessage(msg) {
             var container = document.getElementById("chat-messages");
             if (!container) return;

@@ -7,6 +7,7 @@ from app.users import cleanup_unverified_accounts
 
 CURRENT_STATE = GameState()
 CURRENT_STATE_LOCK = Lock()
+CURRENT_BATTLE_ID: str | None = None
 
 
 def run_periodic_cleanup() -> None:

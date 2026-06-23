@@ -204,6 +204,14 @@
                     <input type="text" id="chat-input" placeholder="输入消息，按 Enter 发送" maxlength="50" />
                     <button type="button" id="chat-send-btn">发送</button>
                 </div>
+                <div class="quick-chat-row">
+                    <button type="button" class="quick-chat-btn" data-msg="打得好！">打得好！</button>
+                    <button type="button" class="quick-chat-btn" data-msg="承让">承让</button>
+                    <button type="button" class="quick-chat-btn" data-msg="稍等">稍等</button>
+                    <button type="button" class="quick-chat-btn" data-msg="再来一局">再来一局</button>
+                    <button type="button" class="quick-chat-btn" data-msg="👍">👍</button>
+                    <button type="button" class="quick-chat-btn" data-msg="😄">😄</button>
+                </div>
             </div>
 
             <div class="card" id="history-section">
@@ -353,13 +361,46 @@
 
             <div class="help-section">
                 <div class="help-section-title">按键操作</div>
-                <p>· 1 / 2 / 3 / 4：选择锦囊动作</p>
-                <p>· Q / W / E / R：选择资源与防御动作</p>
-                <p>· A / S / D / F / G：选择气系攻击动作</p>
-                <p>· Z / X / C / V：选择盾系攻击动作</p>
-                <p>· Enter：确认当前已选择的动作</p>
-                <p>· Backspace：取消当前选择；如果你已经提交且对方尚未提交，则撤回本回合提交</p>
-                <p>· Escape：关闭帮助弹窗、设置弹窗或结束弹窗</p>
+                <div class="keyboard-legend">
+                    <div class="kbd-row">
+                        <div class="kbd-group-label">锦囊</div>
+                        <div class="kbd-keys">
+                            <kbd>1</kbd><span class="kbd-label">你吃</span>
+                            <kbd>2</kbd><span class="kbd-label">双吃</span>
+                            <kbd>3</kbd><span class="kbd-label">闪</span>
+                            <kbd>4</kbd><span class="kbd-label">镐</span>
+                        </div>
+                    </div>
+                    <div class="kbd-row">
+                        <div class="kbd-group-label">资源/防御</div>
+                        <div class="kbd-keys">
+                            <kbd>Q</kbd><span class="kbd-label">气</span>
+                            <kbd>W</kbd><span class="kbd-label">盾</span>
+                            <kbd>E</kbd><span class="kbd-label">十字</span>
+                            <kbd>R</kbd><span class="kbd-label">八卦</span>
+                        </div>
+                    </div>
+                    <div class="kbd-row">
+                        <div class="kbd-group-label">气系攻击</div>
+                        <div class="kbd-keys">
+                            <kbd>A</kbd><span class="kbd-label">gi</span>
+                            <kbd>S</kbd><span class="kbd-label">破</span>
+                            <kbd>D</kbd><span class="kbd-label">冷锋</span>
+                            <kbd>F</kbd><span class="kbd-label">如来</span>
+                            <kbd>G</kbd><span class="kbd-label">黑洞</span>
+                        </div>
+                    </div>
+                    <div class="kbd-row">
+                        <div class="kbd-group-label">盾系攻击</div>
+                        <div class="kbd-keys">
+                            <kbd>Z</kbd><span class="kbd-label">Fire</span>
+                            <kbd>X</kbd><span class="kbd-label">闪电</span>
+                            <kbd>C</kbd><span class="kbd-label">烈焰</span>
+                            <kbd>V</kbd><span class="kbd-label">Shining</span>
+                        </div>
+                    </div>
+                </div>
+                <p style="margin-top:10px;">· Enter：确认已选择动作 &nbsp;· Backspace：取消/撤回 &nbsp;· Esc：关闭弹窗</p>
             </div>
 
             <div class="help-section">

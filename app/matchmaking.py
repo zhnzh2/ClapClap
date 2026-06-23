@@ -303,6 +303,7 @@ def cleanup_expired_match_state(
                         "room_id": None,
                         "seat": None,
                         "room_player_token": None,
+                        "updated_at": datetime.now(timezone.utc).isoformat(),
                     }
                     removed_tokens.append(waiting_token)
 

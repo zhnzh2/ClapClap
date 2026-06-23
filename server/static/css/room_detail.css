@@ -608,3 +608,82 @@
 .chat-input-row button:hover {
     background: #1d4ed8;
 }
+
+/* ── 快捷聊天按钮 ────────────────────────────── */
+.quick-chat-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 6px;
+}
+
+.quick-chat-btn {
+    padding: 3px 10px;
+    border: 1px solid #d1d5db;
+    border-radius: 14px;
+    background: #f3f4f6;
+    color: #374151;
+    font-size: 12px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.quick-chat-btn:hover {
+    background: #e5e7eb;
+    border-color: #9ca3af;
+}
+
+.quick-chat-btn:active {
+    background: #2563eb;
+    color: #fff;
+    border-color: #2563eb;
+}
+
+/* ── 键盘图例 ────────────────────────────── */
+.keyboard-legend {
+    margin: 8px 0 4px;
+}
+
+.kbd-row {
+    display: flex;
+    align-items: center;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+}
+
+.kbd-group-label {
+    font-size: 12px;
+    font-weight: bold;
+    color: #6b7280;
+    min-width: 72px;
+    flex-shrink: 0;
+}
+
+.kbd-keys {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 2px;
+}
+
+.kbd-keys kbd {
+    display: inline-block;
+    min-width: 24px;
+    padding: 2px 6px;
+    font-size: 12px;
+    font-weight: bold;
+    font-family: 'Consolas', 'Courier New', monospace;
+    text-align: center;
+    color: #1f2937;
+    background: #e5e7eb;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    box-shadow: 0 1px 0 #9ca3af;
+}
+
+.kbd-keys .kbd-label {
+    font-size: 11px;
+    color: #6b7280;
+    margin-right: 8px;
+}

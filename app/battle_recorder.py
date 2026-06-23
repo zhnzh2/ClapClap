@@ -60,7 +60,7 @@ def _rub_path(battle_id: str) -> Path:
     return RUB_DIR / f"{battle_id}.json"
 
 
-def _read_battle(battle_id: str) -> dict | None:
+def read_battle(battle_id: str) -> dict | None:
     if len(battle_id) != 17 or not battle_id.isdigit():
         return None
     path = _battle_path(battle_id)
@@ -106,7 +106,7 @@ def _resolve_battle_name(base_name: str, participants: dict) -> str:
     with _lock:
         candidate = base_name
         while True:
-            existing = _read_battle(candidate)
+            existing = read_battle(candidate)
             if existing is None:
                 return candidate
 
@@ -172,7 +172,7 @@ def record_round(battle_id: str, round_data: dict) -> None:
     """记录一回合的完整数据。round_data 来自 RoundLog.to_dict()，包含双方动作、
     资源快照、伤害、格挡、备注、回合胜者等完整信息。"""
     with _lock:
-        data = _read_battle(battle_id)
+        data = read_battle(battle_id)
         if data is None:
             return
         data.setdefault("rounds", []).append(round_data)
@@ -182,7 +182,7 @@ def record_round(battle_id: str, round_data: dict) -> None:
 def record_chat(battle_id: str, timestamp: str, sender: str, message: str) -> None:
     """追加一条聊天记录。"""
     with _lock:
-        data = _read_battle(battle_id)
+        data = read_battle(battle_id)
         if data is None:
             return
         data.setdefault("chat", []).append({
@@ -196,7 +196,7 @@ def record_chat(battle_id: str, timestamp: str, sender: str, message: str) -> No
 def end_battle(battle_id: str, winner: int | None) -> None:
     """标记对局结束。winner: 1=P1胜, 2=P2胜, 0=平局, None=未知。"""
     with _lock:
-        data = _read_battle(battle_id)
+        data = read_battle(battle_id)
         if data is None:
             return
         now = datetime.now(timezone.utc)
@@ -208,7 +208,7 @@ def end_battle(battle_id: str, winner: int | None) -> None:
 def add_spectator(battle_id: str, spectator_name: str) -> None:
     """添加观战者。"""
     with _lock:
-        data = _read_battle(battle_id)
+        data = read_battle(battle_id)
         if data is None:
             return
         spectators = data.setdefault("spectators", [])
@@ -238,7 +238,7 @@ def _append_user_battle(uid: int, battle_id: str) -> None:
 
 def _rename_in_user_battles(old_id: str, new_id: str) -> None:
     """当对局改名时更新用户 battles 文件。"""
-    data = _read_battle(new_id)
+    data = read_battle(new_id)
     if data is None:
         return
     for info in data.get("participants", {}).values():
@@ -256,7 +256,7 @@ def _rename_in_user_battles(old_id: str, new_id: str) -> None:
 def delete_battle(battle_id: str) -> bool:
     """Delete a battle and remove it from participant indexes."""
     with _lock:
-        data = _read_battle(battle_id)
+        data = read_battle(battle_id)
         if data is None:
             return False
         for info in data.get("participants", {}).values():
@@ -292,7 +292,7 @@ def mark_user_deleted_in_battles(username: str, uid: int) -> None:
             continue  # 跳过 rub 子目录
 
         battle_id = path.stem
-        data = _read_battle(battle_id)
+        data = read_battle(battle_id)
         if data is None:
             continue
 

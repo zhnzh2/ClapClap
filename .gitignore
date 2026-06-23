@@ -27,6 +27,7 @@ data/battles/
 .vscode/
 .idea/
 .github/
+.claude/
 CLAUDE.md
 history.md
 

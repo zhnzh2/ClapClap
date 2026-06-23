@@ -95,8 +95,8 @@ class TestUserFeatures(unittest.TestCase):
         self.battle_ids.update({first_id, renamed_id})
 
         self.assertEqual(second_id, first_id)
-        self.assertIsNotNone(battle_recorder._read_battle(first_id))
-        self.assertIsNotNone(battle_recorder._read_battle(renamed_id))
+        self.assertIsNotNone(battle_recorder.read_battle(first_id))
+        self.assertIsNotNone(battle_recorder.read_battle(renamed_id))
 
     def test_battle_list_is_paginated(self):
         user, token = self._register_and_login("history-user")
