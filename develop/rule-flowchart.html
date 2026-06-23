@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>2.0 结算阶段流程图 — ClapClap</title>
+<style>
+  :root {
+    --bg: #0f1117; --card: #1a1d27; --border: #2a2d3a;
+    --text: #e1e4eb; --text2: #8b8fa3; --accent: #6c8cff;
+    --danger: #e0556a; --warn: #d97706; --ok: #2ea043;
+    --phase: #7c3aed;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans SC", sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.6; padding: 32px;
+  }
+  h1 { font-size: 22px; margin-bottom: 4px; }
+  h1 span { color: var(--text2); font-weight: 400; font-size: 14px; }
+  .flow { max-width: 900px; margin: 28px auto; }
+
+  .phase { margin-bottom: 20px; }
+  .phase-header {
+    display: flex; align-items: center; gap: 12px; margin-bottom: 8px;
+  }
+  .phase-tag {
+    width: 36px; height: 36px; border-radius: 50%;
+    background: var(--phase); display: flex; align-items: center; justify-content: center;
+    font-size: 14px; font-weight: 700; flex-shrink: 0;
+  }
+  .phase-title { font-size: 15px; font-weight: 600; }
+  .phase-desc { font-size: 13px; color: var(--text2); margin-left: 48px; }
+
+  .sub-box {
+    margin: 6px 0 6px 48px; padding: 12px 16px;
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 8px; font-size: 13px;
+  }
+  .sub-box .label { color: var(--accent); font-weight: 600; margin-bottom: 4px; }
+  .sub-box .detail { color: var(--text2); font-size: 12px; }
+  .sub-box.danger { border-left: 3px solid var(--danger); }
+  .sub-box.warn { border-left: 3px solid var(--warn); }
+  .sub-box.ok { border-left: 3px solid var(--ok); }
+  .sub-box.info { border-left: 3px solid var(--accent); }
+
+  .arrow {
+    display: flex; align-items: center; justify-content: center;
+    color: var(--text2); font-size: 20px; margin: 4px 0;
+  }
+  .branch {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+    margin: 8px 0 8px 48px;
+  }
+  .branch-item {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 8px; padding: 12px 14px; font-size: 13px;
+  }
+  .branch-item .label { font-weight: 600; margin-bottom: 3px; }
+  .branch-item .label.yes { color: var(--ok); }
+  .branch-item .label.no { color: var(--danger); }
+
+  .layer-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 14px; margin: 3px 0 3px 48px;
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 6px; font-size: 13px;
+  }
+  .layer-row .lnum {
+    width: 24px; height: 24px; border-radius: 50%;
+    background: #1e293b; display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; color: var(--accent); flex-shrink: 0;
+  }
+  .layer-row .lname { font-weight: 500; flex: 1; }
+  .layer-row .ldesc { color: var(--text2); font-size: 12px; }
+
+  .legend {
+    display: flex; gap: 20px; margin: 32px 0; flex-wrap: wrap; font-size: 12px;
+  }
+  .legend span { display: flex; align-items: center; gap: 6px; color: var(--text2); }
+  .legend .dot { width: 8px; height: 8px; border-radius: 50%; }
+</style>
+</head>
+<body>
+
+<h1>ClapClap 2.0 结算阶段流程图 <span>/ Settlement Phase Flowchart</span></h1>
+
+<div class="flow">
+
+  <!-- 阶段 A -->
+  <div class="phase">
+    <div class="phase-header">
+      <div class="phase-tag">A</div>
+      <div class="phase-title">资源合法性检查</div>
+    </div>
+    <div class="phase-desc">出手阶段冻结后，检查所有存活玩家提交的手势</div>
+    <div class="sub-box danger">
+      <div class="label">处罚判定</div>
+      <div class="detail">爆气（气不足）、爆盾（盾不足）→ 蚂蚁，立即死亡，从本回合移除</div>
+    </div>
+    <div class="sub-box ok">
+      <div class="label">手势存在性 &amp; 闪剩余次数 &amp; 分段数量检查</div>
+      <div class="detail">所有检查通过 → 进入下一阶段</div>
+    </div>
+  </div>
+
+  <div class="arrow">▼</div>
+
+  <!-- 阶段 B -->
+  <div class="phase">
+    <div class="phase-header">
+      <div class="phase-tag">B</div>
+      <div class="phase-title">统一亮招</div>
+    </div>
+    <div class="phase-desc">所有玩家手势同时公开。此时不结算攻击，只公开信息。</div>
+    <div class="sub-box info">
+      <div class="label">页面展示</div>
+      <div class="detail">显示所有玩家的手势、非法动作标记、闪的声明</div>
+    </div>
+  </div>
+
+  <div class="arrow">▼</div>
+
+  <!-- 阶段 C — 层 1 -->
+  <div class="phase">
+    <div class="phase-header">
+      <div class="phase-tag">C</div>
+      <div class="phase-title">闪结算 — 速度层 1</div>
+    </div>
+    <div class="sub-box ok">
+      <div class="label">出闪的玩家 → 立即变为已操作对象</div>
+      <div class="detail">本回合不再被任何攻击/锦囊选为目标，不参与后续任何结算。<br>不参与三连检测。</div>
+    </div>
+  </div>
+
+  <div class="arrow">▼</div>
+
+  <!-- 阶段 D — 层 2 -->
+  <div class="phase">
+    <div class="phase-header">
+      <div class="phase-tag">D</div>
+      <div class="phase-title">三连检测与结算 — 速度层 2</div>
+    </div>
+    <div class="phase-desc">检测对象：存活 + 未操作 + 非闪玩家。只看手势类型和克制链。</div>
+
+    <div class="branch">
+      <div class="branch-item">
+        <div class="label yes">✓ 两组独立三连（6 人）</div>
+        <div class="detail" style="color:var(--text2)">本回合直接结束。6 人全部已操作。仅资源手势和加镐仍结算，其余攻击/锦囊无效。</div>
+      </div>
+      <div class="branch-item">
+        <div class="label" style="color:var(--accent)">✓ 存在三连</div>
+        <div class="detail" style="color:var(--text2)">
+          (1,1,1)：三人直接组成<br>
+          (1,1,多)：克制方选择一人<br>
+          (1,多,多)：两步链路选择
+        </div>
+      </div>
+    </div>
+
+    <div class="sub-box warn" style="margin-top:8px">
+      <div class="label">三连结果</div>
+      <div class="detail">
+        三人攻击全无效 → 全部变为已操作对象。<br>
+        出闪电且被"吃" → 不获得电池；出 Fire → 仍获火种。<br>
+        gi-黑洞-闪电三连（无"吃"）→ 闪电仍获电池。
+      </div>
+    </div>
+
+    <div class="branch" style="margin-top:8px">
+      <div class="branch-item">
+        <div class="label no">✗ 无三连</div>
+        <div class="detail" style="color:var(--text2)">直接进入速度层循环</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow">▼</div>
+
+  <!-- 阶段 E — 速度层循环 -->
+  <div class="phase">
+    <div class="phase-header">
+      <div class="phase-tag">E</div>
+      <div class="phase-title">速度层循环 — 层 3 ~ 12</div>
+    </div>
+    <div class="phase-desc">按速度从快到慢逐层处理。每层包含：合法目标计算 → 目标意向提交 → 冲突检测 → 协商/结算。</div>
+
+    <div class="layer-row"><div class="lnum">3</div><div class="lname">你吃 / 双吃</div><div class="ldesc">含双吃拆分的两个你吃。目标：出破/闪电的未操作玩家</div></div>
+    <div class="layer-row"><div class="lnum">4</div><div class="lname">gi 攻击黑洞</div><div class="ldesc">gi → 黑洞。成功则黑洞受 3 点反噬，双方已操作</div></div>
+    <div class="layer-row"><div class="lnum">5</div><div class="lname">黑洞</div><div class="ldesc">可拆 3 段。若在层 4 被 gi 命中则已操作，拆分作废</div></div>
+    <div class="layer-row"><div class="lnum">6</div><div class="lname">如来 / Shining</div><div class="ldesc">Shining 在此层声明拆分（拆为 2 闪电，在层 9 结算）</div></div>
+    <div class="layer-row"><div class="lnum">7</div><div class="lname">冷锋 / 烈焰</div><div class="ldesc">各自攻击或放空</div></div>
+    <div class="layer-row"><div class="lnum">8</div><div class="lname">gi 造成伤害 / gi 抢镐</div><div class="ldesc">同一 gi 二选一：攻击造成伤害 OR 抢镐。必须选目标</div></div>
+    <div class="layer-row"><div class="lnum">9</div><div class="lname">破 / 闪电</div><div class="ldesc">含 Shining 拆分闪电。被吃闪电不获得电池</div></div>
+    <div class="layer-row"><div class="lnum">10</div><div class="lname">Fire</div><div class="ldesc">攻击或放空。已操作仍获火种</div></div>
+    <div class="layer-row"><div class="lnum">11</div><div class="lname">无合法目标的 gi</div><div class="ldesc">gi 失效，保持未操作</div></div>
+    <div class="layer-row"><div class="lnum">12</div><div class="lname">气 / 盾 / 加镐</div><div class="ldesc">已操作仍获资源（被抢镐除外）。镐复活在此时触发</div></div>
+  </div>
+
+  <div class="arrow">▼</div>
+
+  <!-- 阶段 F -->
+  <div class="phase">
+    <div class="phase-header">
+      <div class="phase-tag">F</div>
+      <div class="phase-title">死亡与胜负判定</div>
+    </div>
+    <div class="phase-desc">速度层全部结算完毕后，统一判定。</div>
+
+    <div class="sub-box danger">
+      <div class="label">回合末死亡判定</div>
+      <div class="detail">生命值 ≤ 0 的玩家 → 死亡，下回合移出游戏（转观战）</div>
+    </div>
+
+    <div class="branch">
+      <div class="branch-item">
+        <div class="label yes">✓ 只剩 1 人存活</div>
+        <div class="detail" style="color:var(--text2)">该玩家获胜。记录完整名次。</div>
+      </div>
+      <div class="branch-item">
+        <div class="label no">✗ 全员死亡（0 人存活）</div>
+        <div class="detail" style="color:var(--text2)">平局。所有参与者并列。</div>
+      </div>
+    </div>
+
+    <div class="branch">
+      <div class="branch-item" style="grid-column: span 2">
+        <div class="label" style="color:var(--accent)">→ 多人存活</div>
+        <div class="detail" style="color:var(--text2)">记录本回合死亡玩家的名次（并列同回合死亡者）→ 进入下一回合（回到阶段 A）</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Legend -->
+<div class="legend">
+  <span><span class="dot" style="background:var(--danger)"></span> 死亡/移除</span>
+  <span><span class="dot" style="background:var(--warn)"></span> 决策/分支</span>
+  <span><span class="dot" style="background:var(--ok)"></span> 通过/继续</span>
+  <span><span class="dot" style="background:var(--accent)"></span> 信息展示</span>
+</div>
+
+<p style="text-align:center;color:var(--text2);font-size:12px;margin-top:24px">
+  ClapClap 2.0 结算阶段流程图 · 定稿 2026-06-23 · 对应 develop/rule-spec-2.0.md
+</p>
+
+</body>
+</html>

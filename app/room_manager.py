@@ -31,6 +31,8 @@ class Room:
     chat_messages: list[dict] = field(default_factory=list)
     # 对局记录 ID
     battle_id: str | None = None
+    # 规则版本
+    rule_version: str = "1.0"
 
     def to_dict(self) -> dict:
         return {
@@ -50,6 +52,7 @@ class Room:
             "updated_at": self.updated_at.isoformat(),
             "chat_messages": self.chat_messages,
             "battle_id": self.battle_id,
+            "rule_version": self.rule_version,
         }
 
     @classmethod
@@ -77,6 +80,7 @@ class Room:
             chat_messages=data.get("chat_messages", []),
             battle_id=data.get("battle_id"),
             updated_at=_ensure_utc(datetime.fromisoformat(data["updated_at"])),
+            rule_version=data.get("rule_version", "1.0"),
         )
         room.state = GameState.from_dict(data["state"])
         return room
@@ -275,10 +279,10 @@ def generate_room_id(length: int = 6) -> str:
         if room_id not in ROOMS:
             return room_id
 
-def create_room(player_name: str) -> tuple[Room, str, str]:
+def create_room(player_name: str, rule_version: str = "1.0") -> tuple[Room, str, str]:
     with ROOMS_LOCK:
         room_id = generate_room_id()
-        room = Room(room_id=room_id)
+        room = Room(room_id=room_id, rule_version=rule_version)
         seat, token = room.add_player(player_name)
         ROOMS[room_id] = room
         ROOM_RUNTIME_LOCKS[room_id] = RLock()

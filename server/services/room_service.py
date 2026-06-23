@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from app.game import GameEngine
+from app.game_v2 import GameEngineV2
 from app.room_manager import (
     create_room,
     get_room,
@@ -21,8 +22,8 @@ def _lookup_uid(username: str) -> int:
     return lookup_uid(username)
 
 
-def create_room_service(player_name: str) -> dict:
-    room, seat, player_token = create_room(player_name.strip())
+def create_room_service(player_name: str, rule_version: str = "1.0") -> dict:
+    room, seat, player_token = create_room(player_name.strip(), rule_version=rule_version)
 
     return {
         "ok": True,
@@ -155,7 +156,20 @@ def submit_room_move_service(
             p1_move = parse_move_name(resolved_p1_move_name)
             p2_move = parse_move_name(resolved_p2_move_name)
 
-            GameEngine.resolve_round(room.state, p1_move, p2_move)
+            # ── 引擎分发 ──────────────────────────────────
+            rule_version = room.rule_version
+            if rule_version == "1.0":
+                GameEngine.resolve_round(room.state, p1_move, p2_move)
+            elif rule_version == "2.0":
+                return {
+                    "ok": False,
+                    "error": "2.0 规则引擎尚未实现。阶段 4 完成后可用。",
+                }, 400
+            else:
+                return {
+                    "ok": False,
+                    "error": f"未知的规则版本: {rule_version}",
+                }, 400
             round_num = room.state.round_num
             room.clear_pending_moves()
 
@@ -177,7 +191,7 @@ def submit_room_move_service(
                     if p2_uid >= 0:
                         participants["p2"] = {"username": room.p2_name, "uid": p2_uid}
                 if len(participants) == 2:
-                    room.battle_id = create_battle(participants)
+                    room.battle_id = create_battle(participants, rule_version=rule_version)
 
             # 记录回合（传入完整 RoundLog 数据以支持回放）
             if room.battle_id:

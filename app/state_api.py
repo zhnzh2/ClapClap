@@ -76,4 +76,5 @@ def get_room_payload(room) -> dict:
         "online_status": room.get_online_status_payload(),
         "chat_messages": getattr(room, "chat_messages", []),
         "battle_id": getattr(room, "battle_id", None),
+        "rule_version": getattr(room, "rule_version", "1.0"),
     }

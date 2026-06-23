@@ -8,7 +8,9 @@
 
 | 内容 | 位置 | 说明 |
 |------|------|------|
-| 对话记录 | `.claude/conversations/*.md` | Claude Code 对话的 Markdown 导出，一个对话一个文件 |
+| 对话记录 (Markdown) | `.claude/conversations/*.md` | 人类可读的对话导出，按轮次组织 |
+| 对话记录 (JSON) | `.claude/conversations/*.json` | 结构化对话数据，方便 Claude 程序化解析和导入 |
+| 原始对话数据 | `~/.claude/projects/...ClapClap.../*.jsonl` | Claude Code 原生 JSONL 文件，包含完整对话数据 |
 | 自动记忆 | `~/.claude/projects/...ClapClap.../memory/*.md` | Claude Code 的自动记忆文件（MEMORY.md + 各记忆条目） |
 | 项目代码 | 整个 git 仓库 | 通过 git push/pull 同步，不在此流程范围内 |
 
@@ -42,7 +44,9 @@
   把下面这段话发给 Claude:
   ---
   我刚从另一台设备导入了上下文，请先阅读 .claude/conversations/
-  中的对话记录了解之前的开发对话，然后告诉我你了解到的项目状态。
+  中的 JSON 对话记录（优先读 .json 文件，它们结构清晰便于解析），
+  了解之前的开发对话，然后告诉我你了解到的项目状态。
+  如果 JSON 中没有你需要的信息，可以查看同名的 .md 文件或 jsonl/ 目录下的原始数据。
   ---
 ```
 
@@ -53,9 +57,12 @@
 ### 步骤 A：了解项目状态
 
 ```
-使用 Glob 列出 .claude/conversations/ 中的所有 .md 文件。
-选择最近 2-3 个对话记录，通读它们。
-总结：项目当前状态、最近在做什么、有哪些待办任务。
+1. 使用 Glob 列出 .claude/conversations/ 中的所有 .json 文件。
+2. 选择最近 2-3 个 JSON 对话记录，使用 Read 逐一遍历它们。
+   （JSON 格式包含 session_id、title、turns 数组，每轮有 user/tool_calls/assistant 字段）
+3. 如果对话记录引用了 .claude/conversations/ 中不存在的旧对话，
+   检查 jsonl/ 目录下的原始 JSONL 文件。
+4. 总结：项目当前状态、最近在做什么、有哪些待办任务。
 ```
 
 ### 步骤 B：加载记忆
@@ -84,9 +91,10 @@
 ### `sync_export.py`
 
 导出当前设备上的 Claude 上下文为一个 zip 包：
-- 自动刷新对话记录（先运行 `export_conversations.py --all`）
-- 打包 `.claude/conversations/*.md`
-- 打包 `~/.claude/projects/...ClapClap.../memory/*.md`
+- 自动刷新对话记录（先运行 `export_conversations.py --all`，生成 `.md` + `.json` 两种格式）
+- 打包 `.claude/conversations/*.md` + `.claude/conversations/*.json`
+- 打包原始 `~/.claude/projects/...ClapClap.../*.jsonl`（Claude Code 原生数据）
+- 打包 `~/.claude/projects/...ClapClap.../memory/*.md`（自动记忆）
 - 生成 `manifest.json` 记录导出时间、文件列表
 - 输出到 `.claude/sync/clapclap-sync-YYYYMMDD-HHmmss.zip`
 
@@ -104,5 +112,6 @@
 - 两台设备的项目路径不同，但脚本会自动检测 Claude Code 项目目录
 - `.claude/sync/` 目录在 `.gitignore` 中，如需通过 git 传输 zip 文件，需 `git add -f .claude/sync/clapclap-sync-*.zip`
 - 记忆文件可能包含用户偏好和项目约定，导入后下次对话自动生效
-- 对话记录是只读参考，不会自动加载到 Claude 的上下文中——需要明确要求 Claude 阅读
+- **JSON 优先**：导入后让 Claude 先读 `.json` 文件（结构化、易解析），需要更多细节再看 `.md`（人类可读）或 `jsonl/`（原始完整数据）
+- JSON 文件只包含对话文本摘要，不包含完整工具调用结果；如需完整数据，查看同名 `.md` 文件或 `jsonl/` 下的原始 JSONL
 - git push/pull 负责代码同步，本流程只负责 Claude 上下文的同步

@@ -1,0 +1,37 @@
+# 所有文本文件在提交时自动转为 LF，检出时由各平台 Git 自行决定
+* text=auto
+
+# Python 源码
+*.py text eol=lf
+
+# Web 前端
+*.html text eol=lf
+*.css text eol=lf
+*.js text eol=lf
+*.json text eol=lf
+
+# 文档与配置
+*.md text eol=lf
+*.txt text eol=lf
+*.tex text eol=lf
+*.csv text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+*.cfg text eol=lf
+*.ini text eol=lf
+
+# Shell 脚本
+*.sh text eol=lf
+*.ps1 text eol=lf
+
+# 二进制文件（不转换）
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.zip binary
+*.db binary
+*.sqlite3 binary
+*.sqlite binary

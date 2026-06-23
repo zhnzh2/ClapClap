@@ -69,7 +69,11 @@ def read_battle(battle_id: str) -> dict | None:
     if target is None:
         return None
     try:
-        return json.loads(target.read_text(encoding="utf-8"))
+        data = json.loads(target.read_text(encoding="utf-8"))
+        # 兼容旧记录：无 rule_version 视为 1.0
+        if "rule_version" not in data:
+            data["rule_version"] = "1.0"
+        return data
     except Exception:
         return None
 
@@ -138,7 +142,7 @@ def _increment_name(name: str) -> str:
 
 # ── 创建 / 更新 ──────────────────────────────────────────────
 
-def create_battle(participants: dict, start_time: datetime | None = None) -> str:
+def create_battle(participants: dict, start_time: datetime | None = None, rule_version: str = "1.0") -> str:
     """创建对局记录。participants = {seat: {username, uid}}。返回 battle_id。"""
     if start_time is None:
         start_time = datetime.now(timezone.utc)
@@ -149,6 +153,7 @@ def create_battle(participants: dict, start_time: datetime | None = None) -> str
 
         data = {
             "battle_id": battle_id,
+            "rule_version": rule_version,
             "start_time": start_time.strftime("%Y-%m-%dT%H:%M:%S.") + f"{start_time.microsecond // 1000:03d}Z",
             "end_time": None,
             "participants": {

@@ -18,7 +18,11 @@ room_bp = Blueprint("room", __name__)
 @require_auth
 def api_create_room():
     player_name = get_current_username()
-    result = create_room_service(player_name)
+    data = request.get_json(silent=True) or {}
+    rule_version = data.get("rule_version", "1.0")
+    if rule_version not in ("1.0", "2.0"):
+        return jsonify({"ok": False, "error": f"不支持的规则版本: {rule_version}"}), 400
+    result = create_room_service(player_name, rule_version=rule_version)
     return jsonify(result)
 
 
