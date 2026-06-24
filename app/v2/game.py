@@ -43,6 +43,7 @@ from app.v2.constants import (
     PHASE_FLASH,
     PHASE_RESOURCE_CHECK,
     PHASE_REVEAL,
+    PHASE_ROUND_SUMMARY,
     PHASE_SPEED_LAYER,
     PHASE_THREE_CHAIN,
     PHASE_WAITING_MOVES,
@@ -62,15 +63,38 @@ from app.v2.constants import (
     SPEED_LAYER_RESOURCES,
     SPEED_LAYER_RULAI_SHINING,
     SPEED_LAYER_THREE_CHAIN,
+    SPEED_LAYER_NAMES,
+    SPEED_LAYERS_ORDERED,
     THREE_CHAIN_TYPE_GI_CHI_PO,
     THREE_CHAIN_TYPE_GI_HEIDONG_OTHER,
+    SUB_PHASE_LAYER_EXECUTION,
+    SUB_PHASE_LAYER_INTENT_REVEAL,
+    SUB_PHASE_LAYER_NEGOTIATION,
+    SUB_PHASE_LAYER_RESULT,
+    SUB_PHASE_LAYER_TARGETING,
+    SUB_PHASE_THREE_CHAIN_DETECT,
+    SUB_PHASE_THREE_CHAIN_RESOLVE,
+    SUB_PHASE_THREE_CHAIN_SELECT,
+    DECISION_TYPE_TARGET_SELECT,
+    DECISION_TYPE_THREE_CHAIN_SELECT,
+    DECISION_TYPE_CONFLICT_RESOLVE,
+    STEP_ACTION_SHOW_PHASE,
+    STEP_ACTION_REQUEST_DECISION,
+    STEP_ACTION_LAYER_COMPLETE,
+    STEP_ACTION_ROUND_COMPLETE,
+    STEP_ACTION_GAME_OVER,
+    STEP_ACTION_WAITING,
 )
 from app.v2.models import (
     ConflictRecord,
+    DecisionOption,
+    DecisionRequest,
     EventType,
     GameStateV2,
     PlayerStateV2,
     RoundLogV2,
+    RoundSummary,
+    SettlementStepResult,
     SpeedLayerEvent,
     TargetDeclaration,
     ThreeChainResult,
@@ -121,11 +145,19 @@ _LAYER_ACTIVE_MOVES: dict[int, set[Move]] = {
 class GameEngineV2:
     """2.0 多人版游戏引擎。
 
-    使用方法:
+    支持两种使用模式：
+
+    1. 完整结算（向后兼容，测试用）:
         engine = GameEngineV2(state)
         log = engine.resolve_round(moves)
 
-    其中 moves 是 {player_id: Move} 的字典。
+    2. 步进式结算（Step 6 交互协议）:
+        engine = GameEngineV2(state)
+        result = engine.begin_settlement(moves)
+        # 如果 result.action == "request_decision"，广播决策请求
+        # 前端提交后：
+        result = engine.continue_settlement(decisions)
+        # 重复直到 result.action in ("round_complete", "game_over")
     """
 
     def __init__(self, state: GameStateV2):
@@ -133,20 +165,44 @@ class GameEngineV2:
         self.log: RoundLogV2 | None = None
 
     # ═══════════════════════════════════════════════════════════
-    # 主入口
+    # 主入口：完整结算（向后兼容）
     # ═══════════════════════════════════════════════════════════
 
     def resolve_round(self, moves: dict[str, Move]) -> RoundLogV2:
-        """执行完整回合结算 A~F。
+        """执行完整回合结算 A~F（使用确定性默认值，无暂停）。
+
+        用于测试和向后兼容。Step 6 交互式结算请使用
+        begin_settlement + continue_settlement。
+        """
+        # 先用步进 API 开始结算
+        result = self.begin_settlement(moves)
+
+        # 循环处理决策点（使用默认值自动通过）
+        while result.action == STEP_ACTION_REQUEST_DECISION:
+            # 生成默认决策
+            default_decisions = self._make_default_decisions(result.decision_requests)
+            result = self.continue_settlement(default_decisions)
+
+        # 最终完成（如果 _finish_round 还没被调用）
+        if self.log is not None and self.log not in self.state.history:
+            return self._finish_round()
+        return self.log or RoundLogV2()
+
+    # ═══════════════════════════════════════════════════════════
+    # 步进式 API：开始结算
+    # ═══════════════════════════════════════════════════════════
+
+    def begin_settlement(self, moves: dict[str, Move]) -> SettlementStepResult:
+        """开始结算流程。
+
+        执行 A(资源检查)、B(亮招)、C(闪)、三连检测(D)，
+        然后进入速度层循环。在第一处需要玩家决策的地方暂停。
 
         参数:
             moves: {player_id: Move} 所有存活玩家的手势
 
         返回:
-            RoundLogV2: 完整的回合结算记录
-
-        异常:
-            ValueError: 对局已结束
+            SettlementStepResult: 下一步动作
         """
         # ── 对局已结束检查 ──
         if self.state.is_game_over():
@@ -156,6 +212,7 @@ class GameEngineV2:
         self.state.start_round()
         self.state.target_declarations = {}
         self.state.current_conflicts = []
+        self.state.current_decision_requests = []
         self.log = RoundLogV2(round_num=self.state.round_num)
 
         # 记录原始动作
@@ -173,11 +230,12 @@ class GameEngineV2:
         for p in self.state.alive_players():
             self.log.pre_snapshots[p.player_id] = p.resource_snapshot()
 
-        # ── 阶段 1.1：出手阶段（蛤蟆/蟆蛤检测） ──
+        # ── 阶段 1.1：出手阶段 ──
         self._phase_move_check()
 
         # ── 阶段 A：资源合法性检查 ──
         self.state.phase = PHASE_RESOURCE_CHECK
+        self.state.sub_phase = ""
         self._phase_resource_check()
 
         # ── 阶段 B：统一亮招 ──
@@ -188,23 +246,881 @@ class GameEngineV2:
         self.state.phase = PHASE_FLASH
         self._phase_flash()
 
-        # ── 阶段 D：三连检测与结算（速度层 2） ──
+        # ── 汇总 A~C 阶段的展示数据 ──
+        progress_data = self._build_reveal_progress()
+
+        # ── 阶段 D：三连检测 ──
         self.state.phase = PHASE_THREE_CHAIN
-        self._phase_three_chain()
-        if self.state.is_game_over():
-            return self._finish_round()
+        self.state.sub_phase = SUB_PHASE_THREE_CHAIN_DETECT
+        tc_result = self._begin_three_chain_interactive()
 
-        # ── 阶段 E：速度层循环（层 3~12） ──
+        if tc_result is not None:
+            # 需要三连选人
+            return tc_result
+
+        # ── 三连已处理（无三连或已自动结算） ──
+        if self.state.is_game_over():
+            return self._build_game_over_result()
+
+        # ── 阶段 E：开始速度层循环 ──
         self.state.phase = PHASE_SPEED_LAYER
-        self._phase_speed_layers()
-        if self.state.is_game_over():
-            return self._finish_round()
+        return self._advance_speed_layers()
 
-        # ── 阶段 F：死亡与胜负判定 ──
+    # ═══════════════════════════════════════════════════════════
+    # 步进式 API：继续结算
+    # ═══════════════════════════════════════════════════════════
+
+    def continue_settlement(self, decisions: dict | None = None) -> SettlementStepResult:
+        """接收玩家决策，继续结算流程。
+
+        根据 state.phase 和 state.sub_phase 判断当前处于哪个决策点，
+        应用决策后继续推进状态机，直到下一个决策点或完成。
+
+        参数:
+            decisions: 玩家提交的决策数据，格式取决于决策类型。
+              - target_select: {player_id: [target1_player_id, ...]}
+              - three_chain_select: {selector_player_id: chosen_player_id}
+              - conflict_resolve: {player_id: choice}
+
+        返回:
+            SettlementStepResult: 下一步动作
+        """
+        phase = self.state.phase
+        sub_phase = self.state.sub_phase
+
+        # ── 三连人选选择 ──
+        if phase == PHASE_THREE_CHAIN and sub_phase == SUB_PHASE_THREE_CHAIN_SELECT:
+            return self._handle_three_chain_decisions(decisions or {})
+
+        # ── 速度层目标选择 ──
+        if phase == PHASE_SPEED_LAYER and sub_phase == SUB_PHASE_LAYER_TARGETING:
+            return self._handle_target_selection_decisions(decisions or {})
+
+        # ── 冲突协商 ──
+        if phase == PHASE_SPEED_LAYER and sub_phase == SUB_PHASE_LAYER_NEGOTIATION:
+            return self._handle_conflict_negotiation_decisions(decisions or {})
+
+        # ── 不应到达的状态 ──
+        return SettlementStepResult(
+            action=STEP_ACTION_WAITING,
+            phase=phase,
+            sub_phase=sub_phase,
+            progress_data={"error": f"意外状态: phase={phase}, sub_phase={sub_phase}"},
+        )
+
+    # ═══════════════════════════════════════════════════════════
+    # 决策生成辅助
+    # ═══════════════════════════════════════════════════════════
+
+    def _make_default_decisions(self, requests: list) -> dict:
+        """从决策请求列表生成确定性默认决策。"""
+        decisions = {}
+        for req in requests:
+            req_dict = req.to_dict() if hasattr(req, 'to_dict') else req
+            dtype = req_dict.get("decision_type", "")
+            pid = req_dict.get("player_id", "")
+            options = req_dict.get("options", [])
+
+            if dtype == DECISION_TYPE_TARGET_SELECT:
+                split_count = req_dict.get("split_count", 1)
+                valid = [o for o in options if o.get("is_valid", True)]
+                targets = [o["option_id"] for o in valid[:split_count]]
+                while len(targets) < split_count:
+                    targets.append("")
+                decisions[pid] = targets
+
+            elif dtype == DECISION_TYPE_THREE_CHAIN_SELECT:
+                valid = [o for o in options if o.get("is_valid", True)]
+                decisions[pid] = valid[0]["option_id"] if valid else ""
+
+            elif dtype == DECISION_TYPE_CONFLICT_RESOLVE:
+                valid = [o for o in options if o.get("is_valid", True)]
+                decisions[pid] = valid[0]["option_id"] if valid else ""
+
+        return decisions
+
+    def _build_reveal_progress(self) -> dict:
+        """构造 A~C 阶段的展示数据。"""
+        return {
+            "phase_name": "亮招与闪",
+            "resource_check": {
+                pid: ok
+                for pid, ok in self.log.resource_check_ok.items()
+            },
+            "illegal_players": self.log.illegal_players,
+            "illegal_deaths": [
+                d for d in self.log.deaths
+                if d.get("cause") in (DEATH_BOOM_RESOURCE, DEATH_ILLEGAL)
+            ],
+            "flashed_players": self.log.flashed_players,
+            "moves_revealed": {
+                pid: move
+                for pid, move in self.log.moves.items()
+                if pid not in self.log.illegal_players
+            },
+            "alive_players": [p.player_id for p in self.state.alive_players()],
+        }
+
+    def _build_round_summary_result(self) -> SettlementStepResult:
+        """构造回合总结结果。"""
+        return SettlementStepResult(
+            action=STEP_ACTION_ROUND_COMPLETE,
+            phase=PHASE_ROUND_SUMMARY,
+            sub_phase="",
+            current_speed_layer=0,
+            progress_data={
+                "round_num": self.log.round_num if self.log else self.state.round_num,
+                "moves": self.log.moves if self.log else {},
+                "deaths": self.log.deaths if self.log else [],
+                "winner": self.state.winner,
+                "game_ended": self.state.is_game_over(),
+                "final_ranks": {
+                    p.player_id: p.final_rank
+                    for p in self.state.players
+                    if p.final_rank is not None
+                },
+            },
+        )
+
+    def _build_game_over_result(self) -> SettlementStepResult:
+        """构造对局结束结果。确保 _finish_round 已调用。"""
+        if self.log is not None and self.log not in self.state.history:
+            self._finish_round()
+        return SettlementStepResult(
+            action=STEP_ACTION_GAME_OVER,
+            phase=PHASE_FINISHED,
+            sub_phase="",
+            current_speed_layer=0,
+            progress_data={
+                "round_num": self.log.round_num if self.log else self.state.round_num,
+                "winner": self.state.winner,
+                "final_ranks": {
+                    p.player_id: p.final_rank
+                    for p in self.state.players
+                    if p.final_rank is not None
+                },
+            },
+        )
+
+    # ═══════════════════════════════════════════════════════════
+    # 阶段 1.1：出手阶段 — 蛤蟆 / 蟆蛤检测
+    # ═══════════════════════════════════════════════════════════
+
+    def _begin_three_chain_interactive(self) -> SettlementStepResult | None:
+        """检测三连并判断是否需要交互式选人。
+
+        如果需要选人，返回 SettlementStepResult(decision_request)。
+        如果不需要（无三连或自动结算完成），返回 None。
+        """
+        # 筛选候选玩家
+        candidates = [
+            p for p in self.state.alive_players()
+            if p.is_unresolved() and not p.is_flashed
+        ]
+        if len(candidates) < 3:
+            return None
+
+        result = self._detect_three_chain(candidates)
+        self.state.three_chain_result = result
+
+        if not result.found:
+            return None
+
+        # 两组独立三连 → 自动结算
+        if result.two_groups:
+            self._resolve_two_three_chains(result)
+            return None
+
+        # 检查是否需要玩家选择
+        decision_requests = self._build_three_chain_decisions(result)
+        if decision_requests:
+            self.state.sub_phase = SUB_PHASE_THREE_CHAIN_SELECT
+            self.state.current_decision_requests = decision_requests
+            return SettlementStepResult(
+                action=STEP_ACTION_REQUEST_DECISION,
+                phase=PHASE_THREE_CHAIN,
+                sub_phase=SUB_PHASE_THREE_CHAIN_SELECT,
+                current_speed_layer=SPEED_LAYER_THREE_CHAIN,
+                decision_requests=decision_requests,
+                progress_data={
+                    "phase_name": "三连选人",
+                    "three_chain_type": result.groups[0].get("type", ""),
+                    "candidates": [
+                        {
+                            "player_id": pid,
+                            "username": self.state.get_player(pid).username if self.state.get_player(pid) else pid,
+                            "move": self.state.get_player(pid).pending_move if self.state.get_player(pid) else "",
+                        }
+                        for group in result.groups
+                        for pid in group.get("players", [])
+                    ],
+                },
+            )
+
+        # 无需选人的三连（如 1,1,1）→ 直接结算
+        self.state.sub_phase = SUB_PHASE_THREE_CHAIN_RESOLVE
+        self._resolve_three_chain(result)
+        return None
+
+    def _build_three_chain_decisions(self, result: ThreeChainResult) -> list[DecisionRequest]:
+        """为三连人选选择构造决策请求。"""
+        requests = []
+        for group in result.groups:
+            chain = group.get("selection_chain", [])
+            for sel in chain:
+                selector_id = sel.get("selector", "")
+                options_ids = sel.get("options", [])
+                selector_player = self.state.get_player(selector_id)
+
+                options = []
+                for oid in options_ids:
+                    op = self.state.get_player(oid)
+                    options.append(DecisionOption(
+                        option_id=oid,
+                        label=op.username if op else oid,
+                        is_valid=True,
+                        reason="",
+                    ))
+
+                requests.append(DecisionRequest(
+                    decision_id=f"three_chain_{selector_id}",
+                    decision_type=DECISION_TYPE_THREE_CHAIN_SELECT,
+                    speed_layer=SPEED_LAYER_THREE_CHAIN,
+                    player_id=selector_id,
+                    prompt=f"请选择三连{'第二' if sel == chain[0] and len(chain) > 1 else ''}"
+                           f"{'第三' if sel != chain[0] else ''}角色参与玩家",
+                    options=options,
+                    split_count=1,
+                    timeout_seconds=30,
+                    negotiation_round=0,
+                ))
+
+        return requests
+
+    def _handle_three_chain_decisions(self, decisions: dict) -> SettlementStepResult:
+        """应用三连人选选择，然后结算三连。
+
+        decisions 格式: {selector_player_id: chosen_player_id}
+        """
+        result = self.state.three_chain_result
+
+        # 构建从旧选择到新选择的映射，用于替换 selection_chain 中的 selected
+        selection_map = {}
+        for selector_id, chosen_id in decisions.items():
+            selection_map[selector_id] = chosen_id
+
+        # 替换选择链路中的默认值
+        for group in result.groups:
+            chain = group.get("selection_chain", [])
+            for i, sel in enumerate(chain):
+                selector = sel.get("selector", "")
+                if selector in selection_map:
+                    chain[i]["selected"] = selection_map[selector]
+            # 重建 players 列表
+            group["players"] = self._rebuild_three_chain_players(group)
+
+        # 结算三连
+        self.state.sub_phase = SUB_PHASE_THREE_CHAIN_RESOLVE
+        self._resolve_three_chain(result)
+
+        if self.state.is_game_over():
+            return self._build_game_over_result()
+
+        # 进入速度层循环
+        self.state.phase = PHASE_SPEED_LAYER
+        return self._advance_speed_layers()
+
+    def _rebuild_three_chain_players(self, group: dict) -> list[str]:
+        """根据 selection_chain 重建三连组的 players 列表。"""
+        chain_type = group.get("type", "")
+        selection_chain = group.get("selection_chain", [])
+
+        # 收集所有候选玩家（需要重新检测，这里用简化方式）
+        candidates = [
+            p for p in self.state.alive_players()
+            if p.is_unresolved() and not p.is_flashed
+        ]
+
+        gi_players = [p for p in candidates if p.pending_move == Move.GI.value]
+        if chain_type == THREE_CHAIN_TYPE_GI_CHI_PO:
+            mid_players = [
+                p for p in candidates
+                if p.pending_move in (Move.CHI.value, Move.SHUANG_CHI.value)
+            ]
+            end_players = [p for p in candidates if p.pending_move == Move.PO.value]
+        else:
+            mid_players = [p for p in candidates if p.pending_move == Move.HEI_DONG.value]
+            end_players = [
+                p for p in candidates
+                if p.pending_move in self._non_gi_non_heidong_attacks()
+            ]
+
+        if not gi_players:
+            return []
+
+        gi = gi_players[0].player_id
+        mid = mid_players[0].player_id if mid_players else ""
+        end = end_players[0].player_id if end_players else ""
+
+        for sel in selection_chain:
+            selector = sel.get("selector", "")
+            selected = sel.get("selected", "")
+            if selector == gi:
+                mid = selected
+            elif selector == mid:
+                end = selected
+
+        return [gi, mid, end] if gi and mid and end else group.get("players", [])
+
+    # ═══════════════════════════════════════════════════════════════
+    # 速度层推进（步进式）
+    # ═══════════════════════════════════════════════════════════════
+
+    def _advance_speed_layers(self) -> SettlementStepResult:
+        """推进速度层循环。
+
+        从 state._speed_layer_cursor 开始，逐层处理。
+        每层如果需要目标选择，暂停等待玩家决策。
+        否则直接执行并继续下一层。
+        """
+        layers = SPEED_LAYERS_ORDERED  # [3, 4, 5, ..., 12]
+
+        while self.state._speed_layer_cursor < len(layers):
+            layer = layers[self.state._speed_layer_cursor]
+            self.state.current_speed_layer = layer
+
+            # ── 筛选本层活跃玩家 ──
+            active = self._get_active_players_for_layer(layer)
+
+            # 非始终运行层且无活跃玩家 → 跳过
+            if not active and layer not in self._ALWAYS_RUN_LAYERS:
+                self.state._speed_layer_cursor += 1
+                continue
+
+            self.state.speed_layer_players = [p.player_id for p in active]
+
+            # 重置本层运行时字段
+            for p in active:
+                p.reset_layer_runtime()
+
+            # ── 需要目标选择的层 ──
+            _TARGET_SELECTION_LAYERS = {
+                SPEED_LAYER_CHI_SHUANGCHI,
+                SPEED_LAYER_GI_VS_HEIDONG,
+                SPEED_LAYER_HEIDONG,
+                SPEED_LAYER_RULAI_SHINING,
+                SPEED_LAYER_LENGFENG_LIEYAN,
+                SPEED_LAYER_GI_ATTACK_STEAL,
+                SPEED_LAYER_PO_SHANDIAN,
+                SPEED_LAYER_FIRE,
+            }
+
+            if active and layer in _TARGET_SELECTION_LAYERS:
+                # 构造目标选择决策请求
+                decision_requests = self._build_target_selection_decisions(layer, active)
+
+                if decision_requests:
+                    # 暂停，等待玩家选择目标
+                    self.state.sub_phase = SUB_PHASE_LAYER_TARGETING
+                    self.state.current_decision_requests = decision_requests
+                    return SettlementStepResult(
+                        action=STEP_ACTION_REQUEST_DECISION,
+                        phase=PHASE_SPEED_LAYER,
+                        sub_phase=SUB_PHASE_LAYER_TARGETING,
+                        current_speed_layer=layer,
+                        decision_requests=decision_requests,
+                        progress_data={
+                            "phase_name": f"速度层 {layer}: {SPEED_LAYER_NAMES.get(layer, '')} — 选择目标",
+                            "speed_layer": layer,
+                            "speed_layer_name": SPEED_LAYER_NAMES.get(layer, ""),
+                            "active_players": [
+                                {
+                                    "player_id": p.player_id,
+                                    "username": p.username,
+                                    "move": p.pending_move,
+                                }
+                                for p in active
+                            ],
+                        },
+                    )
+                else:
+                    # 无活跃玩家需要目标选择（如 gi 攻击黑洞时只有黑洞无人出 gi）
+                    self.state._speed_layer_cursor += 1
+                    continue
+
+            # ── 无目标选择的层：直接执行 ──
+            self.state.sub_phase = SUB_PHASE_LAYER_EXECUTION
+            self._execute_current_speed_layer(layer, active)
+            self.state._speed_layer_cursor += 1
+
+        # ── 全部速度层完成 ──
         self.state.phase = PHASE_DEATH_CHECK
+        self.state.sub_phase = ""
         self._phase_death_check()
 
-        return self._finish_round()
+        # 完成回合（记录快照、追加历史）
+        self._finish_round()
+
+        if self.state.is_game_over():
+            return self._build_game_over_result()
+
+        return self._build_round_summary_result()
+
+    def _build_target_selection_decisions(
+        self, layer: int, active: list[PlayerStateV2],
+    ) -> list[DecisionRequest]:
+        """为目标选择阶段构造决策请求。
+
+        每个活跃玩家独立看到自己的合法目标列表。
+        """
+        requests = []
+        for p in active:
+            move = self._parse_move(p.pending_move)
+            if move is None:
+                continue
+
+            legal_targets = self._get_legal_targets_for_player(p, move, layer)
+            is_split = move in (Move.HEI_DONG, Move.SHINING, Move.SHUANG_CHI)
+            split_count = {
+                Move.HEI_DONG: 3,
+                Move.SHINING: 2,
+                Move.SHUANG_CHI: 2,
+            }.get(move, 1)
+
+            options = []
+            for t in legal_targets:
+                options.append(DecisionOption(
+                    option_id=t.player_id,
+                    label=t.username,
+                    is_valid=True,
+                    reason="",
+                ))
+            # 放空选项（gi 除外）
+            if move != Move.GI:
+                options.append(DecisionOption(
+                    option_id="",
+                    label="放空",
+                    is_valid=True,
+                    reason="",
+                ))
+
+            prompt = f"请为 {SPEED_LAYER_NAMES.get(layer, '')} 选择{'攻击' if move in self._non_gi_non_heidong_attacks() else ''}目标"
+            if is_split:
+                prompt += f"（需要选择 {split_count} 段）"
+
+            requests.append(DecisionRequest(
+                decision_id=f"target_{p.player_id}_{layer}",
+                decision_type=DECISION_TYPE_TARGET_SELECT,
+                speed_layer=layer,
+                player_id=p.player_id,
+                prompt=prompt,
+                options=options,
+                split_count=split_count,
+                timeout_seconds=30,
+            ))
+
+        return requests
+
+    def _handle_target_selection_decisions(self, decisions: dict) -> SettlementStepResult:
+        """应用目标选择决策，检测冲突，必要时发起协商。
+
+        decisions 格式:
+          {player_id: [target1_player_id, ...]} 或
+          {player_id: target_player_id}（非拆分技能）
+
+        返回:
+            下一步动作（协商请求 / 执行层 / 继续推进）
+        """
+        layer = self.state.current_speed_layer
+        active = [
+            p for p in self.state.alive_players()
+            if p.player_id in self.state.speed_layer_players
+        ]
+
+        # ── 构建目标声明 ──
+        declarations = self._build_declarations_from_decisions(layer, active, decisions)
+        self.state.target_declarations = declarations
+
+        # ── 检测冲突 ──
+        conflicts = self._detect_layer_conflicts(layer, declarations)
+
+        if conflicts:
+            # 进入意向公开 + 协商阶段
+            self.state.sub_phase = SUB_PHASE_LAYER_INTENT_REVEAL
+            self.state.current_conflicts = conflicts
+            self.state.negotiation_round = 1
+            self.state.negotiation_layer = layer
+            self.state.negotiation_declarations = {
+                pid: d.to_dict() for pid, d in declarations.items()
+            }
+
+            # 构造协商请求
+            negotiation_requests = self._build_conflict_negotiation_decisions(
+                layer, conflicts, declarations,
+            )
+
+            self.state.sub_phase = SUB_PHASE_LAYER_NEGOTIATION
+            self.state.current_decision_requests = negotiation_requests
+
+            return SettlementStepResult(
+                action=STEP_ACTION_REQUEST_DECISION,
+                phase=PHASE_SPEED_LAYER,
+                sub_phase=SUB_PHASE_LAYER_NEGOTIATION,
+                current_speed_layer=layer,
+                decision_requests=negotiation_requests,
+                progress_data={
+                    "phase_name": f"速度层 {layer}: {SPEED_LAYER_NAMES.get(layer, '')} — 冲突协商",
+                    "speed_layer": layer,
+                    "speed_layer_name": SPEED_LAYER_NAMES.get(layer, ""),
+                    "intents": {
+                        pid: {
+                            "player_id": pid,
+                            "username": self.state.get_player(pid).username if self.state.get_player(pid) else pid,
+                            "move": d.move_name,
+                            "targets": d.targets,
+                        }
+                        for pid, d in declarations.items()
+                    },
+                    "conflicts": [c.to_dict() for c in conflicts],
+                    "negotiation_round": 1,
+                },
+            )
+
+        # ── 无冲突：直接执行本层 ──
+        self.state.sub_phase = SUB_PHASE_LAYER_EXECUTION
+        self._execute_current_speed_layer(layer, active, declarations)
+        self.state._speed_layer_cursor += 1
+
+        return self._advance_speed_layers()
+
+    def _build_declarations_from_decisions(
+        self, layer: int, active: list[PlayerStateV2], decisions: dict,
+    ) -> dict[str, TargetDeclaration]:
+        """根据玩家提交的决策构造 TargetDeclaration。"""
+        declarations = {}
+        for p in active:
+            move = self._parse_move(p.pending_move)
+            if move is None:
+                continue
+
+            is_split = move in (Move.HEI_DONG, Move.SHINING, Move.SHUANG_CHI)
+            split_count = {
+                Move.HEI_DONG: 3,
+                Move.SHINING: 2,
+                Move.SHUANG_CHI: 2,
+            }.get(move, 1)
+
+            # 从 decisions 中提取该玩家的目标选择
+            player_choice = decisions.get(p.player_id, [])
+            if isinstance(player_choice, str):
+                player_choice = [player_choice]
+            if not isinstance(player_choice, list):
+                player_choice = []
+
+            # 确保足够的段数
+            targets = list(player_choice[:split_count])
+            while len(targets) < split_count:
+                targets.append("")
+
+            # 验证合法性
+            legal_targets = self._get_legal_targets_for_player(p, move, layer)
+            legal_ids = {t.player_id for t in legal_targets}
+            validated_targets = []
+            for t in targets:
+                if t == "" or t in legal_ids:
+                    validated_targets.append(t)
+                else:
+                    validated_targets.append("")  # 不合法的目标放空
+
+            declarations[p.player_id] = TargetDeclaration(
+                player_id=p.player_id,
+                move_name=move.value,
+                targets=validated_targets,
+                is_split=is_split,
+                split_count=split_count,
+            )
+
+        return declarations
+
+    def _build_conflict_negotiation_decisions(
+        self,
+        layer: int,
+        conflicts: list[ConflictRecord],
+        declarations: dict[str, TargetDeclaration],
+    ) -> list[DecisionRequest]:
+        """为冲突协商构造决策请求。"""
+        requests = []
+        processed = set()
+
+        for conflict in conflicts:
+            if conflict.conflict_type == self.CONFLICT_MUTUAL:
+                # 互攻：双方都可以选择放空或坚持
+                for pid in conflict.involved_players:
+                    if pid in processed:
+                        continue
+                    processed.add(pid)
+                    p = self.state.get_player(pid)
+                    other = [x for x in conflict.involved_players if x != pid][0] if len(conflict.involved_players) > 1 else ""
+                    other_p = self.state.get_player(other) if other else None
+
+                    requests.append(DecisionRequest(
+                        decision_id=f"conflict_mutual_{pid}_{layer}",
+                        decision_type=DECISION_TYPE_CONFLICT_RESOLVE,
+                        speed_layer=layer,
+                        player_id=pid,
+                        prompt=f"你与 {other_p.username if other_p else other} 互相攻击。"
+                               f"请选择：坚持攻击 / 放空",
+                        options=[
+                            DecisionOption(option_id=other, label=f"坚持攻击 {other_p.username if other_p else other}", is_valid=True),
+                            DecisionOption(option_id="", label="放空", is_valid=True),
+                        ],
+                        split_count=1,
+                        timeout_seconds=20,
+                        negotiation_round=self.state.negotiation_round,
+                    ))
+
+            elif conflict.conflict_type == self.CONFLICT_MULTI_ATTACK:
+                # 多攻少：被攻击者选择由谁来攻击自己
+                target = conflict.details.get("target", "")
+                if target in processed:
+                    continue
+                processed.add(target)
+                attackers = conflict.details.get("attackers", [])
+
+                options = []
+                for aid in attackers:
+                    ap = self.state.get_player(aid)
+                    options.append(DecisionOption(
+                        option_id=aid,
+                        label=f"接受 {ap.username if ap else aid} 的攻击",
+                        is_valid=True,
+                    ))
+
+                target_p = self.state.get_player(target)
+                requests.append(DecisionRequest(
+                    decision_id=f"conflict_multi_attack_{target}_{layer}",
+                    decision_type=DECISION_TYPE_CONFLICT_RESOLVE,
+                    speed_layer=layer,
+                    player_id=target,
+                    prompt=f"多人同时攻击你。请选择接受谁的攻击（其余将放空）：",
+                    options=options,
+                    split_count=1,
+                    timeout_seconds=20,
+                    negotiation_round=self.state.negotiation_round,
+                ))
+
+            elif conflict.conflict_type == self.CONFLICT_MULTI_TRICK:
+                # 锦囊多对一：被作用者选择接受谁的锦囊
+                target = conflict.details.get("target", "")
+                if target in processed:
+                    continue
+                processed.add(target)
+                tricksters = conflict.details.get("tricksters", [])
+
+                options = []
+                for tid in tricksters:
+                    tp = self.state.get_player(tid)
+                    options.append(DecisionOption(
+                        option_id=tid,
+                        label=f"接受 {tp.username if tp else tid} 的锦囊",
+                        is_valid=True,
+                    ))
+
+                target_p = self.state.get_player(target)
+                requests.append(DecisionRequest(
+                    decision_id=f"conflict_multi_trick_{target}_{layer}",
+                    decision_type=DECISION_TYPE_CONFLICT_RESOLVE,
+                    speed_layer=layer,
+                    player_id=target,
+                    prompt=f"多人对你使用锦囊。请选择接受谁的锦囊（其余将失效）：",
+                    options=options,
+                    split_count=1,
+                    timeout_seconds=20,
+                    negotiation_round=self.state.negotiation_round,
+                ))
+
+        return requests
+
+    def _handle_conflict_negotiation_decisions(self, decisions: dict) -> SettlementStepResult:
+        """应用冲突协商决策。
+
+        decisions 格式根据冲突类型不同:
+          - mutual: {player_id: target_player_id | ""}  ("坚持攻击的target" / "" 放空)
+          - multi_attack: {target_player_id: chosen_attacker_player_id}
+          - multi_trick: {target_player_id: chosen_trickster_player_id}
+        """
+        layer = self.state.current_speed_layer
+
+        # 从备份恢复目标声明
+        declarations: dict[str, TargetDeclaration] = {}
+        for pid, d_dict in self.state.negotiation_declarations.items():
+            declarations[pid] = TargetDeclaration.from_dict(d_dict)
+
+        conflicts = self.state.current_conflicts
+
+        # ── 应用协商决策 ──
+        for conflict in conflicts:
+            if conflict.conflict_type == self.CONFLICT_MUTUAL:
+                # 互攻：双方各自决定坚持或放空
+                outcomes = []
+                for pid in conflict.involved_players:
+                    choice = decisions.get(pid)
+                    if choice == "" or choice is None:
+                        # 选择了放空
+                        self._remove_target_from_declaration(declarations.get(pid), None)
+                        outcomes.append(f"{pid} 放空")
+                    else:
+                        outcomes.append(f"{pid} 坚持攻击")
+                conflict.resolved = True
+                conflict.details["resolution"] = "互攻击协商完成：" + "，".join(outcomes)
+                self.log.add_event(SpeedLayerEvent(
+                    event_type=EventType.RESOLVED,
+                    speed_layer=layer,
+                    detail=f"协商解决（互攻）: {', '.join(outcomes)}。",
+                    data={"conflict_type": conflict.conflict_type,
+                           "outcomes": outcomes},
+                ))
+
+            elif conflict.conflict_type == self.CONFLICT_MULTI_ATTACK:
+                target = conflict.details.get("target", "")
+                attackers = conflict.details.get("attackers", [])
+                chosen = decisions.get(target, attackers[0] if attackers else "")
+                rest = [a for a in attackers if a != chosen]
+
+                for pid in rest:
+                    self._remove_target_from_declaration(declarations.get(pid), target)
+
+                conflict.resolved = True
+                conflict.details["resolution"] = f"{target} 选择接受 {chosen} 的攻击"
+                conflict.details["chosen"] = chosen
+                conflict.details["missed"] = rest
+
+                self.log.add_event(SpeedLayerEvent(
+                    event_type=EventType.RESOLVED,
+                    speed_layer=layer,
+                    detail=f"协商解决（多攻少）: {target} 选择接受 {chosen} 的攻击，"
+                           f"{', '.join(rest)} 放空。" if rest else "",
+                    data={"conflict_type": conflict.conflict_type,
+                           "chosen": chosen, "missed": rest, "target": target},
+                ))
+
+            elif conflict.conflict_type == self.CONFLICT_MULTI_TRICK:
+                target = conflict.details.get("target", "")
+                tricksters = conflict.details.get("tricksters", [])
+                chosen = decisions.get(target, tricksters[0] if tricksters else "")
+                rest = [t for t in tricksters if t != chosen]
+
+                for pid in rest:
+                    self._remove_target_from_declaration(declarations.get(pid), target)
+
+                conflict.resolved = True
+                conflict.details["resolution"] = f"{target} 选择接受 {chosen} 的锦囊"
+                conflict.details["chosen"] = chosen
+                conflict.details["missed"] = rest
+
+        # ── 协商后，更新状态并检查是否需要更多轮次 ──
+        # 收集已通过协商的互攻对（不再重新检测）
+        negotiated_mutual: set[tuple[str, str]] = set()
+        for conflict in conflicts:
+            if conflict.conflict_type == self.CONFLICT_MUTUAL and conflict.resolved:
+                pair = tuple(sorted(conflict.involved_players[:2]))
+                negotiated_mutual.add(pair)
+
+        # 重新检测冲突（排除已协商过的互攻对）
+        remaining_conflicts = self._detect_layer_conflicts(layer, declarations)
+        remaining_conflicts = [
+            c for c in remaining_conflicts
+            if not (
+                c.conflict_type == self.CONFLICT_MUTUAL
+                and tuple(sorted(c.involved_players[:2])) in negotiated_mutual
+            )
+        ]
+
+        if remaining_conflicts and self.state.negotiation_round < NEGOTIATION_MAX_ROUNDS:
+            # 继续协商
+            self.state.negotiation_round += 1
+            self.state.current_conflicts = remaining_conflicts
+            self.state.negotiation_declarations = {
+                pid: d.to_dict() for pid, d in declarations.items()
+            }
+
+            negotiation_requests = self._build_conflict_negotiation_decisions(
+                layer, remaining_conflicts, declarations,
+            )
+            self.state.current_decision_requests = negotiation_requests
+
+            return SettlementStepResult(
+                action=STEP_ACTION_REQUEST_DECISION,
+                phase=PHASE_SPEED_LAYER,
+                sub_phase=SUB_PHASE_LAYER_NEGOTIATION,
+                current_speed_layer=layer,
+                decision_requests=negotiation_requests,
+                progress_data={
+                    "phase_name": f"速度层 {layer}: {SPEED_LAYER_NAMES.get(layer, '')} — 冲突协商（第{self.state.negotiation_round}轮）",
+                    "speed_layer": layer,
+                    "speed_layer_name": SPEED_LAYER_NAMES.get(layer, ""),
+                    "conflicts": [c.to_dict() for c in remaining_conflicts],
+                    "negotiation_round": self.state.negotiation_round,
+                },
+            )
+
+        # ── 协商完成或达到最大轮次 → 强制执行默认裁决 ──
+        if remaining_conflicts:
+            self._auto_resolve_conflicts(layer, remaining_conflicts, declarations)
+
+        # ── 执行本层 ──
+        self.state.sub_phase = SUB_PHASE_LAYER_EXECUTION
+        active = [
+            p for p in self.state.alive_players()
+            if p.player_id in self.state.speed_layer_players
+        ]
+        self._execute_current_speed_layer(layer, active, declarations)
+        self.state._speed_layer_cursor += 1
+
+        return self._advance_speed_layers()
+
+    def _execute_current_speed_layer(
+        self,
+        layer: int,
+        active: list[PlayerStateV2],
+        declarations: dict[str, TargetDeclaration] | None = None,
+    ) -> None:
+        """执行当前速度层的结算。"""
+        if declarations is None:
+            # 对于无目标选择的层，构建声明
+            _TARGET_SELECTION_LAYERS = {
+                SPEED_LAYER_CHI_SHUANGCHI, SPEED_LAYER_GI_VS_HEIDONG,
+                SPEED_LAYER_HEIDONG, SPEED_LAYER_RULAI_SHINING,
+                SPEED_LAYER_LENGFENG_LIEYAN, SPEED_LAYER_GI_ATTACK_STEAL,
+                SPEED_LAYER_PO_SHANDIAN, SPEED_LAYER_FIRE,
+            }
+            if active and layer in _TARGET_SELECTION_LAYERS:
+                declarations = self._build_layer_declarations(layer, active)
+                conflicts = self._detect_layer_conflicts(layer, declarations)
+                if conflicts:
+                    self._auto_resolve_conflicts(layer, conflicts, declarations)
+
+        # 更新 state 的目标声明
+        if declarations:
+            self.state.target_declarations = declarations
+
+        # 按层分发到具体处理方法
+        layer_handlers = {
+            SPEED_LAYER_CHI_SHUANGCHI: self._resolve_layer_3_chi_shuangchi,
+            SPEED_LAYER_GI_VS_HEIDONG: self._resolve_layer_4_gi_vs_heidong,
+            SPEED_LAYER_HEIDONG: self._resolve_layer_5_heidong,
+            SPEED_LAYER_RULAI_SHINING: self._resolve_layer_6_rulai_shining,
+            SPEED_LAYER_LENGFENG_LIEYAN: self._resolve_layer_7_lengfeng_lieyan,
+            SPEED_LAYER_GI_ATTACK_STEAL: self._resolve_layer_8_gi_attack_steal,
+            SPEED_LAYER_PO_SHANDIAN: self._resolve_layer_9_po_shandian,
+            SPEED_LAYER_FIRE: self._resolve_layer_10_fire,
+            SPEED_LAYER_GI_NO_TARGET: self._resolve_layer_11_gi_no_target,
+            SPEED_LAYER_RESOURCES: self._resolve_layer_12_resources,
+        }
+
+        handler = layer_handlers.get(layer)
+        if handler:
+            handler(active, declarations)
 
     # ═══════════════════════════════════════════════════════════
     # 阶段 1.1：出手阶段 — 蛤蟆 / 蟆蛤检测
@@ -963,13 +1879,21 @@ class GameEngineV2:
         return resolution
 
     @staticmethod
-    def _remove_target_from_declaration(declaration: TargetDeclaration | None, target_id: str) -> None:
+    def _remove_target_from_declaration(declaration: TargetDeclaration | None, target_id: str | None) -> None:
+        """从目标声明中移除指定目标。
+
+        如果 target_id 为 None，清除所有目标（放空）。
+        """
         if declaration is None:
             return
-        declaration.targets = [
-            "" if existing == target_id else existing
-            for existing in declaration.targets
-        ]
+        if target_id is None:
+            # 放空：清除所有目标
+            declaration.targets = ["" for _ in declaration.targets]
+        else:
+            declaration.targets = [
+                "" if existing == target_id else existing
+                for existing in declaration.targets
+            ]
 
     # ── 层 3：你吃 / 双吃 ─────────────────────────────────────
 

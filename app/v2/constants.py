@@ -78,7 +78,7 @@ NEGOTIATION_TIMEOUT_SEC = 30     # 每轮协商限时秒数（暂未启用）
 THREE_CHAIN_TYPE_GI_CHI_PO = "gi_chi_po"            # gi — 你吃/双吃 — 破
 THREE_CHAIN_TYPE_GI_HEIDONG_OTHER = "gi_heidong_other"  # gi — 黑洞 — 其它攻击
 
-# ── 游戏阶段枚举 ──────────────────────────────────────────
+# ── 游戏阶段枚举（顶层，6 个主要阶段）──────────────────────
 
 PHASE_WAITING_MOVES = "waiting_moves"      # 等待所有玩家提交动作
 PHASE_RESOURCE_CHECK = "resource_check"    # 资源合法性检查
@@ -87,4 +87,47 @@ PHASE_FLASH = "flash"                      # 闪结算
 PHASE_THREE_CHAIN = "three_chain"          # 三连检测与结算
 PHASE_SPEED_LAYER = "speed_layer"          # 速度层循环
 PHASE_DEATH_CHECK = "death_check"          # 死亡与胜负判定
+PHASE_ROUND_SUMMARY = "round_summary"      # 回合总结
 PHASE_FINISHED = "finished"                # 对局结束
+
+# ── 游戏子阶段枚举（结算流程内的细分状态）──────────────────
+
+# 三连子阶段
+SUB_PHASE_THREE_CHAIN_DETECT = "three_chain_detect"      # 三连检测中
+SUB_PHASE_THREE_CHAIN_SELECT = "three_chain_select"       # 等待三连人选选择
+SUB_PHASE_THREE_CHAIN_RESOLVE = "three_chain_resolve"     # 三连结算中
+
+# 速度层子阶段
+SUB_PHASE_LAYER_TARGETING = "layer_targeting"              # 等待玩家选择目标
+SUB_PHASE_LAYER_INTENT_REVEAL = "layer_intent_reveal"      # 同速意向公开
+SUB_PHASE_LAYER_NEGOTIATION = "layer_negotiation"          # 冲突协商中
+SUB_PHASE_LAYER_EXECUTION = "layer_execution"              # 执行速度层结算
+SUB_PHASE_LAYER_RESULT = "layer_result"                    # 速度层结算结果展示
+
+# ── 决策类型常量 ──────────────────────────────────────────
+
+DECISION_TYPE_TARGET_SELECT = "target_select"              # 选择攻击/锦囊目标
+DECISION_TYPE_THREE_CHAIN_SELECT = "three_chain_select"    # 三连人选选择
+DECISION_TYPE_CONFLICT_RESOLVE = "conflict_resolve"        # 冲突协商
+
+# ── 结算步进动作 ──────────────────────────────────────────
+
+STEP_ACTION_SHOW_PHASE = "show_phase"          # 展示阶段结果（前端展示）
+STEP_ACTION_REQUEST_DECISION = "request_decision"  # 请求玩家决策
+STEP_ACTION_LAYER_COMPLETE = "layer_complete"  # 速度层完成
+STEP_ACTION_ROUND_COMPLETE = "round_complete"  # 回合完成
+STEP_ACTION_GAME_OVER = "game_over"            # 对局结束
+STEP_ACTION_WAITING = "waiting"                # 等待中（无新动作）
+
+# 阶段展示名称
+PHASE_DISPLAY_NAMES = {
+    PHASE_WAITING_MOVES: "等待出招",
+    PHASE_RESOURCE_CHECK: "资源检查",
+    PHASE_REVEAL: "统一亮招",
+    PHASE_FLASH: "闪结算",
+    PHASE_THREE_CHAIN: "三连检测",
+    PHASE_SPEED_LAYER: "速度层结算",
+    PHASE_DEATH_CHECK: "死亡判定",
+    PHASE_ROUND_SUMMARY: "回合总结",
+    PHASE_FINISHED: "对局结束",
+}

@@ -33,6 +33,7 @@ from app.v2.constants import (
     PLAYER_UNRESOLVED,
     PLAYER_RESOLVED,
     PHASE_WAITING_MOVES,
+    STEP_ACTION_WAITING,
 )
 
 ROOM_ROLE_PLAYER = "player"
@@ -495,6 +496,111 @@ class ThreeChainResult:
 
 
 # ═══════════════════════════════════════════════════════════════
+# 决策系统：前后端交互数据结构
+# ═══════════════════════════════════════════════════════════════
+
+@dataclass
+class DecisionOption:
+    """决策选项。"""
+    option_id: str = ""                     # 选项 ID（如目标 player_id）
+    label: str = ""                         # 显示标签（如用户名）
+    is_valid: bool = True                   # 是否合法
+    reason: str = ""                        # 不合法原因（可空）
+
+    def to_dict(self) -> dict:
+        return {
+            "option_id": self.option_id,
+            "label": self.label,
+            "is_valid": self.is_valid,
+            "reason": self.reason,
+        }
+
+
+@dataclass
+class DecisionRequest:
+    """下发给前端的决策请求。
+
+    当引擎需要玩家输入时生成，通过 Socket.IO 发送给指定玩家。
+    """
+    decision_id: str = ""                   # 本次决策的唯一 ID
+    decision_type: str = ""                 # "target_select" / "three_chain_select" / "conflict_resolve"
+    speed_layer: int = 0                    # 所在速度层（三连选人时 speed_layer=2）
+    player_id: str = ""                     # 需要做决策的玩家
+    prompt: str = ""                        # 人类可读提示
+    options: list = field(default_factory=list)  # DecisionOption 列表
+    split_count: int = 1                    # 需要选择几段（拆分技能 > 1）
+    timeout_seconds: int = 30               # 超时秒数
+    negotiation_round: int = 0              # 当前协商轮次（冲突协商时用）
+
+    def to_dict(self) -> dict:
+        return {
+            "decision_id": self.decision_id,
+            "decision_type": self.decision_type,
+            "speed_layer": self.speed_layer,
+            "player_id": self.player_id,
+            "prompt": self.prompt,
+            "options": [o.to_dict() if isinstance(o, DecisionOption) else o for o in self.options],
+            "split_count": self.split_count,
+            "timeout_seconds": self.timeout_seconds,
+            "negotiation_round": self.negotiation_round,
+        }
+
+
+@dataclass
+class SettlementStepResult:
+    """引擎每步结算的返回结果。
+
+    告知 service 层下一步该做什么。
+    """
+    action: str = STEP_ACTION_WAITING        # show_phase / request_decision / layer_complete / round_complete / game_over
+    phase: str = ""                          # 当前顶层阶段
+    sub_phase: str = ""                      # 当前子阶段（可空）
+    current_speed_layer: int = 0             # 当前速度层
+    decision_requests: list = field(default_factory=list)  # DecisionRequest 列表（多个玩家同时决策时）
+    progress_data: dict = field(default_factory=dict)      # 前端展示数据
+
+    def to_dict(self) -> dict:
+        return {
+            "action": self.action,
+            "phase": self.phase,
+            "sub_phase": self.sub_phase,
+            "current_speed_layer": self.current_speed_layer,
+            "decision_requests": [
+                r.to_dict() if isinstance(r, DecisionRequest) else r
+                for r in self.decision_requests
+            ],
+            "progress_data": self.progress_data,
+        }
+
+
+@dataclass
+class RoundSummary:
+    """回合总结数据。"""
+    round_num: int = 0
+    pre_snapshots: dict = field(default_factory=dict)     # {player_id: resource_dict}
+    post_snapshots: dict = field(default_factory=dict)    # {player_id: resource_dict}
+    deaths: list = field(default_factory=list)            # 本回合死亡列表
+    alive_count: int = 0
+    winner: str | None = None
+    game_ended: bool = False
+    rank_updates: dict = field(default_factory=dict)      # {player_id: rank}
+    events_summary: dict = field(default_factory=dict)    # 事件摘要（按速度层归类）
+
+    def to_dict(self) -> dict:
+        return {
+            "round_num": self.round_num,
+            "pre_snapshots": self.pre_snapshots,
+            "post_snapshots": self.post_snapshots,
+            "deaths": self.deaths,
+            "alive_count": self.alive_count,
+            "winner": self.winner,
+            "game_ended": self.game_ended,
+            "rank_updates": self.rank_updates,
+            "events_summary": self.events_summary,
+        }
+
+
+# ═══════════════════════════════════════════════════════════════
 # 对局总状态
 # ═══════════════════════════════════════════════════════════════
 
@@ -514,17 +620,27 @@ class GameStateV2:
 
     # ── 阶段机 ──
     phase: str = PHASE_WAITING_MOVES
+    sub_phase: str = ""                     # 结算流程内的细分阶段（如 layer_targeting, layer_negotiation）
 
     # ── 当前速度层（仅在 phase == "speed_layer" 时有效） ──
     current_speed_layer: int = 0
     speed_layer_players: list[str] = field(default_factory=list)  # 本层涉及 player_id
 
+    # ── 速度层循环游标 ──
+    _speed_layer_cursor: int = 0            # 当前遍历到的速度层索引（0-based，对应 SPEED_LAYERS_ORDERED）
+
     # ── 运行时结算数据（每回合/每层重置，不持久化） ──
     target_declarations: dict[str, TargetDeclaration] = field(default_factory=dict)
     pending_decisions: dict[str, str] = field(default_factory=dict)  # {player_id: decision_type}
+    current_decision_requests: list = field(default_factory=list)    # list[DecisionRequest] 当前等待的决策
     current_conflicts: list[ConflictRecord] = field(default_factory=list)
     three_chain_result: ThreeChainResult = field(default_factory=ThreeChainResult)
     random_seeds_used: list[dict] = field(default_factory=list)
+
+    # ── 协商状态 ──
+    negotiation_round: int = 0              # 当前协商轮次（0 = 未在协商）
+    negotiation_layer: int = 0              # 正在协商的速度层
+    negotiation_declarations: dict = field(default_factory=dict)  # 协商中的目标声明（序列化备份）
 
     # ── 胜负 ──
     winner: str | None = None              # 获胜者 player_id（"" = 平局，None = 未结束）
@@ -578,13 +694,19 @@ class GameStateV2:
         """开始新回合：重置所有存活玩家的运行时字段。"""
         self.round_num += 1
         self.phase = PHASE_WAITING_MOVES
+        self.sub_phase = ""
         self.current_speed_layer = 0
         self.speed_layer_players = []
+        self._speed_layer_cursor = 0
         self.target_declarations = {}
         self.pending_decisions = {}
+        self.current_decision_requests = []
         self.current_conflicts = []
         self.three_chain_result = ThreeChainResult()
         self.random_seeds_used = []
+        self.negotiation_round = 0
+        self.negotiation_layer = 0
+        self.negotiation_declarations = {}
 
         for p in self.alive_players():
             p.reset_round_runtime()
@@ -624,6 +746,7 @@ class GameStateV2:
         data = {
             "round_num": self.round_num,
             "phase": self.phase,
+            "sub_phase": self.sub_phase,
             "winner": self.winner,
             "rule_version": self.rule_version,
             "max_players": self.max_players,
@@ -631,14 +754,22 @@ class GameStateV2:
             "players": [p.to_dict() for p in self.players],
             "current_speed_layer": self.current_speed_layer,
             "speed_layer_players": self.speed_layer_players,
+            "_speed_layer_cursor": self._speed_layer_cursor,
             "target_declarations": {
                 player_id: declaration.to_dict()
                 for player_id, declaration in self.target_declarations.items()
             },
             "pending_decisions": self.pending_decisions,
+            "current_decision_requests": [
+                r.to_dict() if hasattr(r, 'to_dict') else r
+                for r in self.current_decision_requests
+            ],
             "current_conflicts": [conflict.to_dict() for conflict in self.current_conflicts],
             "three_chain_result": self.three_chain_result.to_dict(),
             "random_seeds_used": self.random_seeds_used,
+            "negotiation_round": self.negotiation_round,
+            "negotiation_layer": self.negotiation_layer,
+            "negotiation_declarations": self.negotiation_declarations,
         }
         if include_history:
             data["history"] = [log.to_dict() for log in self.history]
@@ -670,13 +801,19 @@ class GameStateV2:
             players=players,
             round_num=data.get("round_num", 0),
             phase=data.get("phase", PHASE_WAITING_MOVES),
+            sub_phase=data.get("sub_phase", ""),
             current_speed_layer=data.get("current_speed_layer", 0),
             speed_layer_players=data.get("speed_layer_players", []),
+            _speed_layer_cursor=data.get("_speed_layer_cursor", 0),
             target_declarations=target_declarations,
             pending_decisions=data.get("pending_decisions", {}),
+            current_decision_requests=data.get("current_decision_requests", []),
             current_conflicts=current_conflicts,
             three_chain_result=ThreeChainResult.from_dict(data.get("three_chain_result", {})),
             random_seeds_used=data.get("random_seeds_used", []),
+            negotiation_round=data.get("negotiation_round", 0),
+            negotiation_layer=data.get("negotiation_layer", 0),
+            negotiation_declarations=data.get("negotiation_declarations", {}),
             winner=data.get("winner"),
             rule_version=data.get("rule_version", "2.0"),
             max_players=data.get("max_players", 6),

@@ -363,6 +363,13 @@ class RoomV2:
                 return s
         return None
 
+    def get_seat_by_player_id(self, player_id: str) -> SeatV2 | None:
+        """根据 player_id 查找席位。"""
+        for s in self.seats:
+            if s.player_id == player_id:
+                return s
+        return None
+
     def get_spectator_by_token(self, token: str) -> SpectatorV2 | None:
         for s in self.spectators:
             if s.spectator_token == token:

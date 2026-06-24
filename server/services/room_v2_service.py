@@ -8,6 +8,11 @@ ClapClap 2.0 房间服务 — 业务逻辑 + 引擎连接。
 from __future__ import annotations
 
 from app.constants import Move
+from app.v2.constants import (
+    STEP_ACTION_GAME_OVER,
+    STEP_ACTION_REQUEST_DECISION,
+    STEP_ACTION_ROUND_COMPLETE,
+)
 from app.v2.game import GameEngineV2
 from app.v2.room import LEAVE_QUIT, LEAVE_SURRENDER, RoomV2
 from app.v2.room_manager import (
@@ -317,7 +322,7 @@ def submit_move_v2_service(
     all_submitted = room.all_moves_submitted()
 
     if all_submitted:
-        # ── 触发引擎结算 ──
+        # ── 触发引擎结算（步进式 API）──
         alive = room.game_state.alive_players()
         moves: dict[str, Move] = {}
         for p in alive:
@@ -335,7 +340,7 @@ def submit_move_v2_service(
 
         try:
             engine = GameEngineV2(room.game_state)
-            log = engine.resolve_round(moves)
+            result = engine.begin_settlement(moves)
         except Exception as exc:
             import traceback
             traceback.print_exc()
@@ -344,35 +349,57 @@ def submit_move_v2_service(
                 "error": f"引擎结算异常: {exc}",
             }, 500
 
-        # ── 结算后处理 ──
-        room.clear_round_state()
-
-        if room.game_state.is_game_over():
-            room.status = "finished"
-            _try_end_battle(room)
-
-        _try_record_round(room)
+        # ── 持久化 ──
         persist_room_v2(room)
 
-        from server.socket_events_v2 import emit_room_v2_state
+        # ── 广播进度 ──
+        from server.socket_events_v2 import (
+            emit_room_v2_state,
+            emit_settlement_progress_v2,
+        )
         emit_room_v2_state(room_id)
+        emit_settlement_progress_v2(room_id, result)
 
-        # 构建结算预览
-        resolved_preview = {
-            "round_num": log.round_num,
-            "moves": log.moves,
-            "deaths": log.deaths,
-            "winner": room.game_state.winner,
-            "game_ended": log.game_ended,
-        }
+        # ── 根据结算结果返回不同响应 ──
+        if result.action == STEP_ACTION_REQUEST_DECISION:
+            return {
+                "ok": True,
+                "message": "本回合结算已开始，等待玩家决策。",
+                "resolved": False,
+                "settlement_phase": "awaiting_decisions",
+                "progress": result.to_dict() if hasattr(result, 'to_dict') else result,
+                "room": get_room_v2_payload(room, requester_token=player_token),
+            }, 200
 
-        return {
-            "ok": True,
-            "message": "全员已提交，本回合已结算。",
-            "resolved": True,
-            "resolved_preview": resolved_preview,
-            "room": get_room_v2_payload(room, requester_token=player_token),
-        }, 200
+        elif result.action == STEP_ACTION_ROUND_COMPLETE:
+            _handle_round_complete(room)
+            return {
+                "ok": True,
+                "message": "本回合已结算。",
+                "resolved": True,
+                "progress": result.to_dict() if hasattr(result, 'to_dict') else result,
+                "room": get_room_v2_payload(room, requester_token=player_token),
+            }, 200
+
+        elif result.action == STEP_ACTION_GAME_OVER:
+            _handle_game_over(room)
+            return {
+                "ok": True,
+                "message": "对局已结束！",
+                "resolved": True,
+                "game_over": True,
+                "progress": result.to_dict() if hasattr(result, 'to_dict') else result,
+                "room": get_room_v2_payload(room, requester_token=player_token),
+            }, 200
+
+        else:
+            return {
+                "ok": True,
+                "message": "结算中。",
+                "resolved": False,
+                "progress": result.to_dict() if hasattr(result, 'to_dict') else result,
+                "room": get_room_v2_payload(room, requester_token=player_token),
+            }, 200
 
     # ── 等待其他玩家 ──
     from server.socket_events_v2 import emit_room_v2_state
@@ -488,3 +515,140 @@ def change_seat_service(room_id: str, player_token: str, new_seat_index: int) ->
         "message": f"已更换到席位 {new_seat_index}。",
         "room": get_room_v2_payload(room, requester_token=player_token),
     }, 200
+
+
+# ═══════════════════════════════════════════════════════════════
+# 结算后处理辅助
+# ═══════════════════════════════════════════════════════════════
+
+def _handle_round_complete(room: RoomV2) -> None:
+    """回合完成的后续处理。"""
+    room.clear_round_state()
+    _try_record_round(room)
+    persist_room_v2(room)
+
+
+def _handle_game_over(room: RoomV2) -> None:
+    """对局结束的后续处理。"""
+    room.clear_round_state()
+    room.status = "finished"
+    _try_end_battle(room)
+    _try_record_round(room)
+    persist_room_v2(room)
+
+
+# ═══════════════════════════════════════════════════════════════
+# 决策提交（Step 6 交互协议）
+# ═══════════════════════════════════════════════════════════════
+
+def submit_decision_v2_service(
+    room_id: str,
+    player_token: str,
+    decisions: dict,
+) -> tuple[dict, int]:
+    """提交结算中的决策（目标选择、冲突协商等）。
+
+    Args:
+        room_id: 房间 ID
+        player_token: 玩家 token
+        decisions: 决策数据，格式取决于 decision_type。
+          例如 {"p1": ["p3"]} 表示 p1 选择目标 p3
+
+    Returns:
+        (response_dict, http_status)
+    """
+    room = get_room_v2(room_id)
+    if room is None:
+        return {
+            "ok": False,
+            "error": "房间不存在。",
+            "error_code": "ROOM_NOT_FOUND",
+        }, 404
+
+    # ── 身份验证 ──
+    seat = room.get_seat_by_token(player_token.strip())
+    if seat is None:
+        return {
+            "ok": False,
+            "error": "身份无效，不能提交决策。",
+        }, 403
+
+    if room.game_state is None:
+        return {"ok": False, "error": "对局状态异常。"}, 500
+
+    # ── 检查是否在等待决策阶段 ──
+    if room.game_state.phase not in ("three_chain", "speed_layer"):
+        return {"ok": False, "error": "当前不在决策阶段。"}, 400
+
+    if not room.game_state.current_decision_requests:
+        return {"ok": False, "error": "当前没有待处理的决策请求。"}, 400
+
+    # ── 验证决策者身份 ──
+    player_id = seat.player_id
+    is_involved = any(
+        (r.player_id if hasattr(r, 'player_id') else r.get('player_id', '')) == player_id
+        for r in room.game_state.current_decision_requests
+    )
+    if not is_involved:
+        return {"ok": False, "error": "你不需要提交决策。"}, 403
+
+    # ── 调用引擎继续结算 ──
+    try:
+        engine = GameEngineV2(room.game_state)
+        result = engine.continue_settlement(decisions)
+    except Exception as exc:
+        import traceback
+        traceback.print_exc()
+        return {
+            "ok": False,
+            "error": f"引擎结算异常: {exc}",
+        }, 500
+
+    # ── 持久化 ──
+    persist_room_v2(room)
+
+    # ── 广播进度 ──
+    from server.socket_events_v2 import (
+        emit_room_v2_state,
+        emit_settlement_progress_v2,
+    )
+    emit_room_v2_state(room_id)
+    emit_settlement_progress_v2(room_id, result)
+
+    # ── 根据结算结果返回不同响应 ──
+    if result.action == STEP_ACTION_REQUEST_DECISION:
+        return {
+            "ok": True,
+            "message": "决策已接收，等待进一步协商。",
+            "settlement_phase": "awaiting_decisions",
+            "progress": result.to_dict() if hasattr(result, 'to_dict') else result,
+            "room": get_room_v2_payload(room, requester_token=player_token),
+        }, 200
+
+    elif result.action == STEP_ACTION_ROUND_COMPLETE:
+        _handle_round_complete(room)
+        return {
+            "ok": True,
+            "message": "本回合已结算。",
+            "resolved": True,
+            "progress": result.to_dict() if hasattr(result, 'to_dict') else result,
+            "room": get_room_v2_payload(room, requester_token=player_token),
+        }, 200
+
+    elif result.action == STEP_ACTION_GAME_OVER:
+        _handle_game_over(room)
+        return {
+            "ok": True,
+            "message": "对局已结束！",
+            "game_over": True,
+            "progress": result.to_dict() if hasattr(result, 'to_dict') else result,
+            "room": get_room_v2_payload(room, requester_token=player_token),
+        }, 200
+
+    else:
+        return {
+            "ok": True,
+            "message": "结算进度已更新。",
+            "progress": result.to_dict() if hasattr(result, 'to_dict') else result,
+            "room": get_room_v2_payload(room, requester_token=player_token),
+        }, 200

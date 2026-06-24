@@ -249,3 +249,81 @@ def api_rematch_vote(room_id: str):
 
     result, status_code = rematch_vote_service(room_id, player_token.strip(), vote)
     return jsonify(result), status_code
+
+
+# ═══════════════════════════════════════════════════════════════
+# Step 6：提交结算决策
+# ═══════════════════════════════════════════════════════════════
+
+@room_v2_bp.route("/<room_id>/decision", methods=["POST"])
+def submit_decision_v2(room_id: str):
+    """提交结算中的决策（目标选择、冲突协商等）。
+
+    Body (JSON):
+        player_token: str    — 玩家身份 token
+        decisions: dict      — 决策数据
+
+    decisions 格式示例:
+        # 目标选择（非拆分技能）
+        {"p1": ["p3"]}
+        # 目标选择（拆分技能）
+        {"p1": ["p3", "p4"]}  # 双吃2段，或黑洞3段
+        # 冲突协商（多攻少，被攻击者选择）
+        {"p3": "p1"}
+        # 冲突协商（互攻）
+        {"p1": "p2", "p2": ""}  # p1坚持攻击p2，p2放空
+    """
+    data = flask_request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({"ok": False, "error": "请求体必须是 JSON。"}), 400
+
+    player_token = data.get("player_token")
+    if not isinstance(player_token, str) or not player_token.strip():
+        return jsonify({"ok": False, "error": "player_token 不能为空。"}), 400
+
+    decisions = data.get("decisions", {})
+    if not isinstance(decisions, dict):
+        return jsonify({"ok": False, "error": "decisions 必须是字典。"}), 400
+
+    from server.services.room_v2_service import submit_decision_v2_service
+    result, status_code = submit_decision_v2_service(
+        room_id, player_token.strip(), decisions,
+    )
+    return jsonify(result), status_code
+
+
+# ═══════════════════════════════════════════════════════════════
+# Step 6：获取当前决策请求（方便前端轮询）
+# ═══════════════════════════════════════════════════════════════
+
+@room_v2_bp.route("/<room_id>/decisions", methods=["GET"])
+def get_pending_decisions_v2(room_id: str):
+    """获取当前待处理的决策请求列表。
+
+    前端可以在 `settlement_progress_v2` 事件之外轮询此端点。
+    """
+    room = get_room_v2(room_id)
+    if room is None:
+        return jsonify({
+            "ok": False,
+            "error": "房间不存在。",
+            "error_code": "ROOM_NOT_FOUND",
+        }), 404
+
+    if room.game_state is None:
+        return jsonify({"ok": True, "decisions": [], "phase": ""}), 200
+
+    decision_requests = []
+    for r in room.game_state.current_decision_requests:
+        if hasattr(r, 'to_dict'):
+            decision_requests.append(r.to_dict())
+        else:
+            decision_requests.append(r)
+
+    return jsonify({
+        "ok": True,
+        "phase": room.game_state.phase,
+        "sub_phase": room.game_state.sub_phase,
+        "current_speed_layer": room.game_state.current_speed_layer,
+        "decision_requests": decision_requests,
+    }), 200

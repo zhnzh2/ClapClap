@@ -185,6 +185,92 @@ def handle_chat_message_v2(data):
     emit("chat_v2_broadcast", {"ok": True, "message": msg}, to=room_id)
 
 
+def emit_settlement_progress_v2(room_id: str, step_result) -> None:
+    """广播结算进度给房间内所有人。
+
+    Args:
+        room_id: 房间 ID
+        step_result: SettlementStepResult 实例
+    """
+    result_dict = step_result.to_dict() if hasattr(step_result, 'to_dict') else step_result
+
+    # 广播给所有玩家（更新游戏进度）
+    socketio.emit(
+        "settlement_progress_v2",
+        {
+            "ok": True,
+            "room_id": room_id,
+            "action": result_dict.get("action", ""),
+            "phase": result_dict.get("phase", ""),
+            "sub_phase": result_dict.get("sub_phase", ""),
+            "current_speed_layer": result_dict.get("current_speed_layer", 0),
+            "progress_data": result_dict.get("progress_data", {}),
+        },
+        to=room_id,
+    )
+
+    # 如果有决策请求，分别发送给对应的玩家
+    decision_requests = result_dict.get("decision_requests", [])
+    if decision_requests:
+        room = get_room_v2(room_id)
+        if room is None:
+            return
+
+        # 按玩家分组发送（每个玩家只看自己的决策）
+        for req in decision_requests:
+            player_id = req.get("player_id", "")
+            # 找到该玩家的 session
+            seat = room.get_seat_by_player_id(player_id)
+            if seat is None:
+                continue
+            # 广播给整个房间，前端根据 player_id 过滤
+            # （Socket.IO 的 private messaging 需要知道 socket id，这里简化处理）
+            pass
+
+        # 广播所有玩家的决策请求摘要（每个玩家根据 player_id 过滤）
+        socketio.emit(
+            "decision_requests_v2",
+            {
+                "ok": True,
+                "room_id": room_id,
+                "decision_requests": decision_requests,
+            },
+            to=room_id,
+        )
+
+
+@socketio.on("submit_decision_v2")
+def handle_submit_decision_v2(data):
+    """玩家通过 Socket.IO 提交结算决策。"""
+    room_id = data.get("room_id")
+    player_token = data.get("player_token")
+    decisions = data.get("decisions", {})
+
+    if not isinstance(room_id, str) or not isinstance(player_token, str):
+        emit("decision_v2_error", {"ok": False, "error": "参数无效。"})
+        return
+
+    from server.services.room_v2_service import submit_decision_v2_service
+
+    response_data, status = submit_decision_v2_service(room_id, player_token, decisions)
+
+    if status >= 400:
+        emit("decision_v2_error", {
+            "ok": False,
+            "error": response_data.get("error", "决策提交失败。"),
+        })
+
+
+@socketio.on("leave_room_v2")
+def handle_leave_room_v2(data):
+    """玩家主动离开 v2 房间的 Socket.IO 频道。"""
+    room_id = data.get("room_id")
+    if isinstance(room_id, str):
+        # 只是离开 Socket.IO 房间，不退出游戏房间
+        from flask_socketio import leave_room
+        leave_room(room_id)
+
+
 def persist_room_v2(room) -> None:
     """持久化 v2 房间（从 socket_events 调用的便捷函数）。"""
     from app.v2.room_manager import persist_room_v2 as _persist
