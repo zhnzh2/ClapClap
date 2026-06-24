@@ -52,7 +52,23 @@
 
 ## Claude 操作指令
 
-**如果你是 Claude，收到用户上述请求后，请执行以下操作：**
+**如果你是 Claude，收到用户下述任一触发词后，请按步骤自动执行全部操作，不需要用户再手动操作。**
+
+### 触发词
+
+> "我已经切换到Linux Ubuntu，请按照SYNC导入对话记录"
+> "我已经切换到Windows，请按照SYNC导入对话记录"
+
+收到上述触发词后，执行以下步骤：
+
+### 步骤 0：执行导入脚本
+
+```
+1. 使用 Glob 列出 .claude/sync/ 下所有 clapclap-sync-*.zip 文件，按文件名排序。
+2. 取最新的一个 zip 文件。
+3. 运行: python .claude/scripts/sync_import.py .claude/sync/<最新zip文件名>
+4. 打印导入结果给用户看。
+```
 
 ### 步骤 A：了解项目状态
 

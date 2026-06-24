@@ -26,7 +26,7 @@ from app.constants import (
     INITIAL_SPARK,
     MAX_FLASH_USE,
 )
-from app.constants_v2 import (
+from app.v2.constants import (
     DEATH_NORMAL,
     PLAYER_ALIVE,
     PLAYER_DEAD,

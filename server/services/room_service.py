@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from app.game import GameEngine
-from app.game_v2 import GameEngineV2
+from app.v2.game import GameEngineV2
 from app.room_manager import (
     create_room,
     get_room,

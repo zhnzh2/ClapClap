@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import unittest
 
-from app.constants_v2 import (
+from app.v2.constants import (
     DEATH_NORMAL,
     PHASE_SPEED_LAYER,
     PLAYER_DEAD,
 )
-from app.models_v2 import (
+from app.v2.models import (
     ConflictRecord,
     EventType,
     GameStateV2,
