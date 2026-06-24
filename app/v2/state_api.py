@@ -1,0 +1,197 @@
+"""
+ClapClap 2.0 状态 API — 生成房间和对局状态载荷。
+
+与 1.0 (app/state_api.py) 完全独立。
+载荷结构以「玩家列表」替代 p1/p2 双人字段。
+"""
+
+from __future__ import annotations
+
+from app.constants import ATTACK_MOVES, DEFENSE_MOVES, Move, RESOURCE_MOVES, TRICK_MOVES
+from app.v2.game import GameEngineV2
+from app.v2.models import GameStateV2, PlayerStateV2
+from app.v2.room import RoomV2
+
+
+# ═══════════════════════════════════════════════════════════════
+# 动作目录
+# ═══════════════════════════════════════════════════════════════
+
+def get_move_catalog_v2() -> list[dict]:
+    """获取动作目录（与 1.0 共享 Move 枚举）。"""
+    result: list[dict] = []
+
+    for move in Move:
+        if move in RESOURCE_MOVES:
+            category = "resource"
+        elif move in ATTACK_MOVES:
+            category = "attack"
+        elif move in DEFENSE_MOVES:
+            category = "defense"
+        elif move in TRICK_MOVES:
+            category = "trick"
+        else:
+            category = "unknown"
+
+        result.append({
+            "name": move.name,
+            "label": move.value,
+            "category": category,
+        })
+
+    return result
+
+
+# ═══════════════════════════════════════════════════════════════
+# 合法动作
+# ═══════════════════════════════════════════════════════════════
+
+def get_legal_moves_v2(player: PlayerStateV2) -> list[str]:
+    """获取某个玩家的合法动作列表。"""
+    legal: list[str] = []
+    for move in Move:
+        if GameEngineV2.can_afford(player, move):
+            legal.append(move.name)
+    return legal
+
+
+def get_all_legal_moves_v2(state: GameStateV2) -> dict[str, list[str]]:
+    """获取所有存活玩家的合法动作。{player_id: [move_name, ...]}"""
+    result: dict[str, list[str]] = {}
+    for p in state.alive_players():
+        result[p.player_id] = get_legal_moves_v2(p)
+    return result
+
+
+# ═══════════════════════════════════════════════════════════════
+# 游戏状态载荷
+# ═══════════════════════════════════════════════════════════════
+
+def get_game_state_v2_payload(
+    state: GameStateV2,
+    include_history: bool = True,
+) -> dict:
+    """生成 v2 游戏状态的前端载荷。"""
+    payload = state.to_dict(include_history=include_history)
+
+    # 添加每个存活玩家的合法动作
+    payload["legal_moves"] = get_all_legal_moves_v2(state)
+
+    # 添加动作目录
+    payload["move_catalog"] = get_move_catalog_v2()
+
+    # 添加快捷访问字段
+    payload["alive_count"] = state.alive_count
+    payload["is_game_over"] = state.is_game_over()
+
+    return payload
+
+
+# ═══════════════════════════════════════════════════════════════
+# 房间载荷
+# ═══════════════════════════════════════════════════════════════
+
+def get_room_v2_payload(
+    room: RoomV2,
+    requester_token: str | None = None,
+) -> dict:
+    """生成 v2 房间的完整前端载荷。
+
+    Args:
+        room: RoomV2 实例
+        requester_token: 请求者的 player_token（用于确定 my_seat_index / my_role）
+    """
+
+    # ── 确定请求者身份 ──
+    my_seat_index: int | None = None
+    my_role: str | None = None
+    my_player_id: str | None = None
+
+    if requester_token:
+        seat = room.get_seat_by_token(requester_token)
+        if seat is not None:
+            my_seat_index = seat.seat_index
+            my_role = "player"
+            my_player_id = seat.player_id
+        else:
+            spec = room.get_spectator_by_token(requester_token)
+            if spec is not None:
+                my_role = "spectator"
+
+    # ── 构建席位列表（按席位号排序）──
+    seats_payload = []
+    for seat in sorted(room.seats, key=lambda s: s.seat_index):
+        seat_data = {
+            "seat_index": seat.seat_index,
+            "username": seat.username,
+            "player_id": seat.player_id,
+            "ready": seat.ready,
+            "online": room.is_seat_online(seat.seat_index),
+            "connected": seat.connected,
+            "is_host": seat.seat_index == room.host_seat_index,
+        }
+        # 如果有对局状态，附加上该玩家的对局信息
+        if room.game_state is not None:
+            player = room.game_state.get_player(seat.player_id)
+            if player is not None:
+                seat_data["alive"] = player.is_alive()
+                seat_data["move_submitted"] = player.move_submitted
+                seat_data["hp"] = player.hp
+                seat_data["qi"] = player.qi
+                seat_data["shield"] = player.shield
+                seat_data["spark"] = player.spark
+                seat_data["battery"] = player.battery
+                seat_data["pickaxe"] = player.pickaxe
+                seat_data["flash_used"] = player.flash_used
+        seats_payload.append(seat_data)
+
+    # ── 构建游戏状态 ──
+    game_payload = None
+    if room.game_state is not None:
+        game_payload = get_game_state_v2_payload(room.game_state, include_history=True)
+        # 移除对局中的玩家完整数据（已在 seats_payload 中）
+        # 保留历史、回合数、胜者等
+
+    # ── 构建载荷 ──
+    payload = {
+        "room_id": room.room_id,
+        "rule_version": room.rule_version,
+        "status": room.status,
+
+        # 席位
+        "seats": seats_payload,
+        "occupied_seats": sorted(room._occupied_seats()),
+        "spectator_count": room.spectator_count(),
+
+        # 请求者身份
+        "my_seat_index": my_seat_index,
+        "my_role": my_role,
+        "my_player_id": my_player_id,
+
+        # 房间配置
+        "host_seat_index": room.host_seat_index,
+        "max_players": room.max_players,
+        "min_players": room.min_players,
+        "start_condition": room.start_condition,
+        "allow_spectate": room.allow_spectate,
+        "public": room.public,
+        "has_password": room.password is not None,
+
+        # 对局状态
+        "game": game_payload,
+        "player_count": room.player_count(),
+
+        # 聊天
+        "chat_messages": room.chat_messages,
+
+        # 对局记录
+        "battle_id": room.battle_id,
+
+        # 重赛
+        "rematch_votes": {
+            token: vote
+            for token, vote in room.rematch_votes.items()
+        },
+    }
+
+    return payload

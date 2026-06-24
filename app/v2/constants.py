@@ -66,6 +66,7 @@ DEATH_BOOM_PICKAXE = "boom"     # 爆镐（立即）
 DEATH_BOOM_RESOURCE = "ant"     # 爆气/爆盾（阶段 A 立即）
 DEATH_SLOW = "toad"             # 蛤蟆（慢出手，立即）
 DEATH_ILLEGAL = "fake_toad"     # 蟆蛤（不合规手势，立即）
+DEATH_SURRENDER = "surrender"   # 投降/断线（房间层面）
 
 # ── 协商参数 ──────────────────────────────────────────────
 

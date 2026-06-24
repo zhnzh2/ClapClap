@@ -265,6 +265,9 @@ def load_rooms_from_storage() -> None:
         ROOM_RUNTIME_LOCKS.clear()
 
         for room_id, room_data in persisted.items():
+            # v2 房间由 load_rooms_v2_from_storage() 单独加载
+            if room_data.get("rule_version", "1.0") != "1.0":
+                continue
             try:
                 ROOMS[room_id] = Room.from_dict(room_data)
                 ROOM_RUNTIME_LOCKS[room_id] = RLock()
