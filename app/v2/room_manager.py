@@ -108,6 +108,30 @@ def get_room_v2(room_id: str) -> RoomV2 | None:
         return restored_room
 
 
+def list_public_rooms_v2() -> list[dict]:
+    """列出所有公开 v2 房间（用于房间列表展示）。"""
+    result = []
+    with ROOMS_V2_LOCK:
+        for room_id, room in ROOMS_V2.items():
+            if not room.public:
+                continue
+            host_name = ""
+            host_seat = room.get_seat_by_index(room.host_seat_index)
+            if host_seat:
+                host_name = host_seat.username
+            result.append({
+                "room_id": room.room_id,
+                "host_name": host_name,
+                "max_players": room.max_players,
+                "player_count": room.player_count(),
+                "spectator_count": room.spectator_count(),
+                "status": room.status,
+                "allow_spectate": room.allow_spectate,
+                "created_at": room.created_at.isoformat() if room.created_at else "",
+            })
+    return result
+
+
 def join_room_v2(
     room_id: str,
     username: str,

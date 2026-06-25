@@ -205,7 +205,7 @@
             // 结算中：显示动作区但禁用
             document.getElementById("move-selection-card").style.display = "";
             document.getElementById("move-groups").innerHTML = '<div style="text-align:center;color:var(--muted);padding:20px;">结算中，请等待...</div>';
-            document.getElementById("move-status-line").textContent = "";
+            document.getElementById("move-selection-status").textContent = "";
         } else {
             // 观战者无动作选择
             document.getElementById("move-selection-card").style.display = "none";
@@ -348,15 +348,15 @@
         if (!player || player.status === "dead") {
             document.getElementById("move-groups").innerHTML =
                 '<div style="text-align:center;color:var(--muted);padding:20px;">你已死亡，无法操作。</div>';
-            document.getElementById("move-status-line").textContent = "";
+            document.getElementById("move-selection-status").textContent = "";
             return;
         }
 
         if (player.move_submitted) {
-            document.getElementById("move-status-line").textContent = "✓ 已提交：" +
+            document.getElementById("move-selection-status").textContent = "✓ 已提交：" +
                 (MOVE_LABELS[player.pending_move] || player.pending_move);
         } else {
-            document.getElementById("move-status-line").textContent = "请选择一个动作";
+            document.getElementById("move-selection-status").textContent = "请选择一个动作";
         }
 
         var legalMoves = (game.legal_moves && game.legal_moves[myPlayerId]) || [];

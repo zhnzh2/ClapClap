@@ -507,17 +507,6 @@ function _bindOverlayEvents() {
         }
     }
 
-    // 复制房间号
-    var copyBtn = document.getElementById("copy-room-id-btn");
-    if (copyBtn) {
-        copyBtn.addEventListener("click", function () {
-            if (navigator.clipboard) {
-                navigator.clipboard.writeText(v2RoomId).then(function () {
-                    setMessage("房间号已复制！", "success");
-                });
-            }
-        });
-    }
 }
 
 /* ═══════════════════════════════════════════════════════════════

@@ -21,9 +21,20 @@ from server.services.room_v2_service import (
 from server.auth_middleware import require_auth, get_current_username
 from app.v2.constants import MAX_PLAYERS, MIN_PLAYERS
 from app.v2.room import START_HOST, START_ALL_READY, START_FULL
-from app.v2.room_manager import get_room_v2
+from app.v2.room_manager import get_room_v2, list_public_rooms_v2
 
 room_v2_bp = Blueprint("room_v2", __name__)
+
+
+# ═══════════════════════════════════════════════════════
+# 公开房间列表
+# ═══════════════════════════════════════════════════════
+
+@room_v2_bp.get("/api/v2/rooms")
+def api_list_public_rooms_v2():
+    """列出所有公开的 v2 房间。"""
+    rooms = list_public_rooms_v2()
+    return jsonify({"ok": True, "rooms": rooms})
 
 
 # ═══════════════════════════════════════════════════════
