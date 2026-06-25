@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ClapClap 2.0 多人房间</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/v2_rooms.css') }}" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/auth.css') }}" />
+</head>
+<body>
+    <div class="container">
+        <div class="top-row">
+            <div>
+                <h1>ClapClap 2.0 · 多人房间</h1>
+                <div class="sub">最多 6 人对战 · 邀请制</div>
+            </div>
+            <div class="top-actions">
+                <button class="action-btn secondary" id="header-account-btn">账号</button>
+                <a class="action-btn secondary" href="/">返回大厅</a>
+            </div>
+        </div>
+
+        {% if error_message %}
+        <div class="error-box">{{ error_message }}</div>
+        {% endif %}
+
+        <div class="grid">
+            <!-- 创建房间 -->
+            <div class="card">
+                <h2>创建房间</h2>
+                <div class="form-group">
+                    <label>最大人数</label>
+                    <div class="stepper">
+                        <button id="create-max-dec">−</button>
+                        <span id="create-max">4</span>
+                        <button id="create-max-inc">+</button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>最少开始人数</label>
+                    <div class="stepper">
+                        <button id="create-min-dec">−</button>
+                        <span id="create-min">2</span>
+                        <button id="create-min-inc">+</button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>开始条件</label>
+                    <select id="create-start-condition">
+                        <option value="host">房主手动开始</option>
+                        <option value="all_ready">全员准备</option>
+                        <option value="full">满员自动</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="create-allow-spectate" checked />
+                        允许观战
+                    </label>
+                </div>
+                <button class="action-btn primary" id="create-room-btn">创建房间</button>
+                <div id="create-message" class="message"></div>
+            </div>
+
+            <!-- 加入房间 -->
+            <div class="card">
+                <h2>加入房间</h2>
+                <p>输入房主分享的房间号即可加入。</p>
+                <div class="form-group">
+                    <input id="join-room-id" type="text" placeholder="输入房间号（6位）" maxlength="6" />
+                </div>
+                <button class="action-btn primary" id="join-room-btn">加入房间</button>
+                <div id="join-message" class="message"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/core/storage.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/core/session.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/core/message.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/core/api.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/core/modal.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/online/v2_room_identity.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/pages/account_modal.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/pages/admin_users_modal.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/pages/v2_rooms_page.js') }}"></script>
+    <script>
+        // 未登录则跳转
+        if (!window.SessionUtils || !window.SessionUtils.isLoggedIn()) {
+            window.location.href = "/login";
+        }
+        // 账号按钮
+        var btn = document.getElementById("header-account-btn");
+        if (btn) {
+            var user = window.SessionUtils.getSessionUser();
+            if (user) {
+                btn.textContent = user.username;
+                btn.addEventListener("click", function () {
+                    window.location.href = "/user/" + user.uid;
+                });
+            }
+        }
+    </script>
+
+    <!-- 全局弹窗遮罩 -->
+    <div class="modal-mask" id="global-modal-mask" style="z-index: 1100;">
+        <div class="modal-card" id="global-modal-card">
+            <div class="modal-icon" id="global-modal-icon" style="display: none;"></div>
+            <div class="modal-title" id="global-modal-title"></div>
+            <div class="modal-body" id="global-modal-body"></div>
+            <div class="modal-actions" id="global-modal-actions"></div>
+        </div>
+    </div>
+    <script>if (typeof ModalUtils !== "undefined" && ModalUtils.bindGlobalModalEvents) { ModalUtils.bindGlobalModalEvents(); }</script>
+</body>
+</html>

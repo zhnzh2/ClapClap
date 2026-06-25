@@ -1,6 +1,7 @@
 from threading import Lock
 
 from app.models import GameState
+from app.v2.models import GameStateV2
 from app.room_manager import cleanup_expired_rooms
 from app.matchmaking import cleanup_expired_match_state
 from app.users import cleanup_unverified_accounts
@@ -8,6 +9,12 @@ from app.users import cleanup_unverified_accounts
 CURRENT_STATE = GameState()
 CURRENT_STATE_LOCK = Lock()
 CURRENT_BATTLE_ID: str | None = None
+
+# ── v2 本地模式全局状态 ──
+CURRENT_STATE_V2: GameStateV2 = GameStateV2()
+CURRENT_STATE_V2_LOCK = Lock()
+CURRENT_BATTLE_ID_V2: str | None = None
+CURRENT_ENGINE_V2 = None  # 持有当前引擎实例（用于步进式结算）
 
 
 def run_periodic_cleanup() -> None:

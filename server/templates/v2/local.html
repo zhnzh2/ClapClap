@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ClapClap 2.0 本地模拟</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/v2_local.css') }}" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/auth.css') }}" />
+</head>
+<body>
+<div class="container">
+    <!-- ═══════════════════════════════════ 顶部栏 ═══════════════════════════════════ -->
+    <div class="top-bar">
+        <div class="title-box">
+            <h1>ClapClap 2.0 本地模拟</h1>
+            <div class="sub">多人裁判模式 · 一人操作所有玩家</div>
+        </div>
+        <div class="top-actions">
+            <a class="action-btn version-switch-btn" href="/local" title="切换到 1.0 双人版">1.0</a>
+            <button class="action-btn secondary" id="help-open-btn">帮助</button>
+            <button class="action-btn" id="reset-btn" style="display:none;">重新开始</button>
+            <button class="action-btn secondary" id="header-account-btn">账号</button>
+            <a class="action-btn secondary" href="/v2">返回大厅</a>
+        </div>
+    </div>
+
+    <div id="message" class="message-box muted">页面已加载。</div>
+
+    <!-- ═══════════════════════════════════ 准备阶段 ═══════════════════════════════════ -->
+    <div id="setup-phase" class="card">
+        <h2>准备阶段</h2>
+        <div class="setup-controls">
+            <div class="setup-row">
+                <span>玩家数量：</span>
+                <button class="action-btn" id="setup-dec-btn">−</button>
+                <span id="setup-count" class="setup-count">2</span>
+                <button class="action-btn" id="setup-inc-btn">+</button>
+            </div>
+            <div id="setup-names" class="setup-names"></div>
+            <div class="setup-row" style="margin-top: 16px;">
+                <button class="action-btn primary" id="setup-start-btn">开始对局</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════ 对局阶段 ═══════════════════════════════════ -->
+    <div id="battle-phase" style="display:none;">
+
+        <!-- 玩家资源卡片 grid（等同于 v1 的 .two-col） -->
+        <div class="card">
+            <h2>玩家状态</h2>
+            <div id="player-cards" class="players-grid"></div>
+        </div>
+
+        <!-- 动作选择区（等同于 v1 的 selection-layout） -->
+        <div class="card" id="move-selection-card">
+            <h2>
+                本回合出招
+                <span id="focused-player-label" class="focused-label"></span>
+            </h2>
+            <div id="move-selectors" class="selection-layout"></div>
+            <div class="submit-row">
+                <button class="action-btn primary" id="step-btn">提交本回合</button>
+                <button class="action-btn" id="clear-selection-btn">清空全部选择</button>
+                <label class="auto-resolve-label" title="自动使用默认值通过所有决策点">
+                    <input type="checkbox" id="auto-resolve-checkbox" /> 自动决策
+                </label>
+            </div>
+            <div id="selection-info-row" class="selection-info-row"></div>
+        </div>
+
+        <!-- 状态栏（等同于 v1 的 status-card） -->
+        <div class="card status-card">
+            <div id="status-bar" class="status-line"></div>
+        </div>
+
+        <!-- 结算进度（v2 新增：提交后显示） -->
+        <div class="card" id="settlement-card" style="display:none;">
+            <h2>
+                结算进度
+                <span id="settlement-phase-label"></span>
+            </h2>
+            <div id="settlement-phase-bar"></div>
+            <div id="settlement-event-feed" class="event-feed"></div>
+            <div id="decision-area" style="display:none;">
+                <div class="decision-heading">等待决策</div>
+                <div id="decision-content"></div>
+                <div class="submit-row">
+                    <button class="action-btn primary" id="decision-submit-btn">确认决策</button>
+                    <button class="action-btn" id="decision-auto-btn">自动决策</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 回合总结（v2 新增：结算完成后显示） -->
+        <div class="card" id="round-summary-card" style="display:none;">
+            <h2 id="round-summary-title">回合结算完成</h2>
+            <div id="round-summary-content"></div>
+            <div class="submit-row">
+                <button class="action-btn primary" id="round-summary-continue-btn">继续下一回合</button>
+            </div>
+        </div>
+
+        <!-- 对局结束（v2 新增） -->
+        <div class="card" id="end-card" style="display:none;">
+            <div class="end-inline-content">
+                <div class="big-result" id="end-result-text"></div>
+                <div id="end-result-detail" class="muted"></div>
+                <div class="submit-row" style="justify-content:center;">
+                    <button class="action-btn primary" id="end-reset-btn">重新开始</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 底部：最近回合 + 历史（等同于 v1 的 bottom-layout） -->
+        <div class="bottom-layout">
+            <div class="card" id="latest-round-card">
+                <h2>最近一回合结果</h2>
+                <div id="latest-round" class="round-box muted">当前还没有回合记录。</div>
+            </div>
+            <div class="card" id="history-card">
+                <h2>历史记录</h2>
+                <div id="history" class="history-list"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════ 帮助弹窗 ═══════════════════════════════════ -->
+    <div id="help-modal-mask" class="modal-mask">
+        <div class="modal">
+            <div class="modal-close-row">
+                <button class="action-btn" id="help-close-btn">关闭</button>
+            </div>
+            <h2>帮助</h2>
+            <div class="modal-section">
+                <h3>基本操作</h3>
+                <div>1. 准备阶段设定人数（2~6），点击"开始对局"。</div>
+                <div>2. 为每位玩家选择动作，当前焦点玩家用蓝色边框标识。</div>
+                <div>3. 点击"提交本回合"后，后端按速度层逐级结算。</div>
+                <div>4. 如有决策点（选目标/协商），在页面中直接操作。</div>
+                <div>5. 结算完成后，点击"继续下一回合"。</div>
+            </div>
+            <div class="modal-section">
+                <h3>键盘操作</h3>
+                <div>· Tab：切换焦点玩家</div>
+                <div>· 1/2/3/4：锦囊</div>
+                <div>· Q/W/E/R：资源与防御</div>
+                <div>· A/S/D/F/G：气系攻击</div>
+                <div>· Z/X/C/V：盾系攻击</div>
+                <div>· Enter：提交本回合 / 确认决策 / 继续</div>
+                <div>· Backspace：撤销焦点玩家选择</div>
+                <div>· Escape：关闭帮助弹窗</div>
+            </div>
+            <div class="modal-section">
+                <h3>结算流程</h3>
+                <div>资源检查 → 亮招 → 闪 → 三连 → 速度层 3~12 → 死亡判定 → 回合总结</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 全局弹窗遮罩 -->
+    <div class="modal-mask" id="global-modal-mask" style="z-index: 1100;">
+        <div class="modal-card" id="global-modal-card">
+            <div class="modal-icon" id="global-modal-icon" style="display: none;"></div>
+            <div class="modal-title" id="global-modal-title"></div>
+            <div class="modal-body" id="global-modal-body"></div>
+            <div class="modal-actions" id="global-modal-actions"></div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/core/session.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/core/api.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/core/modal.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/pages/account_modal.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/pages/admin_users_modal.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/pages/v2_local_data.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/pages/v2_local_ui.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/pages/v2_local.js') }}"></script>
+    <script>
+        var btn = document.getElementById("header-account-btn");
+        if (btn) {
+            var user = window.SessionUtils?.getSessionUser();
+            if (user) {
+                btn.textContent = user.username;
+                btn.addEventListener("click", function () {
+                    window.location.href = "/user/" + user.uid;
+                });
+            }
+        }
+        if (typeof ModalUtils !== "undefined" && ModalUtils.bindGlobalModalEvents) {
+            ModalUtils.bindGlobalModalEvents();
+        }
+    </script>
+</body>
+</html>

@@ -332,6 +332,18 @@ class RoundLogV2:
     # ── 速度层事件序列 ──
     speed_layer_events: list[SpeedLayerEvent] = field(default_factory=list)
 
+    # ── 每层目标声明 ──
+    # {layer: {player_id: {move: str, targets: [str, ...]}}}
+    target_declarations_by_layer: dict[int, dict] = field(default_factory=dict)
+
+    # ── 每层冲突记录 ──
+    # {layer: [ConflictRecord dicts]}
+    conflicts_by_layer: dict[int, list] = field(default_factory=dict)
+
+    # ── 决策历史（含自动决策原因） ──
+    # [{layer, player_id, decision_type, options: [{id, label}], chosen: [id, ...], reason: str}]
+    decision_log: list[dict] = field(default_factory=list)
+
     # ── 死亡 ──
     deaths: list[dict] = field(default_factory=list)
     # [{"player_id": "A", "cause": "normal", "round": 3, "speed_layer": 9}]
@@ -361,6 +373,45 @@ class RoundLogV2:
             "speed_layer": speed_layer,
         })
 
+    def record_layer_declarations(self, layer: int, declarations: dict) -> None:
+        """记录某速度层的目标声明。"""
+        layer_data = {}
+        for pid, decl in declarations.items():
+            if hasattr(decl, 'to_dict'):
+                d = decl.to_dict()
+            else:
+                d = dict(decl)
+            layer_data[pid] = {
+                "move": d.get("move_name", ""),
+                "targets": d.get("targets", []),
+                "is_split": d.get("is_split", False),
+                "split_count": d.get("split_count", 1),
+            }
+        self.target_declarations_by_layer[layer] = layer_data
+
+    def record_layer_conflicts(self, layer: int, conflicts: list) -> None:
+        """记录某速度层的冲突。"""
+        self.conflicts_by_layer[layer] = [
+            c.to_dict() if hasattr(c, 'to_dict') else dict(c)
+            for c in conflicts
+        ]
+
+    def add_decision(self, layer: int, player_id: str, decision_type: str,
+                     options: list, chosen: list, reason: str = "") -> None:
+        """记录一次决策。"""
+        self.decision_log.append({
+            "speed_layer": layer,
+            "player_id": player_id,
+            "decision_type": decision_type,
+            "options": [
+                {"id": o.get("option_id", "") if isinstance(o, dict) else o.option_id,
+                 "label": o.get("label", "") if isinstance(o, dict) else o.label}
+                for o in options
+            ],
+            "chosen": chosen,
+            "reason": reason,
+        })
+
     def to_dict(self) -> dict:
         return {
             "round_num": self.round_num,
@@ -371,6 +422,15 @@ class RoundLogV2:
             "three_chain_groups": self.three_chain_groups,
             "two_three_chains": self.two_three_chains,
             "speed_layer_events": [e.to_dict() for e in self.speed_layer_events],
+            "target_declarations_by_layer": {
+                str(layer): decls
+                for layer, decls in self.target_declarations_by_layer.items()
+            },
+            "conflicts_by_layer": {
+                str(layer): confs
+                for layer, confs in self.conflicts_by_layer.items()
+            },
+            "decision_log": self.decision_log,
             "deaths": self.deaths,
             "pre_snapshots": self.pre_snapshots,
             "post_snapshots": self.post_snapshots,
@@ -403,6 +463,12 @@ class RoundLogV2:
             event = SpeedLayerEvent.from_dict(e_data)
             if event is not None:
                 log.speed_layer_events.append(event)
+        # 重建层声明（key 从 str 转回 int）
+        for layer_str, decls in data.get("target_declarations_by_layer", {}).items():
+            log.target_declarations_by_layer[int(layer_str)] = decls
+        for layer_str, confs in data.get("conflicts_by_layer", {}).items():
+            log.conflicts_by_layer[int(layer_str)] = confs
+        log.decision_log = data.get("decision_log", [])
         return log
 
 

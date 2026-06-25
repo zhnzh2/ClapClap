@@ -1,0 +1,871 @@
+/* ═══════════════════════════════════════════════════════════════
+   ClapClap 2.0 房间对战页样式
+   ═══════════════════════════════════════════════════════════════ */
+
+:root {
+    --bg: #f4f6fb;
+    --card: #ffffff;
+    --panel: #f8fafc;
+    --text: #1f2937;
+    --muted: #6b7280;
+    --border: #e5e7eb;
+    --shadow: 0 4px 14px rgba(0,0,0,0.06);
+
+    --blue: #2563eb;
+    --blue-bg: #eff6ff;
+    --blue-border: #bfdbfe;
+    --blue-hover: #1d4ed8;
+
+    --red: #dc2626;
+    --red-bg: #fef2f2;
+    --red-border: #fca5a5;
+
+    --green: #16a34a;
+    --green-bg: #ecfdf5;
+    --green-border: #86efac;
+
+    --yellow: #d97706;
+    --yellow-bg: #fffbeb;
+    --yellow-border: #fcd34d;
+
+    --danger: #dc2626;
+    --danger-hover: #b91c1c;
+}
+
+body {
+    margin: 0;
+    font-family: Arial, "Microsoft YaHei", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+}
+
+/* ═══════════════════════════════════════════════════════
+   容器 + 布局
+   ═══════════════════════════════════════════════════════ */
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 18px 14px;
+    display: grid;
+    grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.7fr);
+    grid-template-rows: auto auto 1fr;
+    gap: 12px;
+}
+
+/* 顶部栏占满两列 */
+.top-bar {
+    grid-column: 1 / -1;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.top-bar h1 { margin: 0 0 2px 0; font-size: 22px; }
+.top-bar .sub { font-size: 13px; color: var(--muted); }
+
+.top-actions {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+#message {
+    grid-column: 1 / -1;
+}
+
+/* 左侧占主要区域 */
+#lobby-phase,
+#battle-phase {
+    grid-column: 1;
+}
+
+/* 右侧面板 */
+.right-panel {
+    grid-column: 2;
+    grid-row: 3 / span 6;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+/* ═══════════════════════════════════════════════════════
+   通用组件
+   ═══════════════════════════════════════════════════════ */
+
+.card {
+    background: var(--card);
+    border-radius: 16px;
+    padding: 18px 20px;
+    box-shadow: var(--shadow);
+}
+
+.card h2 {
+    margin: 0 0 12px 0;
+    font-size: 16px;
+}
+
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.card-header h2 { margin: 0; }
+
+.section-title {
+    font-size: 13px;
+    font-weight: bold;
+    color: var(--muted);
+    margin: 14px 0 8px 0;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* ── 按钮 ── */
+.action-btn {
+    border: none;
+    border-radius: 10px;
+    padding: 8px 14px;
+    font-size: 14px;
+    font-weight: bold;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
+    line-height: 1.4;
+}
+
+.action-btn.primary   { background: var(--blue); color: #fff; }
+.action-btn.primary:hover { background: var(--blue-hover); }
+.action-btn.secondary { background: #6b7280; color: #fff; }
+.action-btn.secondary:hover { background: #4b5563; }
+.action-btn.danger    { background: var(--danger); color: #fff; }
+.action-btn.danger:hover { background: var(--danger-hover); }
+
+.action-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+/* ── 消息 ── */
+.message-box {
+    padding: 10px 16px;
+    border-radius: 10px;
+    font-size: 14px;
+    min-height: 20px;
+    line-height: 1.5;
+}
+
+.message-box.muted { background: #f8fafc; color: #6b7280; }
+.message-box.info  { background: var(--blue-bg); color: var(--blue); }
+.message-box.success { background: var(--green-bg); color: #166534; }
+.message-box.waiting { background: var(--yellow-bg); color: #92400e; }
+.message-box.error   { background: var(--red-bg); color: #991b1b; }
+
+.message {
+    padding: 10px 14px;
+    border-radius: 10px;
+    font-size: 13px;
+    min-height: 18px;
+    line-height: 1.5;
+}
+
+.message:empty { display: none; }
+.message.info    { background: var(--blue-bg); color: var(--blue); }
+.message.success { background: var(--green-bg); color: #166534; }
+.message.waiting { background: var(--yellow-bg); color: #92400e; }
+.message.error   { background: var(--red-bg); color: #991b1b; }
+
+/* ═══════════════════════════════════════════════════════
+   大厅阶段
+   ═══════════════════════════════════════════════════════ */
+
+.room-id-badge {
+    background: var(--blue-bg);
+    color: var(--blue);
+    padding: 4px 10px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: bold;
+    font-family: monospace;
+    letter-spacing: 1px;
+}
+
+.info-row {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.info-item {
+    background: var(--panel);
+    padding: 10px 12px;
+    border-radius: 10px;
+    text-align: center;
+}
+
+.info-label {
+    display: block;
+    font-size: 11px;
+    color: var(--muted);
+    margin-bottom: 2px;
+}
+
+.info-item span:last-child {
+    font-size: 15px;
+    font-weight: bold;
+}
+
+/* 玩家座位卡片 */
+.lobby-seats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 10px;
+}
+
+.lobby-seat-card {
+    background: var(--panel);
+    border-radius: 12px;
+    padding: 14px;
+    text-align: center;
+    border: 2px solid transparent;
+    transition: border-color 0.2s;
+}
+
+.lobby-seat-card.is-host { border-color: var(--yellow); }
+.lobby-seat-card.is-self { border-color: var(--blue); background: var(--blue-bg); }
+.lobby-seat-card.empty-slot { opacity: 0.5; border-style: dashed; border-color: var(--border); }
+
+.lobby-seat-card .seat-index {
+    font-size: 11px;
+    color: var(--muted);
+    margin-bottom: 4px;
+}
+
+.lobby-seat-card .seat-name {
+    font-size: 15px;
+    font-weight: bold;
+}
+
+.lobby-seat-card .seat-badges {
+    margin-top: 6px;
+    display: flex;
+    gap: 4px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.badge {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-weight: bold;
+}
+
+.badge.host   { background: var(--yellow-bg); color: #92400e; }
+.badge.ready  { background: var(--green-bg); color: #166534; }
+.badge.not-ready { background: #f3f4f6; color: #6b7280; }
+.badge.self   { background: var(--blue-bg); color: var(--blue); }
+.badge.offline { background: #fee2e2; color: #991b1b; }
+.badge.online  { background: var(--green-bg); color: #166534; }
+
+.spectator-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--muted);
+}
+
+.lobby-actions {
+    margin-top: 14px;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+/* ═══════════════════════════════════════════════════════
+   对局阶段
+   ═══════════════════════════════════════════════════════ */
+
+/* 状态栏 */
+.status-card {
+    padding: 12px 18px;
+}
+
+.status-top-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 14px;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.status-phase {
+    background: var(--blue-bg);
+    color: var(--blue);
+    padding: 4px 10px;
+    border-radius: 8px;
+    font-weight: bold;
+    font-size: 13px;
+}
+
+/* 速度层进度条 */
+.speed-layer-bar {
+    margin-top: 10px;
+    display: flex;
+    gap: 3px;
+}
+
+.speed-layer-dot {
+    flex: 1;
+    height: 6px;
+    border-radius: 3px;
+    background: #e5e7eb;
+    cursor: default;
+    transition: background 0.3s;
+}
+
+.speed-layer-dot.done { background: var(--green); }
+.speed-layer-dot.current { background: var(--blue); }
+
+.speed-layer-labels {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 2px 6px;
+    margin-top: 4px;
+    font-size: 10px;
+    color: var(--muted);
+}
+
+/* 玩家卡片网格 */
+.player-cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 10px;
+}
+
+.player-card {
+    background: var(--card);
+    border-radius: 14px;
+    padding: 14px;
+    box-shadow: var(--shadow);
+    border: 2px solid transparent;
+    transition: border-color 0.2s;
+}
+
+.player-card.is-self { border-color: var(--blue); }
+.player-card.is-dead { opacity: 0.5; }
+.player-card.is-resolved { border-color: var(--green); }
+
+.player-card .card-name-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.player-card .card-name {
+    font-weight: bold;
+    font-size: 14px;
+}
+
+.player-card .card-badges {
+    display: flex;
+    gap: 3px;
+    flex-wrap: wrap;
+}
+
+.player-card .card-hp {
+    font-size: 32px;
+    font-weight: bold;
+    text-align: center;
+    margin: 8px 0;
+}
+
+.player-card .card-hp.hp-low { color: var(--red); }
+.player-card .card-hp.hp-ok { color: var(--text); }
+
+.player-card .card-resources {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+}
+
+.resource-item {
+    text-align: center;
+    padding: 4px 6px;
+    background: var(--panel);
+    border-radius: 8px;
+}
+
+.resource-item .res-label {
+    font-size: 10px;
+    color: var(--muted);
+}
+
+.resource-item .res-value {
+    font-size: 15px;
+    font-weight: bold;
+}
+
+.resource-item .res-value.res-highlight { color: var(--blue); }
+
+/* 回合动作标识 */
+.player-card .card-move {
+    margin-top: 8px;
+    text-align: center;
+    font-size: 13px;
+    font-weight: bold;
+}
+
+.player-card .card-move.move-visible {
+    background: var(--blue-bg);
+    color: var(--blue);
+    padding: 4px 8px;
+    border-radius: 8px;
+}
+
+.player-card .card-target {
+    font-size: 11px;
+    color: var(--muted);
+    text-align: center;
+    margin-top: 2px;
+}
+
+/* ── 动作选择 ── */
+.move-status-line {
+    font-size: 13px;
+    color: var(--muted);
+    margin-bottom: 8px;
+}
+
+.move-group {
+    margin-bottom: 12px;
+}
+
+.move-group-label {
+    font-size: 12px;
+    font-weight: bold;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 4px;
+}
+
+.move-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+    gap: 6px;
+}
+
+.move-btn {
+    border: 2px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 6px;
+    text-align: center;
+    font-size: 14px;
+    font-weight: bold;
+    cursor: pointer;
+    background: white;
+    transition: background 0.15s, border-color 0.15s;
+    color: var(--text);
+    user-select: none;
+}
+
+.move-btn:hover:not(.disabled):not(.selected) {
+    border-color: var(--blue);
+    background: var(--blue-bg);
+}
+
+.move-btn.selected {
+    border-color: var(--blue);
+    background: var(--blue-bg);
+    color: var(--blue);
+}
+
+.move-btn.disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+
+.move-btn.submitted-locked {
+    background: #f3f4f6;
+    border-color: #e5e7eb;
+    color: #9ca3af;
+    cursor: not-allowed;
+}
+
+.move-actions {
+    margin-top: 12px;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+/* ── 结算进度 ── */
+.settlement-event {
+    padding: 8px 12px;
+    margin-bottom: 4px;
+    border-radius: 8px;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.settlement-event.ev-attack  { background: #fef2f2; color: #991b1b; }
+.settlement-event.ev-block   { background: #f3f4f6; color: #4b5563; }
+.settlement-event.ev-trick   { background: #ede9fe; color: #6d28d9; }
+.settlement-event.ev-resource { background: #ecfdf5; color: #166534; }
+.settlement-event.ev-death   { background: #fee2e2; color: #991b1b; font-weight: bold; }
+.settlement-event.ev-info    { background: var(--blue-bg); color: var(--blue); }
+
+/* 结算事件内的层标签 */
+.settlement-layer-label {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: bold;
+    padding: 2px 8px;
+    border-radius: 6px;
+    margin-right: 6px;
+    background: #f3f4f6;
+    color: var(--muted);
+}
+
+/* ── 对局结束 ── */
+.rank-list {
+    list-style: none;
+    padding: 0;
+    margin: 10px 0;
+}
+
+.rank-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 10px 14px;
+    border-radius: 10px;
+    margin-bottom: 6px;
+    background: var(--panel);
+    font-size: 15px;
+}
+
+.rank-item.rank-1 { background: #fef3c7; font-weight: bold; font-size: 18px; }
+.rank-item .rank-name { font-weight: bold; }
+.rank-item .rank-badge {
+    background: var(--blue);
+    color: white;
+    padding: 2px 10px;
+    border-radius: 8px;
+    font-size: 13px;
+}
+
+.rematch-area {
+    margin-top: 14px;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+/* ═══════════════════════════════════════════════════════
+   聊天
+   ═══════════════════════════════════════════════════════ */
+
+.chat-list {
+    max-height: 280px;
+    overflow-y: auto;
+    padding: 4px 0;
+    font-size: 13px;
+}
+
+.chat-item {
+    padding: 5px 8px;
+    border-radius: 6px;
+    margin-bottom: 3px;
+    line-height: 1.5;
+}
+
+.chat-item .chat-sender {
+    font-weight: bold;
+    color: var(--blue);
+    margin-right: 4px;
+}
+
+.chat-item .chat-time {
+    font-size: 11px;
+    color: #9ca3af;
+    margin-left: 6px;
+}
+
+.chat-item .chat-text {
+    color: var(--text);
+}
+
+.chat-item.is-system {
+    background: var(--panel);
+    color: var(--muted);
+    font-style: italic;
+}
+
+.chat-input-row {
+    display: flex;
+    gap: 6px;
+    margin-top: 8px;
+}
+
+.chat-input-row input {
+    flex: 1;
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    font-size: 13px;
+}
+
+.quick-chat-row {
+    display: flex;
+    gap: 4px;
+    margin-top: 6px;
+    flex-wrap: wrap;
+}
+
+.quick-chat-btn {
+    font-size: 12px !important;
+    padding: 4px 10px !important;
+}
+
+/* ═══════════════════════════════════════════════════════
+   历史记录
+   ═══════════════════════════════════════════════════════ */
+
+.history-list {
+    max-height: 300px;
+    overflow-y: auto;
+    font-size: 13px;
+}
+
+.history-entry {
+    padding: 8px 10px;
+    border-radius: 8px;
+    margin-bottom: 6px;
+    background: var(--panel);
+}
+
+.history-entry .history-round {
+    font-weight: bold;
+    color: var(--blue);
+    margin-bottom: 2px;
+}
+
+.history-entry .history-moves {
+    color: var(--muted);
+    font-size: 12px;
+}
+
+/* ═══════════════════════════════════════════════════════
+   决策弹窗
+   ═══════════════════════════════════════════════════════ */
+
+.modal-mask {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.34);
+    z-index: 1000;
+    justify-content: center;
+    align-items: center;
+}
+
+.modal-mask.show { display: flex; }
+
+.modal-card {
+    background: var(--card);
+    border-radius: 18px;
+    padding: 22px 24px;
+    width: min(520px, calc(100vw - 32px));
+    max-height: 85vh;
+    overflow-y: auto;
+    box-shadow: 0 24px 60px rgba(15, 23, 42, 0.20);
+}
+
+.decision-modal {
+    max-width: 560px;
+}
+
+.round-summary-modal {
+    max-width: 620px;
+}
+
+.modal-close-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.decision-title {
+    font-weight: bold;
+    font-size: 16px;
+    color: #e67e22;
+}
+
+.decision-timer {
+    font-size: 14px;
+    font-weight: bold;
+    color: var(--danger);
+}
+
+.decision-prompt {
+    margin-bottom: 14px;
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--text);
+}
+
+.decision-options {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.decision-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    border-radius: 10px;
+    border: 2px solid var(--border);
+    cursor: pointer;
+    font-size: 14px;
+    transition: border-color 0.15s, background 0.15s;
+}
+
+.decision-option:hover:not(.invalid) { border-color: var(--blue); background: var(--blue-bg); }
+.decision-option.selected { border-color: var(--blue); background: var(--blue-bg); color: var(--blue); font-weight: bold; }
+.decision-option.invalid { opacity: 0.35; cursor: not-allowed; }
+.decision-option .opt-reason { font-size: 11px; color: var(--red); margin-left: auto; }
+
+.modal-actions {
+    margin-top: 16px;
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+}
+
+/* 拆分技能多选提示 */
+.split-counter {
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 4px;
+}
+
+/* ═══════════════════════════════════════════════════════
+   回合总结
+   ═══════════════════════════════════════════════════════ */
+
+.summary-round-num {
+    font-size: 18px;
+    font-weight: bold;
+    margin-bottom: 12px;
+}
+
+.summary-moves {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 14px;
+}
+
+.summary-move-tag {
+    padding: 4px 10px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: bold;
+    background: var(--blue-bg);
+    color: var(--blue);
+}
+
+.summary-changes {
+    margin-bottom: 14px;
+}
+
+.summary-changes table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.summary-changes th {
+    background: var(--panel);
+    padding: 6px 8px;
+    text-align: left;
+    font-size: 11px;
+    color: var(--muted);
+}
+
+.summary-changes td {
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--border);
+}
+
+.summary-changes .change-positive { color: var(--green); font-weight: bold; }
+.summary-changes .change-negative { color: var(--red); font-weight: bold; }
+
+.summary-deaths {
+    padding: 8px 12px;
+    background: #fee2e2;
+    border-radius: 8px;
+    font-size: 14px;
+    color: #991b1b;
+    margin-bottom: 12px;
+    font-weight: bold;
+}
+
+.summary-deaths:empty { display: none; }
+
+.summary-winner {
+    padding: 10px 14px;
+    background: #fef3c7;
+    border-radius: 10px;
+    font-size: 16px;
+    font-weight: bold;
+    text-align: center;
+    margin-bottom: 10px;
+}
+
+.summary-winner:empty { display: none; }
+
+/* ═══════════════════════════════════════════════════════
+   响应式
+   ═══════════════════════════════════════════════════════ */
+
+@media (max-width: 1100px) {
+    .container {
+        grid-template-columns: 1fr;
+    }
+    .right-panel {
+        grid-column: 1;
+        grid-row: auto;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+    }
+}
+
+@media (max-width: 700px) {
+    .container {
+        grid-template-columns: 1fr;
+        padding: 10px 8px;
+    }
+    .right-panel {
+        grid-template-columns: 1fr;
+    }
+    .info-row { grid-template-columns: 1fr 1fr; }
+    .player-cards-grid { grid-template-columns: 1fr; }
+    .lobby-seats-grid { grid-template-columns: 1fr 1fr; }
+    .move-grid { grid-template-columns: repeat(4, 1fr); }
+}

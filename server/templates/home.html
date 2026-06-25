@@ -36,6 +36,7 @@
         .hero {
             text-align: center;
             margin-bottom: 28px;
+            position: relative;
         }
 
         .hero h1 {
@@ -48,6 +49,24 @@
             color: var(--muted);
             font-size: 16px;
         }
+
+        .version-switch-btn {
+            position: absolute;
+            left: 0;
+            top: 8px;
+            display: inline-block;
+            text-decoration: none;
+            padding: 4px 12px;
+            border-radius: 8px;
+            background: #fef3c7;
+            color: #92400e;
+            border: 1px solid #f59e0b;
+            font-size: 13px;
+            font-weight: bold;
+            transition: background 0.15s;
+        }
+
+        .version-switch-btn:hover { background: #fde68a; }
 
         .mode-grid {
             display: grid;
@@ -135,6 +154,7 @@
 <body>
     <div class="container">
         <div class="hero">
+            <a class="version-switch-btn" href="/v2" title="切换到 2.0 多人版">2.0</a>
             <h1>ClapClap</h1>
             <p>选择一种模式开始游戏</p>
         </div>

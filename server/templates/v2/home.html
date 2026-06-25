@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ClapClap 2.0</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/v2_rooms.css') }}" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/auth.css') }}" />
+</head>
+<body>
+    <div class="container">
+        <div class="top-row">
+            <div>
+                <h1>ClapClap 2.0</h1>
+                <div class="sub">多人在线对战 · 本地模拟 · 更多玩法</div>
+            </div>
+            <div class="top-actions">
+                <button class="action-btn secondary" id="header-account-btn">账号</button>
+                <a class="action-btn secondary" href="/">返回 1.0 大厅</a>
+            </div>
+        </div>
+
+        <div class="grid">
+            <div class="card">
+                <h2>🎮 本地模拟对战</h2>
+                <p>一人操作所有玩家，快速体验 2.0 多人规则。支持裁判模式，在同一设备上完成整局对战。</p>
+                <a class="action-btn primary" href="/v2/local">进入本地模拟</a>
+            </div>
+            <div class="card">
+                <h2>🌐 多人房间对战</h2>
+                <p>创建或加入在线房间，与朋友进行真正的多人对战。支持最多 6 人同时竞技。</p>
+                <a class="action-btn primary" href="/v2/rooms">进入房间对战</a>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/core/storage.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/core/session.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/core/api.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/core/modal.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/pages/account_modal.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/pages/admin_users_modal.js') }}"></script>
+    <script>
+        if (!window.SessionUtils || !window.SessionUtils.isLoggedIn()) {
+            window.location.href = "/login";
+        }
+        var btn = document.getElementById("header-account-btn");
+        if (btn) {
+            var user = window.SessionUtils.getSessionUser();
+            if (user) {
+                btn.textContent = user.username;
+                btn.addEventListener("click", function () {
+                    window.location.href = "/user/" + user.uid;
+                });
+            }
+        }
+    </script>
+    <div class="modal-mask" id="global-modal-mask" style="z-index: 1100;">
+        <div class="modal-card" id="global-modal-card">
+            <div class="modal-icon" id="global-modal-icon" style="display: none;"></div>
+            <div class="modal-title" id="global-modal-title"></div>
+            <div class="modal-body" id="global-modal-body"></div>
+            <div class="modal-actions" id="global-modal-actions"></div>
+        </div>
+    </div>
+    <script>if (typeof ModalUtils !== "undefined" && ModalUtils.bindGlobalModalEvents) { ModalUtils.bindGlobalModalEvents(); }</script>
+</body>
+</html>

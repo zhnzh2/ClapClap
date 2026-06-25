@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ClapClap 2.0 房间对战</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/v2_room.css') }}" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/auth.css') }}" />
+</head>
+<body>
+<div class="container">
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- 顶部栏 -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <div class="top-bar">
+        <div class="title-box">
+            <h1>ClapClap 2.0 房间对战</h1>
+            <div class="sub" id="top-subtitle">房间号加载中...</div>
+        </div>
+        <div class="top-actions">
+            <button class="action-btn secondary" id="header-account-btn">账号</button>
+            <button class="action-btn secondary" id="header-admin-btn" style="display:none;">管理</button>
+            <a class="action-btn secondary" href="/">返回大厅</a>
+            <button class="action-btn danger" id="leave-room-btn">退出房间</button>
+        </div>
+    </div>
+
+    <div id="message" class="message-box muted">正在连接...</div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- 大厅阶段（开局前） -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <div id="lobby-phase" class="card">
+        <div class="card-header">
+            <h2>房间大厅</h2>
+            <span id="lobby-room-id" class="room-id-badge"></span>
+        </div>
+
+        <div class="info-row">
+            <div class="info-item"><span class="info-label">规则版本</span><span id="lobby-rule-version">2.0</span></div>
+            <div class="info-item"><span class="info-label">人数</span><span id="lobby-player-count">0 / 0</span></div>
+            <div class="info-item"><span class="info-label">开始条件</span><span id="lobby-start-condition">-</span></div>
+            <div class="info-item"><span class="info-label">观战</span><span id="lobby-spectate-count">0</span></div>
+        </div>
+
+        <!-- 玩家席位列表 -->
+        <div class="section-title">参战玩家</div>
+        <div id="lobby-seats" class="lobby-seats-grid"></div>
+
+        <!-- 观战者列表 -->
+        <div id="lobby-spectators-area" style="display:none;">
+            <div class="section-title">观战者</div>
+            <div id="lobby-spectators" class="spectator-list"></div>
+        </div>
+
+        <!-- 操作按钮 -->
+        <div class="lobby-actions">
+            <button class="action-btn primary" id="lobby-ready-btn">准备</button>
+            <button class="action-btn primary" id="lobby-start-btn" style="display:none;">开始对局</button>
+            <button class="action-btn secondary" id="copy-room-id-btn">复制房间号</button>
+            <div id="lobby-message" class="message" style="display:none;"></div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- 对局阶段（初始隐藏） -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <div id="battle-phase" style="display:none;">
+
+        <!-- 状态栏 -->
+        <div class="card status-card">
+            <div class="status-top-row">
+                <span class="status-round">第 <strong id="battle-round">1</strong> 回合</span>
+                <span class="status-phase" id="battle-phase-label">等待出招</span>
+                <span class="status-alive">存活 <strong id="battle-alive-count">0</strong> 人</span>
+            </div>
+            <!-- 速度层进度条 -->
+            <div id="speed-layer-bar" class="speed-layer-bar" style="display:none;"></div>
+        </div>
+
+        <!-- 玩家资源卡片 -->
+        <div id="player-cards" class="player-cards-grid"></div>
+
+        <!-- 动作选择区 -->
+        <div class="card" id="move-selection-card">
+            <h2>选择动作</h2>
+            <div id="move-selection-status" class="move-status-line"></div>
+            <div id="move-groups"></div>
+            <div class="move-actions">
+                <button class="action-btn primary" id="submit-move-btn">提交动作 (Enter)</button>
+                <button class="action-btn secondary" id="cancel-move-btn">取消选择 (Backspace)</button>
+            </div>
+            <div id="move-message" class="message" style="display:none;"></div>
+        </div>
+
+        <!-- 结算进度区 -->
+        <div class="card" id="settlement-card" style="display:none;">
+            <h2>结算进度</h2>
+            <div id="settlement-events" class="settlement-events"></div>
+        </div>
+
+        <!-- 对局结束区 -->
+        <div class="card" id="game-over-card" style="display:none;">
+            <h2>对局结束</h2>
+            <div id="game-over-body"></div>
+            <div class="rematch-area">
+                <button class="action-btn primary" id="rematch-vote-btn">赞成重赛</button>
+                <span id="rematch-status"></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- 右侧面板：聊天 + 历史 -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <div class="right-panel">
+        <!-- 聊天 -->
+        <div class="card" id="chat-section">
+            <h2>聊天</h2>
+            <div id="chat-messages" class="chat-list"></div>
+            <div class="chat-input-row">
+                <input id="chat-input" type="text" placeholder="输入消息（50字）" maxlength="50" />
+                <button class="action-btn primary" id="chat-send-btn">发送</button>
+            </div>
+            <div class="quick-chat-row">
+                <button class="action-btn secondary quick-chat-btn" data-msg="加油！">加油！</button>
+                <button class="action-btn secondary quick-chat-btn" data-msg="好">好</button>
+                <button class="action-btn secondary quick-chat-btn" data-msg="精彩">精彩</button>
+                <button class="action-btn secondary quick-chat-btn" data-msg="哈哈">哈哈</button>
+            </div>
+        </div>
+
+        <!-- 历史记录 -->
+        <div class="card" id="history-section">
+            <h2>历史回合</h2>
+            <div id="history" class="history-list"></div>
+        </div>
+    </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- 决策弹窗 -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div id="decision-modal-mask" class="modal-mask">
+    <div class="modal-card decision-modal">
+        <div class="modal-close-row">
+            <span id="decision-title" class="decision-title">决策</span>
+            <span id="decision-timer" class="decision-timer"></span>
+        </div>
+        <div id="decision-prompt" class="decision-prompt"></div>
+        <div id="decision-options" class="decision-options"></div>
+        <div class="modal-actions">
+            <button class="action-btn primary" id="decision-submit-btn">确认提交</button>
+            <button class="action-btn secondary" id="decision-auto-btn">自动选择</button>
+        </div>
+    </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- 回合总结弹窗 -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div id="round-summary-mask" class="modal-mask">
+    <div class="modal-card round-summary-modal">
+        <div class="modal-close-row">
+            <span class="decision-title">回合总结</span>
+        </div>
+        <div id="round-summary-body"></div>
+        <div class="modal-actions">
+            <button class="action-btn primary" id="round-summary-continue-btn">继续</button>
+        </div>
+    </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- 全局确认弹窗 -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="modal-mask" id="global-modal-mask" style="z-index: 1100;">
+    <div class="modal-card" id="global-modal-card">
+        <div class="modal-icon" id="global-modal-icon" style="display: none;"></div>
+        <div class="modal-title" id="global-modal-title"></div>
+        <div class="modal-body" id="global-modal-body"></div>
+        <div class="modal-actions" id="global-modal-actions"></div>
+    </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- 脚本加载 -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<script>window.CLAPCLAP_V2_ROOM_ID = "{{ room_id }}";</script>
+<script>window.SERVER_BOOT_ID = "{{ server_boot_id }}";</script>
+
+{# Socket.IO — 优先使用本地副本，失败时回退到 CDN #}
+<script>
+(function () {
+    var s = document.createElement("script");
+    s.src = "{{ url_for('static', filename='js/socket.io.min.js') }}";
+    s.onerror = function () {
+        var fallback = document.createElement("script");
+        fallback.src = "https://cdn.socket.io/4.7.2/socket.io.min.js";
+        fallback.onerror = function () {
+            console.warn("Socket.IO 加载失败。将仅使用 HTTP 轮询。");
+            window.__socket_io_available = false;
+        };
+        fallback.onload = function () { window.__socket_io_available = true; };
+        document.head.appendChild(fallback);
+    };
+    s.onload = function () { window.__socket_io_available = true; };
+    document.head.appendChild(s);
+})();
+</script>
+
+<script src="{{ url_for('static', filename='js/core/storage.js') }}"></script>
+<script src="{{ url_for('static', filename='js/core/session.js') }}"></script>
+<script src="{{ url_for('static', filename='js/core/message.js') }}"></script>
+<script src="{{ url_for('static', filename='js/core/api.js') }}"></script>
+<script src="{{ url_for('static', filename='js/core/modal.js') }}"></script>
+<script src="{{ url_for('static', filename='js/core/boot.js') }}"></script>
+<script src="{{ url_for('static', filename='js/online/v2_room_identity.js') }}"></script>
+<script src="{{ url_for('static', filename='js/online/v2_room_rendering.js') }}"></script>
+<script src="{{ url_for('static', filename='js/online/v2_room_decision.js') }}"></script>
+<script src="{{ url_for('static', filename='js/pages/account_modal.js') }}"></script>
+<script src="{{ url_for('static', filename='js/pages/admin_users_modal.js') }}"></script>
+<script src="{{ url_for('static', filename='js/pages/v2_room_page.js') }}"></script>
+
+<script>
+if (typeof ModalUtils !== "undefined" && ModalUtils.bindGlobalModalEvents) {
+    ModalUtils.bindGlobalModalEvents();
+}
+// 页面入口
+if (typeof initV2RoomPage === "function") {
+    initV2RoomPage();
+}
+</script>
+</body>
+</html>

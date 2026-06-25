@@ -657,10 +657,8 @@ class GameEngineV2:
                             ],
                         },
                     )
-                else:
-                    # 无活跃玩家需要目标选择（如 gi 攻击黑洞时只有黑洞无人出 gi）
-                    self.state._speed_layer_cursor += 1
-                    continue
+                # 有活跃玩家但无合法目标 → 仍执行本层以记录 miss 事件
+                # 落入下方统一执行逻辑
 
             # ── 无目标选择的层：直接执行 ──
             self.state.sub_phase = SUB_PHASE_LAYER_EXECUTION
@@ -718,6 +716,9 @@ class GameEngineV2:
                     is_valid=True,
                     reason="",
                 ))
+            # gi 无合法目标且不能放空 → 跳过此玩家
+            if not options:
+                continue
 
             prompt = f"请为 {SPEED_LAYER_NAMES.get(layer, '')} 选择{'攻击' if move in self._non_gi_non_heidong_attacks() else ''}目标"
             if is_split:
@@ -755,6 +756,20 @@ class GameEngineV2:
         # ── 构建目标声明 ──
         declarations = self._build_declarations_from_decisions(layer, active, decisions)
         self.state.target_declarations = declarations
+
+        # 记录每名玩家的目标决策到日志
+        if self.log is not None:
+            for pid, targets in decisions.items():
+                targets_list = targets if isinstance(targets, list) else [targets]
+                decl = declarations.get(pid)
+                move_name = decl.move_name if decl else ""
+                reason = f"玩家选择目标: {', '.join(t for t in targets_list if t) or '放空'}"
+                # 从原始决策请求中获取选项（如果有的话）
+                self.log.add_decision(
+                    layer=layer, player_id=pid,
+                    decision_type=DECISION_TYPE_TARGET_SELECT,
+                    options=[], chosen=targets_list, reason=reason,
+                )
 
         # ── 检测冲突 ──
         conflicts = self._detect_layer_conflicts(layer, declarations)
@@ -1049,6 +1064,17 @@ class GameEngineV2:
                     data={"conflict_type": conflict.conflict_type,
                            "chosen": chosen, "missed": rest, "target": target},
                 ))
+
+        # 记录本轮协商决策到日志
+        if self.log is not None and decisions:
+            for pid, choice in decisions.items():
+                reason = "协商决策: " + (str(choice) if choice else "放空")
+                self.log.add_decision(
+                    layer=layer, player_id=pid,
+                    decision_type=DECISION_TYPE_CONFLICT_RESOLVE,
+                    options=[], chosen=[choice] if not isinstance(choice, list) else choice,
+                    reason=reason,
+                )
 
         # ── 协商后，更新状态并检查是否需要更多轮次 ──
         # 收集已通过协商的互攻对（不再重新检测）
@@ -1704,8 +1730,10 @@ class GameEngineV2:
                 split_count=split_count,
             )
 
-        # 持久化到 state
+        # 持久化到 state + 记录到回合日志
         self.state.target_declarations = declarations
+        if self.log is not None and declarations:
+            self.log.record_layer_declarations(layer, declarations)
         return declarations
 
     def _get_legal_targets_for_player(
@@ -1725,6 +1753,11 @@ class GameEngineV2:
             # gi 不能攻击 gi
             if move == Move.GI and p.pending_move == Move.GI.value:
                 continue
+            # gi 不能攻击防御力大于自身攻击力(1.0)的目标
+            if move == Move.GI:
+                target_move = self._parse_move(p.pending_move)
+                if target_move and DEFENSE_POWER.get(target_move, 0.0) > ATTACK_POWER[Move.GI]:
+                    continue
             if layer == SPEED_LAYER_GI_VS_HEIDONG and p.pending_move != Move.HEI_DONG.value:
                 continue
             if layer == SPEED_LAYER_CHI_SHUANGCHI:
@@ -1768,6 +1801,8 @@ class GameEngineV2:
 
         if len(pairs) < 2:
             self.state.current_conflicts = conflicts
+            if self.log is not None:
+                self.log.record_layer_conflicts(layer, conflicts)
             return conflicts
 
         # ── 检测互攻 ──
@@ -1836,8 +1871,10 @@ class GameEngineV2:
                     },
                 ))
 
-        # 保存到 state
+        # 保存到 state + 记录到回合日志
         self.state.current_conflicts = conflicts
+        if self.log is not None:
+            self.log.record_layer_conflicts(layer, conflicts)
         return conflicts
 
     def _auto_resolve_conflicts(
@@ -2362,10 +2399,21 @@ class GameEngineV2:
                 not candidate.is_flashed
                 and candidate.player_id != gi_player.player_id
                 and candidate.pending_move != Move.GI.value
+                and not (
+                    candidate.pending_move
+                    and DEFENSE_POWER.get(self._parse_move(candidate.pending_move), 0.0)
+                    > ATTACK_POWER[Move.GI]
+                )
             ),
         )
         if target is None:
-            # 无合法目标 → 保持未操作，留给层 11 处理
+            # 无合法目标 → 保持未操作；层 8 记录，层 11 再次检查
+            self.log.add_event(SpeedLayerEvent(
+                event_type=EventType.GI_NO_TARGET,
+                speed_layer=SPEED_LAYER_GI_ATTACK_STEAL,
+                source_player_id=gi_player.player_id,
+                detail=f"{gi_player.username} 的 gi 无合法目标（防御力均高于 {ATTACK_POWER[Move.GI]} 或为 gi）。",
+            ))
             return
 
         if target.pending_move == Move.GAO.value:
@@ -2710,6 +2758,12 @@ class GameEngineV2:
                 not candidate.is_flashed
                 and candidate.player_id != attacker.player_id
                 and not (move == Move.GI and candidate.pending_move == Move.GI.value)
+                and not (
+                    move == Move.GI
+                    and candidate.pending_move
+                    and DEFENSE_POWER.get(self._parse_move(candidate.pending_move), 0.0)
+                    > ATTACK_POWER[Move.GI]
+                )
             ),
         )
         if target is None:
@@ -2773,7 +2827,7 @@ class GameEngineV2:
         seg_info = f"第 {segment} 段" if segment else ""
 
         if attack_power > defense_power:
-            # 攻击成立
+            # 攻击成立 → 双方都变为已操作对象
             self._deal_damage(
                 source=attacker,
                 target=defender,
@@ -2791,9 +2845,18 @@ class GameEngineV2:
                 data={"attack_power": attack_power, "defense_power": defense_power,
                       "damage": damage, "segment": segment} if segment else {},
             ))
+            attacker.mark_resolved()
+            if not defender.is_resolved():
+                defender.mark_resolved()
+                self.log.add_event(SpeedLayerEvent(
+                    event_type=EventType.RESOLVED,
+                    speed_layer=speed_layer,
+                    source_player_id=defender.player_id,
+                    detail=f"{defender.username} 变为已操作对象。",
+                ))
 
         elif attack_power == defense_power and defender_move in ATTACK_MOVES:
-            # 对掉
+            # 对掉 → 双方都变为已操作对象
             self.log.add_event(SpeedLayerEvent(
                 event_type=EventType.ATTACK_NULLIFIED,
                 speed_layer=speed_layer,
@@ -2802,8 +2865,17 @@ class GameEngineV2:
                 detail=f"{attacker.username} 与 {defender.username} 攻击对掉。",
                 data={"attack_power": attack_power, "segment": segment} if segment else {},
             ))
+            attacker.mark_resolved()
+            if not defender.is_resolved():
+                defender.mark_resolved()
+                self.log.add_event(SpeedLayerEvent(
+                    event_type=EventType.RESOLVED,
+                    speed_layer=speed_layer,
+                    source_player_id=defender.player_id,
+                    detail=f"{defender.username} 变为已操作对象。",
+                ))
         else:
-            # 攻击力不足
+            # 攻击力不足 → 只有攻击者变为已操作对象，被攻击者仍可行动
             self.log.add_event(SpeedLayerEvent(
                 event_type=EventType.ATTACK_BLOCKED,
                 speed_layer=speed_layer,
@@ -2814,23 +2886,13 @@ class GameEngineV2:
                 data={"attack_power": attack_power, "defense_power": defense_power,
                       "segment": segment} if segment else {},
             ))
-
-        # 攻击者和被攻击者都变为已操作对象
-        attacker.mark_resolved()
-        if not defender.is_resolved():
-            defender.mark_resolved()
-            self.log.add_event(SpeedLayerEvent(
-                event_type=EventType.RESOLVED,
-                speed_layer=speed_layer,
-                source_player_id=defender.player_id,
-                detail=f"{defender.username} 变为已操作对象。",
-            ))
+            attacker.mark_resolved()
 
     def _get_attack_targets(self, attacker: PlayerStateV2, move: Move) -> list[PlayerStateV2]:
         """获取攻击的合法目标列表。
 
         目标条件：未操作 + 非闪 + 存活 + 不是自己。
-        gi 额外限制：不能攻击 gi。
+        gi 额外限制：不能攻击 gi，不能攻击防御力>1.0的目标。
         """
         targets = []
         for p in self.state.alive_players():
@@ -2841,6 +2903,11 @@ class GameEngineV2:
             # gi 不能攻击 gi
             if move == Move.GI and p.pending_move == Move.GI.value:
                 continue
+            # gi 不能攻击防御力大于自身攻击力(1.0)的目标
+            if move == Move.GI:
+                target_move = self._parse_move(p.pending_move)
+                if target_move and DEFENSE_POWER.get(target_move, 0.0) > ATTACK_POWER[Move.GI]:
+                    continue
             targets.append(p)
         return targets
 
