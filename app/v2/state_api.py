@@ -186,6 +186,13 @@ def get_room_v2_payload(
             requester_player_id=my_player_id,
         )
 
+    # ── 公开重赛票数：不要把 player_token 暴露给其他客户端 ──
+    rematch_votes: dict[str, bool] = {}
+    for token, vote in room.rematch_votes.items():
+        seat = room.get_seat_by_token(token)
+        if seat is not None:
+            rematch_votes[seat.player_id] = vote
+
     # ── 构建载荷 ──
     payload = {
         "room_id": room.room_id,
@@ -222,10 +229,7 @@ def get_room_v2_payload(
         "battle_id": room.battle_id,
 
         # 重赛
-        "rematch_votes": {
-            token: vote
-            for token, vote in room.rematch_votes.items()
-        },
+        "rematch_votes": rematch_votes,
     }
 
     return payload

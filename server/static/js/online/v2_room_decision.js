@@ -154,6 +154,13 @@
         window.hideDecisionModal();
     };
 
+    window.__v2_submitCurrentDecision = function () {
+        if (!currentDecision) return;
+        if (selectedOptions.length === 0) return;
+        window.__v2_submitDecisionCallback(selectedOptions);
+        window.hideDecisionModal();
+    };
+
     // ═══════════════════════════════════════════════════════
     // 决策提交回调（由主控制器设置）
     // ═══════════════════════════════════════════════════════
@@ -187,6 +194,10 @@
 
     window.showRoundSummary = function (summary) {
         if (!summary) return;
+        if (typeof window.__v2_shouldShowRoundSummary === "function" &&
+                !window.__v2_shouldShowRoundSummary()) {
+            return;
+        }
 
         var body = document.getElementById("round-summary-body");
 

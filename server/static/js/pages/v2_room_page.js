@@ -17,6 +17,15 @@ var v2Socket = null;
 var v2PollTimer = null;
 var v2HeartbeatTimer = null;
 var v2LatestRoom = null;
+var v2UiSettings = null;
+
+var V2_DEFAULT_UI_SETTINGS = {
+    showChat: true,
+    showHistory: false,
+    showSettlementLog: false,
+    compactPlayerCards: false,
+    showRoundSummaryPopup: false,
+};
 
 /* ═══════════════════════════════════════════════════════════════
    初始化
@@ -43,6 +52,7 @@ function initV2RoomPage() {
 
     // 账号按钮
     _setupAccountButton();
+    v2UiSettings = _loadV2UiSettings();
 
     // 事件绑定
     _bindLobbyEvents();
@@ -63,7 +73,7 @@ function initV2RoomPage() {
    ═══════════════════════════════════════════════════════════════ */
 
 function _connectSocket() {
-    if (!window.__socket_io_available) {
+    if (window.__socket_io_available === false || typeof io !== "function") {
         setMessage("Socket.IO 不可用，使用 HTTP 轮询。", "waiting");
         startPolling();
         return;
@@ -107,6 +117,7 @@ function _connectSocket() {
             if (data.room.my_player_id) v2MyPlayerId = data.room.my_player_id;
             if (data.room.my_role) v2MyRole = data.room.my_role;
             window.renderRoom(data.room);
+            _applyV2UiSettings();
             _updateIdentityFromRoom(data.room);
             setMessage("", "muted");
         }
@@ -117,8 +128,10 @@ function _connectSocket() {
             setMessage("等待决策中...", "waiting");
         } else if (data.action === "round_complete") {
             setMessage("本回合结算完成。", "success");
+            if (window.appendSystemChat) window.appendSystemChat("⚡ 本回合结算完成");
         } else if (data.action === "game_over") {
             setMessage("对局结束！", "success");
+            if (window.appendSystemChat) window.appendSystemChat("🏆 对局结束！");
         }
     });
 
@@ -138,6 +151,16 @@ function _connectSocket() {
     v2Socket.on("round_summary_v2", function (data) {
         if (data.ok && data.summary) {
             window.showRoundSummary(data.summary);
+            // 推送死亡事件到聊天
+            var deaths = data.summary.deaths || [];
+            for (var i = 0; i < deaths.length; i++) {
+                if (window.appendSystemChat) {
+                    window.appendSystemChat("💀 " + deaths[i].player_id + " 死亡（" + (deaths[i].cause || "未知") + "）");
+                }
+            }
+            if (data.summary.winner && window.appendSystemChat) {
+                window.appendSystemChat("🏆 " + data.summary.winner + " 获胜！");
+            }
         }
     });
 
@@ -153,14 +176,17 @@ function _connectSocket() {
 
     v2Socket.on("player_left_v2", function (data) {
         setMessage("玩家已离开房间。", "info");
+        if (window.appendSystemChat) window.appendSystemChat("👤 一位玩家离开了房间");
     });
 
     v2Socket.on("host_changed_v2", function (data) {
         setMessage("房主已变更为 " + (data.new_host_username || "另一玩家") + "。", "info");
+        if (window.appendSystemChat) window.appendSystemChat("👑 房主变更为 " + (data.new_host_username || "另一玩家"));
     });
 
     v2Socket.on("game_started_v2", function () {
         setMessage("对局已开始！", "success");
+        if (window.appendSystemChat) window.appendSystemChat("🎮 对局开始！");
     });
 
     v2Socket.on("room_v2_error", function (data) {
@@ -216,6 +242,7 @@ async function fetchRoomState() {
             if (result.data.room.my_player_id) v2MyPlayerId = result.data.room.my_player_id;
             if (result.data.room.my_role) v2MyRole = result.data.room.my_role;
             window.renderRoom(result.data.room);
+            _applyV2UiSettings();
             _updateIdentityFromRoom(result.data.room);
             setMessage("", "muted");
         } else if (result.data && result.data.error_code === "ROOM_NOT_FOUND") {
@@ -406,8 +433,9 @@ function _bindBattleEvents() {
 
 function _bindDecisionEvents() {
     document.getElementById("decision-submit-btn").addEventListener("click", function () {
-        _submitDecision(selectedOptions);
-        window.hideDecisionModal();
+        if (typeof window.__v2_submitCurrentDecision === "function") {
+            window.__v2_submitCurrentDecision();
+        }
     });
 
     document.getElementById("decision-auto-btn").addEventListener("click", function () {
@@ -451,6 +479,9 @@ function _bindChatEvents() {
                 player_token: v2MyPlayerToken,
                 message: msg,
             });
+        } else {
+            setMessage("当前实时连接不可用，暂时不能发送聊天。", "error");
+            return;
         }
         chatInput.value = "";
     }
@@ -471,6 +502,8 @@ function _bindChatEvents() {
                     player_token: v2MyPlayerToken,
                     message: msg,
                 });
+            } else {
+                setMessage("当前实时连接不可用，暂时不能发送聊天。", "error");
             }
         });
     });
@@ -507,6 +540,36 @@ function _bindOverlayEvents() {
         }
     }
 
+    var settingsBtn = document.getElementById("open-v2-settings-btn");
+    if (settingsBtn) {
+        settingsBtn.addEventListener("click", function () {
+            _syncV2SettingsControls();
+            document.getElementById("v2-settings-mask").classList.add("show");
+        });
+    }
+
+    var settingsClose = document.getElementById("v2-settings-close-btn");
+    if (settingsClose) {
+        settingsClose.addEventListener("click", function () {
+            document.getElementById("v2-settings-mask").classList.remove("show");
+        });
+    }
+
+    var settingsMask = document.getElementById("v2-settings-mask");
+    if (settingsMask) {
+        settingsMask.addEventListener("click", function (e) {
+            if (e.target.id === "v2-settings-mask") {
+                document.getElementById("v2-settings-mask").classList.remove("show");
+            }
+        });
+    }
+
+    _bindV2SettingToggle("v2-toggle-chat", "showChat");
+    _bindV2SettingToggle("v2-toggle-history", "showHistory");
+    _bindV2SettingToggle("v2-toggle-settlement-log", "showSettlementLog");
+    _bindV2SettingToggle("v2-toggle-compact-cards", "compactPlayerCards");
+    _bindV2SettingToggle("v2-toggle-round-summary", "showRoundSummaryPopup");
+
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -536,6 +599,75 @@ function _goToRooms() {
     if (window.V2RoomIdentity) window.V2RoomIdentity.remove(v2RoomId);
     window.location.href = "/v2/rooms";
 }
+
+function _settingsStorageKey() {
+    return "clapclap_v2_room_ui_settings";
+}
+
+function _loadV2UiSettings() {
+    var saved = null;
+    try {
+        saved = JSON.parse(localStorage.getItem(_settingsStorageKey()) || "null");
+    } catch (e) {
+        saved = null;
+    }
+    return Object.assign({}, V2_DEFAULT_UI_SETTINGS, saved || {});
+}
+
+function _saveV2UiSettings() {
+    try {
+        localStorage.setItem(_settingsStorageKey(), JSON.stringify(v2UiSettings));
+    } catch (e) {
+        // Ignore storage failures; settings are nice-to-have.
+    }
+}
+
+function _bindV2SettingToggle(id, key) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener("change", function () {
+        v2UiSettings[key] = !!el.checked;
+        _saveV2UiSettings();
+        _applyV2UiSettings();
+    });
+}
+
+function _syncV2SettingsControls() {
+    if (!v2UiSettings) v2UiSettings = _loadV2UiSettings();
+    var map = {
+        "v2-toggle-chat": "showChat",
+        "v2-toggle-history": "showHistory",
+        "v2-toggle-settlement-log": "showSettlementLog",
+        "v2-toggle-compact-cards": "compactPlayerCards",
+        "v2-toggle-round-summary": "showRoundSummaryPopup",
+    };
+    Object.keys(map).forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el) el.checked = !!v2UiSettings[map[id]];
+    });
+}
+
+function _setHiddenBySetting(id, hidden) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.classList.toggle("v2-hidden-by-setting", !!hidden);
+}
+
+function _applyV2UiSettings() {
+    if (!v2UiSettings) v2UiSettings = _loadV2UiSettings();
+    _setHiddenBySetting("chat-section", !v2UiSettings.showChat);
+    _setHiddenBySetting("history-section", !v2UiSettings.showHistory);
+    _setHiddenBySetting("settlement-card", !v2UiSettings.showSettlementLog);
+    _setHiddenBySetting("right-panel", !v2UiSettings.showChat && !v2UiSettings.showHistory);
+    document.body.classList.toggle("v2-compact-cards", !!v2UiSettings.compactPlayerCards);
+    document.body.classList.toggle("v2-no-side-panel", !v2UiSettings.showChat && !v2UiSettings.showHistory);
+    _syncV2SettingsControls();
+}
+
+window.__v2_shouldShowRoundSummary = function () {
+    if (!v2UiSettings) v2UiSettings = _loadV2UiSettings();
+    return !!v2UiSettings.showRoundSummaryPopup;
+};
 
 function setMessage(text, type) {
     var el = document.getElementById("message");

@@ -3,13 +3,13 @@
    ═══════════════════════════════════════════════════════════════ */
 
 :root {
-    --bg: #f0f2f5;
+    --bg: #eef2f6;
     --card: #ffffff;
     --panel: #f8fafc;
     --text: #1f2937;
     --muted: #6b7280;
     --border: #e5e7eb;
-    --shadow: 0 2px 8px rgba(0,0,0,0.04);
+    --shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
 
     --blue: #2563eb;
     --blue-bg: #eff6ff;
@@ -91,13 +91,22 @@ body {
     gap: 12px;
 }
 
+body.v2-no-side-panel .container {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+body.v2-no-side-panel #lobby-phase,
+body.v2-no-side-panel #battle-phase {
+    grid-column: 1 / -1;
+}
+
 /* ═══════════════════════════════════════════════════════
    通用组件
    ═══════════════════════════════════════════════════════ */
 
 .card {
     background: var(--card);
-    border-radius: 16px;
+    border-radius: 8px;
     padding: 18px 20px;
     box-shadow: var(--shadow);
     border: 1px solid var(--border);
@@ -130,7 +139,7 @@ body {
 /* ── 按钮 ── */
 .action-btn {
     border: none;
-    border-radius: 10px;
+    border-radius: 8px;
     padding: 8px 14px;
     font-size: 14px;
     font-weight: bold;
@@ -155,7 +164,7 @@ body {
 /* ── 消息 ── */
 .message-box {
     padding: 10px 16px;
-    border-radius: 10px;
+    border-radius: 8px;
     font-size: 14px;
     min-height: 20px;
     line-height: 1.5;
@@ -169,7 +178,7 @@ body {
 
 .message {
     padding: 10px 14px;
-    border-radius: 10px;
+    border-radius: 8px;
     font-size: 13px;
     min-height: 18px;
     line-height: 1.5;
@@ -206,7 +215,7 @@ body {
 .info-item {
     background: var(--panel);
     padding: 10px 12px;
-    border-radius: 10px;
+    border-radius: 8px;
     text-align: center;
 }
 
@@ -231,7 +240,7 @@ body {
 
 .lobby-seat-card {
     background: var(--panel);
-    border-radius: 12px;
+    border-radius: 8px;
     padding: 14px;
     text-align: center;
     border: 2px solid transparent;
@@ -355,7 +364,7 @@ body {
 
 .player-card {
     background: var(--card);
-    border-radius: 14px;
+    border-radius: 12px;
     padding: 14px;
     box-shadow: var(--shadow);
     border: 2px solid transparent;
@@ -404,7 +413,7 @@ body {
     text-align: center;
     padding: 4px 6px;
     background: var(--panel);
-    border-radius: 8px;
+    border-radius: 6px;
 }
 
 .resource-item .res-label {
@@ -468,7 +477,7 @@ body {
 
 .move-btn {
     border: 2px solid var(--border);
-    border-radius: 10px;
+    border-radius: 8px;
     padding: 10px 6px;
     text-align: center;
     font-size: 14px;
@@ -596,6 +605,20 @@ body {
     margin-right: 4px;
 }
 
+.chat-item .chat-sender-spectator {
+    font-weight: bold;
+    color: #8b5cf6;
+    margin-right: 4px;
+}
+
+.chat-item .chat-sender-system {
+    font-weight: bold;
+    color: #9ca3af;
+    margin-right: 4px;
+    text-transform: uppercase;
+    font-size: 11px;
+}
+
 .chat-item .chat-time {
     font-size: 11px;
     color: #9ca3af;
@@ -684,7 +707,7 @@ body {
 
 .modal-card {
     background: var(--card);
-    border-radius: 18px;
+    border-radius: 8px;
     padding: 22px 24px;
     width: min(520px, calc(100vw - 32px));
     max-height: 85vh;
@@ -739,7 +762,7 @@ body {
     align-items: center;
     gap: 8px;
     padding: 10px 14px;
-    border-radius: 10px;
+    border-radius: 8px;
     border: 2px solid var(--border);
     cursor: pointer;
     font-size: 14px;
@@ -832,7 +855,7 @@ body {
 .summary-winner {
     padding: 10px 14px;
     background: #fef3c7;
-    border-radius: 10px;
+    border-radius: 8px;
     font-size: 16px;
     font-weight: bold;
     text-align: center;
@@ -840,6 +863,108 @@ body {
 }
 
 .summary-winner:empty { display: none; }
+
+/* ═══════════════════════════════════════════════════════
+   设置与简洁模式
+   ═══════════════════════════════════════════════════════ */
+
+.v2-hidden-by-setting {
+    display: none !important;
+}
+
+.settings-modal {
+    max-width: 460px;
+}
+
+.settings-group {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.settings-title {
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.settings-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--panel);
+    font-size: 14px;
+}
+
+.settings-item input[type="checkbox"] {
+    appearance: none;
+    position: relative;
+    flex: 0 0 auto;
+    width: 42px;
+    height: 24px;
+    border: 1px solid #cbd5e1;
+    border-radius: 999px;
+    background: #cbd5e1;
+    cursor: pointer;
+    transition: background 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.settings-item input[type="checkbox"]::after {
+    content: "";
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 18px;
+    height: 18px;
+    border-radius: 999px;
+    background: #ffffff;
+    box-shadow: 0 2px 5px rgba(15, 23, 42, 0.18);
+    transition: transform 0.16s ease;
+}
+
+.settings-item input[type="checkbox"]:checked {
+    border-color: var(--blue);
+    background: var(--blue);
+}
+
+.settings-item input[type="checkbox"]:checked::after {
+    transform: translateX(18px);
+}
+
+.settings-item input[type="checkbox"]:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.18);
+}
+
+body.v2-compact-cards .player-card {
+    padding: 10px 12px;
+}
+
+body.v2-compact-cards .player-card .card-hp {
+    font-size: 24px;
+    margin: 4px 0;
+}
+
+body.v2-compact-cards .player-card .card-resources {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 4px;
+}
+
+body.v2-compact-cards .resource-item {
+    padding: 3px 4px;
+}
+
+body.v2-compact-cards .resource-item .res-label {
+    font-size: 9px;
+}
+
+body.v2-compact-cards .resource-item .res-value {
+    font-size: 13px;
+}
 
 /* ═══════════════════════════════════════════════════════
    响应式

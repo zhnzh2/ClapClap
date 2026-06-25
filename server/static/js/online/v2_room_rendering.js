@@ -243,6 +243,9 @@
             var badges = [];
             if (seat && seat.is_host) badges.push('<span class="badge host">房主</span>');
             if (isSelf) badges.push('<span class="badge self">我</span>');
+            // 在线状态
+            if (seat && seat.online) badges.push('<span class="badge online">在线</span>');
+            else if (seat) badges.push('<span class="badge offline">离线</span>');
             if (isDead) {
                 badges.push('<span class="badge offline">死亡</span>');
                 if (p.final_rank) badges.push('<span class="badge host">第' + p.final_rank + '名</span>');
@@ -448,7 +451,7 @@
         if (!game) return;
 
         // 排名
-        var players = game.players || [];
+        var players = (game.players || []).slice();
         players.sort(function (a, b) { return (a.final_rank || 99) - (b.final_rank || 99); });
 
         var html = '<ul class="rank-list">';
@@ -490,8 +493,11 @@
         for (var i = 0; i < messages.length; i++) {
             var msg = messages[i];
             var time = msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }) : "";
-            html += '<div class="chat-item">' +
-                '<span class="chat-sender">' + _esc(msg.sender || "") + '</span>' +
+            var isSystem = msg.is_system || (msg.sender || "").indexOf("[系统]") === 0;
+            var isSpectator = (msg.sender || "").indexOf("(观战)") >= 0;
+            var senderClass = isSystem ? "chat-sender-system" : (isSpectator ? "chat-sender-spectator" : "chat-sender");
+            html += '<div class="chat-item' + (isSystem ? ' is-system' : '') + '">' +
+                '<span class="' + senderClass + '">' + _esc(msg.sender || "") + '</span>' +
                 '<span class="chat-text">' + _esc(msg.message || "") + '</span>' +
                 '<span class="chat-time">' + time + '</span>' +
                 '</div>';
@@ -504,13 +510,25 @@
         var container = document.getElementById("chat-messages");
         if (!container) return;
         var time = msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }) : "";
+        var isSystem = msg.is_system || (msg.sender || "").indexOf("[系统]") === 0;
+        var isSpectator = (msg.sender || "").indexOf("(观战)") >= 0;
+        var senderClass = isSystem ? "chat-sender-system" : (isSpectator ? "chat-sender-spectator" : "chat-sender");
         var div = document.createElement("div");
-        div.className = "chat-item";
-        div.innerHTML = '<span class="chat-sender">' + _esc(msg.sender || "") + '</span>' +
+        div.className = "chat-item" + (isSystem ? " is-system" : "");
+        div.innerHTML = '<span class="' + senderClass + '">' + _esc(msg.sender || "") + '</span>' +
             '<span class="chat-text">' + _esc(msg.message || "") + '</span>' +
             '<span class="chat-time">' + time + '</span>';
         container.appendChild(div);
         container.scrollTop = container.scrollHeight;
+    };
+
+    window.appendSystemChat = function (text) {
+        window.appendChatItem({
+            sender: "[系统]",
+            message: text,
+            timestamp: new Date().toISOString(),
+            is_system: true,
+        });
     };
 
     // ═══════════════════════════════════════════════════════
@@ -534,14 +552,14 @@
 
             var moves = r.moves || {};
             for (var pid in moves) {
-                html += pid + ': ' + (MOVE_LABELS[moves[pid]] || moves[pid]) + ' ';
+                html += _esc(pid) + ': ' + _esc(MOVE_LABELS[moves[pid]] || moves[pid]) + ' ';
             }
 
             html += '</div>';
             if (r.deaths && r.deaths.length > 0) {
                 html += '<div style="color:#dc2626;font-size:12px;">死亡: ';
                 for (var j = 0; j < r.deaths.length; j++) {
-                    html += r.deaths[j].player_id + ' ';
+                    html += _esc(r.deaths[j].player_id) + ' ';
                 }
                 html += '</div>';
             }

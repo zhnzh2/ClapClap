@@ -514,6 +514,46 @@ class TestRoomV2ProtocolPayload:
         assert own_players["p1"]["pending_move"] == "QI"
         assert own_players["p2"]["pending_move"] is None
 
+    def test_room_payload_does_not_expose_private_tokens(self):
+        room, _, tok1 = create_room_v2("alice")
+        _, tok2 = room.add_player("bob")
+        room.start_game()
+        room.status = ROOM_FINISHED
+        room.vote_rematch(tok1, True)
+
+        payload = get_room_v2_payload(room, requester_token=tok2)
+
+        assert tok1 not in payload["rematch_votes"]
+        assert tok2 not in payload["rematch_votes"]
+        assert payload["rematch_votes"] == {"p1": True}
+
+    def test_socket_room_state_is_emitted_per_private_identity(self, monkeypatch):
+        room, _, tok1 = create_room_v2("alice")
+        _, tok2 = room.add_player("bob")
+        room.start_game()
+        room.submit_move(tok1, "QI")
+
+        emitted = []
+
+        def fake_emit(event, payload, to=None):
+            emitted.append((event, payload, to))
+
+        from server import socket_events_v2
+
+        monkeypatch.setattr(socket_events_v2.socketio, "emit", fake_emit)
+        socket_events_v2.emit_room_v2_state(room.room_id)
+
+        assert [item[2] for item in emitted] == [
+            f"{room.room_id}:player:{tok1}",
+            f"{room.room_id}:player:{tok2}",
+        ]
+
+        first_payload = emitted[0][1]["room"]["game"]["players"]
+        second_payload = emitted[1][1]["room"]["game"]["players"]
+        assert {p["player_id"]: p for p in first_payload}["p1"]["pending_move"] == "QI"
+        assert {p["player_id"]: p for p in first_payload}["p2"]["pending_move"] is None
+        assert {p["player_id"]: p for p in second_payload}["p1"]["pending_move"] is None
+
     def test_step6_routes_are_under_v2_room_api_prefix(self):
         from server.app import app
 

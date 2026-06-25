@@ -22,19 +22,34 @@ def _player_socket_room(room_id: str, player_token: str) -> str:
 # ═══════════════════════════════════════════════════════
 
 def emit_room_v2_state(room_id: str) -> None:
-    """广播 v2 房间状态给房间内所有人。"""
+    """向 v2 房间内成员发送各自视角的状态。
+
+    2.0 状态包含私密字段（例如自己的未公开动作、请求者身份）。不能把同一份
+    公共 payload 广播给所有人，否则会丢失自己的视角，也容易误加敏感字段。
+    """
     room = get_room_v2(room_id)
     if room is None:
         return
 
-    socketio.emit(
-        "room_v2_state",
-        {
-            "ok": True,
-            "room": get_room_v2_payload(room),
-        },
-        to=room_id,
-    )
+    for seat in room.seats:
+        socketio.emit(
+            "room_v2_state",
+            {
+                "ok": True,
+                "room": get_room_v2_payload(room, requester_token=seat.player_token),
+            },
+            to=_player_socket_room(room_id, seat.player_token),
+        )
+
+    for spectator in room.spectators:
+        socketio.emit(
+            "room_v2_state",
+            {
+                "ok": True,
+                "room": get_room_v2_payload(room, requester_token=spectator.spectator_token),
+            },
+            to=_player_socket_room(room_id, spectator.spectator_token),
+        )
 
 
 def emit_player_left_v2(room_id: str, player_token: str, leave_type: str) -> None:
@@ -44,7 +59,6 @@ def emit_player_left_v2(room_id: str, player_token: str, leave_type: str) -> Non
         {
             "ok": True,
             "room_id": room_id,
-            "player_token": player_token,
             "leave_type": leave_type,
         },
         to=room_id,
