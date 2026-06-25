@@ -164,6 +164,11 @@ class GameEngineV2:
         self.state = state
         self.log: RoundLogV2 | None = None
 
+    @staticmethod
+    def _now() -> float:
+        import time
+        return time.time()
+
     # ═══════════════════════════════════════════════════════════
     # 主入口：完整结算（向后兼容）
     # ═══════════════════════════════════════════════════════════
@@ -246,9 +251,6 @@ class GameEngineV2:
         self.state.phase = PHASE_FLASH
         self._phase_flash()
 
-        # ── 汇总 A~C 阶段的展示数据 ──
-        progress_data = self._build_reveal_progress()
-
         # ── 阶段 D：三连检测 ──
         self.state.phase = PHASE_THREE_CHAIN
         self.state.sub_phase = SUB_PHASE_THREE_CHAIN_DETECT
@@ -312,8 +314,9 @@ class GameEngineV2:
     # 决策生成辅助
     # ═══════════════════════════════════════════════════════════
 
-    def _make_default_decisions(self, requests: list) -> dict:
-        """从决策请求列表生成确定性默认决策。"""
+    @staticmethod
+    def _make_default_decisions(requests: list) -> dict:
+        """从决策请求列表生成确定性默认决策（纯函数，不依赖 self）。"""
         decisions = {}
         for req in requests:
             req_dict = req.to_dict() if hasattr(req, 'to_dict') else req
@@ -324,9 +327,16 @@ class GameEngineV2:
             if dtype == DECISION_TYPE_TARGET_SELECT:
                 split_count = req_dict.get("split_count", 1)
                 valid = [o for o in options if o.get("is_valid", True)]
-                targets = [o["option_id"] for o in valid[:split_count]]
-                while len(targets) < split_count:
-                    targets.append("")
+                target_options = [o for o in valid if o.get("option_id", "") != ""]
+                if split_count > 1 and target_options:
+                    targets = [
+                        target_options[i % len(target_options)]["option_id"]
+                        for i in range(split_count)
+                    ]
+                else:
+                    targets = [o.get("option_id", "") for o in valid[:split_count]]
+                    while len(targets) < split_count:
+                        targets.append("")
                 decisions[pid] = targets
 
             elif dtype == DECISION_TYPE_THREE_CHAIN_SELECT:
@@ -436,6 +446,8 @@ class GameEngineV2:
         if decision_requests:
             self.state.sub_phase = SUB_PHASE_THREE_CHAIN_SELECT
             self.state.current_decision_requests = decision_requests
+            self.state.decision_submitted_by = []
+            self.state.decision_deadline = self._now() + 30
             return SettlementStepResult(
                 action=STEP_ACTION_REQUEST_DECISION,
                 phase=PHASE_THREE_CHAIN,
@@ -623,6 +635,8 @@ class GameEngineV2:
                     # 暂停，等待玩家选择目标
                     self.state.sub_phase = SUB_PHASE_LAYER_TARGETING
                     self.state.current_decision_requests = decision_requests
+                    self.state.decision_submitted_by = []
+                    self.state.decision_deadline = self._now() + 30
                     return SettlementStepResult(
                         action=STEP_ACTION_REQUEST_DECISION,
                         phase=PHASE_SPEED_LAYER,
@@ -659,7 +673,8 @@ class GameEngineV2:
         self._phase_death_check()
 
         # 完成回合（记录快照、追加历史）
-        self._finish_round()
+        if self.log is not None and self.log not in self.state.history:
+            self._finish_round()
 
         if self.state.is_game_over():
             return self._build_game_over_result()
@@ -761,6 +776,8 @@ class GameEngineV2:
 
             self.state.sub_phase = SUB_PHASE_LAYER_NEGOTIATION
             self.state.current_decision_requests = negotiation_requests
+            self.state.decision_submitted_by = []
+            self.state.decision_deadline = self._now() + 20
 
             return SettlementStepResult(
                 action=STEP_ACTION_REQUEST_DECISION,
@@ -786,10 +803,12 @@ class GameEngineV2:
                 },
             )
 
-        # ── 无冲突：直接执行本层 ──
-        self.state.sub_phase = SUB_PHASE_LAYER_EXECUTION
+        # ── 无冲突：广播意向然后直接执行本层 ──
+        self.state.sub_phase = SUB_PHASE_LAYER_INTENT_REVEAL
+        self.state.current_conflicts = []
         self._execute_current_speed_layer(layer, active, declarations)
         self.state._speed_layer_cursor += 1
+        self.state.sub_phase = SUB_PHASE_LAYER_RESULT
 
         return self._advance_speed_layers()
 
@@ -998,8 +1017,10 @@ class GameEngineV2:
                 self.log.add_event(SpeedLayerEvent(
                     event_type=EventType.RESOLVED,
                     speed_layer=layer,
-                    detail=f"协商解决（多攻少）: {target} 选择接受 {chosen} 的攻击，"
-                           f"{', '.join(rest)} 放空。" if rest else "",
+                    detail=(
+                        f"冲突解决（多攻少）: {target} 选择接受 {chosen} 的攻击，"
+                        f"{', '.join(rest)} 放空。"
+                    ) if rest else f"冲突解决（多攻少）: {target} 选择接受 {chosen} 的攻击。",
                     data={"conflict_type": conflict.conflict_type,
                            "chosen": chosen, "missed": rest, "target": target},
                 ))
@@ -1017,6 +1038,17 @@ class GameEngineV2:
                 conflict.details["resolution"] = f"{target} 选择接受 {chosen} 的锦囊"
                 conflict.details["chosen"] = chosen
                 conflict.details["missed"] = rest
+
+                self.log.add_event(SpeedLayerEvent(
+                    event_type=EventType.RESOLVED,
+                    speed_layer=layer,
+                    detail=(
+                        f"冲突解决（锦囊多对一）: {target} 选择接受 {chosen} 的锦囊，"
+                        f"{', '.join(rest)} 放空。"
+                    ) if rest else f"冲突解决（锦囊多对一）: {target} 选择接受 {chosen} 的锦囊。",
+                    data={"conflict_type": conflict.conflict_type,
+                           "chosen": chosen, "missed": rest, "target": target},
+                ))
 
         # ── 协商后，更新状态并检查是否需要更多轮次 ──
         # 收集已通过协商的互攻对（不再重新检测）
@@ -1068,7 +1100,12 @@ class GameEngineV2:
         if remaining_conflicts:
             self._auto_resolve_conflicts(layer, remaining_conflicts, declarations)
 
-        # ── 执行本层 ──
+        self.state.current_conflicts = conflicts + [
+            c for c in remaining_conflicts
+            if c not in conflicts
+        ]
+
+        # ── 执行本层并标记结果展示 ──
         self.state.sub_phase = SUB_PHASE_LAYER_EXECUTION
         active = [
             p for p in self.state.alive_players()
@@ -1076,6 +1113,7 @@ class GameEngineV2:
         ]
         self._execute_current_speed_layer(layer, active, declarations)
         self.state._speed_layer_cursor += 1
+        self.state.sub_phase = SUB_PHASE_LAYER_RESULT
 
         return self._advance_speed_layers()
 
@@ -1457,10 +1495,12 @@ class GameEngineV2:
         ))
 
         # 仍结算资源手势（气/盾/加镐）— 在速度层循环中跳过攻击层，直接到层 12
-        # 将阶段设为速度层，但只处理层 12
         self._resolve_layer_12_resources()
 
-        # 游戏结束判定在 _finish_round 中处理
+        # 死亡判定和胜负判定
+        self._phase_death_check()
+        if not self.state.is_game_over():
+            self.state.winner = ""  # 平局
 
     # ═══════════════════════════════════════════════════════════
     # 阶段 E：速度层循环（层 3~12）
@@ -1853,8 +1893,10 @@ class GameEngineV2:
                 self.log.add_event(SpeedLayerEvent(
                     event_type=EventType.RESOLVED,
                     speed_layer=layer,
-                    detail=f"冲突解决（多攻少）: {target} 选择接受 {chosen} 的攻击，"
-                           f"{', '.join(rest)} 放空。" if rest else "",
+                    detail=(
+                        f"冲突解决（多攻少）: {target} 选择接受 {chosen} 的攻击，"
+                        f"{', '.join(rest)} 放空。"
+                    ) if rest else f"冲突解决（多攻少）: {target} 选择接受 {chosen} 的攻击。",
                     data={"conflict_type": conflict.conflict_type,
                            "chosen": chosen, "missed": rest, "target": target},
                 ))
@@ -1875,6 +1917,17 @@ class GameEngineV2:
                 conflict.details["resolution"] = f"{target} 选择接受 {chosen} 的锦囊"
                 conflict.details["chosen"] = chosen
                 conflict.details["missed"] = rest
+
+                self.log.add_event(SpeedLayerEvent(
+                    event_type=EventType.RESOLVED,
+                    speed_layer=layer,
+                    detail=(
+                        f"冲突解决（锦囊多对一）: {target} 选择接受 {chosen} 的锦囊，"
+                        f"{', '.join(rest)} 放空。"
+                    ) if rest else f"冲突解决（锦囊多对一）: {target} 选择接受 {chosen} 的锦囊。",
+                    data={"conflict_type": conflict.conflict_type,
+                           "chosen": chosen, "missed": rest, "target": target},
+                ))
 
         return resolution
 

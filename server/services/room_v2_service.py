@@ -357,11 +357,11 @@ def submit_move_v2_service(
             emit_room_v2_state,
             emit_settlement_progress_v2,
         )
-        emit_room_v2_state(room_id)
         emit_settlement_progress_v2(room_id, result)
 
         # ── 根据结算结果返回不同响应 ──
         if result.action == STEP_ACTION_REQUEST_DECISION:
+            emit_room_v2_state(room_id)
             return {
                 "ok": True,
                 "message": "本回合结算已开始，等待玩家决策。",
@@ -373,6 +373,9 @@ def submit_move_v2_service(
 
         elif result.action == STEP_ACTION_ROUND_COMPLETE:
             _handle_round_complete(room)
+            from server.socket_events_v2 import emit_round_summary_v2
+            emit_round_summary_v2(room_id)
+            emit_room_v2_state(room_id)
             return {
                 "ok": True,
                 "message": "本回合已结算。",
@@ -383,6 +386,9 @@ def submit_move_v2_service(
 
         elif result.action == STEP_ACTION_GAME_OVER:
             _handle_game_over(room)
+            from server.socket_events_v2 import emit_round_summary_v2
+            emit_round_summary_v2(room_id)
+            emit_room_v2_state(room_id)
             return {
                 "ok": True,
                 "message": "对局已结束！",
@@ -393,6 +399,7 @@ def submit_move_v2_service(
             }, 200
 
         else:
+            emit_room_v2_state(room_id)
             return {
                 "ok": True,
                 "message": "结算中。",
@@ -592,6 +599,37 @@ def submit_decision_v2_service(
     if not is_involved:
         return {"ok": False, "error": "你不需要提交决策。"}, 403
 
+    # ── 去重：已提交过的不再接受 ──
+    if player_id in room.game_state.decision_submitted_by:
+        return {"ok": False, "error": "你已经提交过决策，等待其他玩家。"}, 400
+
+    # ── 超时检查：将超时玩家的决策替换为默认值 ──
+    import time
+    now = time.time()
+    deadline = room.game_state.decision_deadline
+    if deadline > 0 and now > deadline:
+        # 收集所有超时未提交的玩家
+        expected_players = set()
+        for r in room.game_state.current_decision_requests:
+            pid = r.player_id if hasattr(r, 'player_id') else r.get('player_id', '')
+            if pid:
+                expected_players.add(pid)
+        already_submitted = set(room.game_state.decision_submitted_by)
+        timed_out = expected_players - already_submitted - {player_id}
+
+        if timed_out:
+            # 为超时玩家生成默认决策
+            from app.v2.game import GameEngineV2
+            default_reqs = [
+                r for r in room.game_state.current_decision_requests
+                if (r.player_id if hasattr(r, 'player_id') else r.get('player_id', '')) in timed_out
+            ]
+            timeout_defaults = GameEngineV2._make_default_decisions(default_reqs)
+            decisions.update(timeout_defaults)
+
+    # ── 标记已提交 ──
+    room.game_state.decision_submitted_by.append(player_id)
+
     # ── 调用引擎继续结算 ──
     try:
         engine = GameEngineV2(room.game_state)
@@ -612,11 +650,11 @@ def submit_decision_v2_service(
         emit_room_v2_state,
         emit_settlement_progress_v2,
     )
-    emit_room_v2_state(room_id)
     emit_settlement_progress_v2(room_id, result)
 
     # ── 根据结算结果返回不同响应 ──
     if result.action == STEP_ACTION_REQUEST_DECISION:
+        emit_room_v2_state(room_id)
         return {
             "ok": True,
             "message": "决策已接收，等待进一步协商。",
@@ -627,6 +665,9 @@ def submit_decision_v2_service(
 
     elif result.action == STEP_ACTION_ROUND_COMPLETE:
         _handle_round_complete(room)
+        from server.socket_events_v2 import emit_round_summary_v2
+        emit_round_summary_v2(room_id)
+        emit_room_v2_state(room_id)
         return {
             "ok": True,
             "message": "本回合已结算。",
@@ -637,6 +678,9 @@ def submit_decision_v2_service(
 
     elif result.action == STEP_ACTION_GAME_OVER:
         _handle_game_over(room)
+        from server.socket_events_v2 import emit_round_summary_v2
+        emit_round_summary_v2(room_id)
+        emit_room_v2_state(room_id)
         return {
             "ok": True,
             "message": "对局已结束！",
@@ -646,6 +690,7 @@ def submit_decision_v2_service(
         }, 200
 
     else:
+        emit_room_v2_state(room_id)
         return {
             "ok": True,
             "message": "结算进度已更新。",

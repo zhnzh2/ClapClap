@@ -19,6 +19,32 @@ from app.v2.models import (
 from app.v2.room import RoomV2
 
 
+def _sanitize_game_payload_for_requester(
+    payload: dict,
+    requester_player_id: str | None,
+) -> dict:
+    """Remove private per-player fields before sending state to clients."""
+    sanitized = dict(payload)
+    players = []
+    for player_data in payload.get("players", []):
+        item = dict(player_data)
+        can_see_own_private = (
+            requester_player_id is not None
+            and item.get("player_id") == requester_player_id
+        )
+        move_revealed = bool(item.get("move_revealed"))
+
+        if not can_see_own_private and not move_revealed:
+            item["pending_move"] = None
+        for field in ("target_intent", "target_final"):
+            if not can_see_own_private:
+                item[field] = []
+        players.append(item)
+
+    sanitized["players"] = players
+    return sanitized
+
+
 # ═══════════════════════════════════════════════════════════════
 # 动作目录
 # ═══════════════════════════════════════════════════════════════
@@ -155,8 +181,10 @@ def get_room_v2_payload(
     game_payload = None
     if room.game_state is not None:
         game_payload = get_game_state_v2_payload(room.game_state, include_history=True)
-        # 移除对局中的玩家完整数据（已在 seats_payload 中）
-        # 保留历史、回合数、胜者等
+        game_payload = _sanitize_game_payload_for_requester(
+            game_payload,
+            requester_player_id=my_player_id,
+        )
 
     # ── 构建载荷 ──
     payload = {

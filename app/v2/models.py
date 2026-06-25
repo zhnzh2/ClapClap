@@ -637,6 +637,10 @@ class GameStateV2:
     three_chain_result: ThreeChainResult = field(default_factory=ThreeChainResult)
     random_seeds_used: list[dict] = field(default_factory=list)
 
+    # ── 决策追踪（用于超时和去重） ──
+    decision_deadline: float = 0.0              # 等待决策的截止时间戳（time.time() + timeout）
+    decision_submitted_by: list[str] = field(default_factory=list)  # 已提交决策的 player_id 列表
+
     # ── 协商状态 ──
     negotiation_round: int = 0              # 当前协商轮次（0 = 未在协商）
     negotiation_layer: int = 0              # 正在协商的速度层
@@ -707,6 +711,8 @@ class GameStateV2:
         self.negotiation_round = 0
         self.negotiation_layer = 0
         self.negotiation_declarations = {}
+        self.decision_deadline = 0.0
+        self.decision_submitted_by = []
 
         for p in self.alive_players():
             p.reset_round_runtime()

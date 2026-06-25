@@ -21,6 +21,7 @@ from server.services.room_v2_service import (
 from server.auth_middleware import require_auth, get_current_username
 from app.v2.constants import MAX_PLAYERS, MIN_PLAYERS
 from app.v2.room import START_HOST, START_ALL_READY, START_FULL
+from app.v2.room_manager import get_room_v2
 
 room_v2_bp = Blueprint("room_v2", __name__)
 
@@ -255,7 +256,7 @@ def api_rematch_vote(room_id: str):
 # Step 6：提交结算决策
 # ═══════════════════════════════════════════════════════════════
 
-@room_v2_bp.route("/<room_id>/decision", methods=["POST"])
+@room_v2_bp.post("/api/v2/rooms/<room_id>/decision")
 def submit_decision_v2(room_id: str):
     """提交结算中的决策（目标选择、冲突协商等）。
 
@@ -273,7 +274,7 @@ def submit_decision_v2(room_id: str):
         # 冲突协商（互攻）
         {"p1": "p2", "p2": ""}  # p1坚持攻击p2，p2放空
     """
-    data = flask_request.get_json(silent=True)
+    data = request.get_json(silent=True)
     if not isinstance(data, dict):
         return jsonify({"ok": False, "error": "请求体必须是 JSON。"}), 400
 
@@ -296,7 +297,7 @@ def submit_decision_v2(room_id: str):
 # Step 6：获取当前决策请求（方便前端轮询）
 # ═══════════════════════════════════════════════════════════════
 
-@room_v2_bp.route("/<room_id>/decisions", methods=["GET"])
+@room_v2_bp.get("/api/v2/rooms/<room_id>/decisions")
 def get_pending_decisions_v2(room_id: str):
     """获取当前待处理的决策请求列表。
 
@@ -311,14 +312,40 @@ def get_pending_decisions_v2(room_id: str):
         }), 404
 
     if room.game_state is None:
-        return jsonify({"ok": True, "decisions": [], "phase": ""}), 200
+        return jsonify({
+            "ok": True,
+            "decision_requests": [],
+            "decision_requests_summary": [],
+            "phase": "",
+        }), 200
+
+    player_token = request.args.get("player_token", type=str)
+    requester_player_id = None
+    if player_token:
+        seat = room.get_seat_by_token(player_token.strip())
+        if seat is None:
+            return jsonify({"ok": False, "error": "身份无效。"}), 403
+        requester_player_id = seat.player_id
 
     decision_requests = []
+    decision_requests_summary = []
     for r in room.game_state.current_decision_requests:
         if hasattr(r, 'to_dict'):
-            decision_requests.append(r.to_dict())
+            item = r.to_dict()
         else:
-            decision_requests.append(r)
+            item = r
+
+        decision_requests_summary.append({
+            "decision_id": item.get("decision_id", ""),
+            "decision_type": item.get("decision_type", ""),
+            "speed_layer": item.get("speed_layer", 0),
+            "player_id": item.get("player_id", ""),
+            "split_count": item.get("split_count", 1),
+            "negotiation_round": item.get("negotiation_round", 0),
+        })
+
+        if requester_player_id and item.get("player_id") == requester_player_id:
+            decision_requests.append(item)
 
     return jsonify({
         "ok": True,
@@ -326,4 +353,5 @@ def get_pending_decisions_v2(room_id: str):
         "sub_phase": room.game_state.sub_phase,
         "current_speed_layer": room.game_state.current_speed_layer,
         "decision_requests": decision_requests,
+        "decision_requests_summary": decision_requests_summary,
     }), 200

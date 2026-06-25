@@ -13,6 +13,10 @@ from app.v2.state_api import get_room_v2_payload
 from server.extensions import socketio
 
 
+def _player_socket_room(room_id: str, player_token: str) -> str:
+    return f"{room_id}:player:{player_token}"
+
+
 # ═══════════════════════════════════════════════════════
 # 广播辅助函数
 # ═══════════════════════════════════════════════════════
@@ -101,15 +105,18 @@ def handle_join_room_v2(data):
 
     player_token = data.get("player_token")
     if isinstance(player_token, str) and player_token.strip():
+        player_token = player_token.strip()
         # 检查是参战者还是观战者
-        seat = room.get_seat_by_token(player_token.strip())
+        seat = room.get_seat_by_token(player_token)
         if seat is not None:
-            mark_reconnected_v2(room_id, player_token.strip())
+            mark_reconnected_v2(room_id, player_token)
+            socket_join_room(_player_socket_room(room_id, player_token))
         else:
-            spec = room.get_spectator_by_token(player_token.strip())
+            spec = room.get_spectator_by_token(player_token)
             if spec is None:
                 emit("room_v2_error", {"ok": False, "error": "身份无效。"})
                 return
+            socket_join_room(_player_socket_room(room_id, player_token))
 
     socket_join_room(room_id)
     emit_room_v2_state(room_id)
@@ -185,6 +192,29 @@ def handle_chat_message_v2(data):
     emit("chat_v2_broadcast", {"ok": True, "message": msg}, to=room_id)
 
 
+def emit_round_summary_v2(room_id: str) -> None:
+    """广播回合总结给房间内所有人。"""
+    room = get_room_v2(room_id)
+    if room is None or room.game_state is None:
+        return
+
+    from app.v2.state_api import get_round_summary_payload
+
+    summary = get_round_summary_payload(room.game_state)
+    if summary is None:
+        return
+
+    socketio.emit(
+        "round_summary_v2",
+        {
+            "ok": True,
+            "room_id": room_id,
+            "summary": summary,
+        },
+        to=room_id,
+    )
+
+
 def emit_settlement_progress_v2(room_id: str, step_result) -> None:
     """广播结算进度给房间内所有人。
 
@@ -209,31 +239,45 @@ def emit_settlement_progress_v2(room_id: str, step_result) -> None:
         to=room_id,
     )
 
-    # 如果有决策请求，分别发送给对应的玩家
+    # 如果有决策请求，只把完整选项发给对应玩家。
     decision_requests = result_dict.get("decision_requests", [])
     if decision_requests:
         room = get_room_v2(room_id)
         if room is None:
             return
 
-        # 按玩家分组发送（每个玩家只看自己的决策）
+        public_summary = []
         for req in decision_requests:
             player_id = req.get("player_id", "")
-            # 找到该玩家的 session
             seat = room.get_seat_by_player_id(player_id)
             if seat is None:
                 continue
-            # 广播给整个房间，前端根据 player_id 过滤
-            # （Socket.IO 的 private messaging 需要知道 socket id，这里简化处理）
-            pass
 
-        # 广播所有玩家的决策请求摘要（每个玩家根据 player_id 过滤）
+            payload = {
+                "ok": True,
+                "room_id": room_id,
+                "decision_request": req,
+            }
+            socketio.emit(
+                "decision_request_v2",
+                payload,
+                to=_player_socket_room(room_id, seat.player_token),
+            )
+            public_summary.append({
+                "decision_id": req.get("decision_id", ""),
+                "decision_type": req.get("decision_type", ""),
+                "speed_layer": req.get("speed_layer", 0),
+                "player_id": player_id,
+                "split_count": req.get("split_count", 1),
+                "negotiation_round": req.get("negotiation_round", 0),
+            })
+
         socketio.emit(
-            "decision_requests_v2",
+            "decision_requests_summary_v2",
             {
                 "ok": True,
                 "room_id": room_id,
-                "decision_requests": decision_requests,
+                "decision_requests": public_summary,
             },
             to=room_id,
         )

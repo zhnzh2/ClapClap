@@ -30,6 +30,8 @@ from app.v2.room_manager import (
     ROOMS_V2,
     ROOMS_V2_LOCK,
 )
+from app.v2.models import DecisionOption, DecisionRequest
+from app.v2.state_api import get_room_v2_payload
 
 
 class TestSeatV2:
@@ -481,3 +483,91 @@ class TestRoomV2Manager:
         deleted = cleanup_expired_rooms_v2()
         assert room_id in deleted
         assert get_room_v2(room_id) is None
+
+
+class TestRoomV2ProtocolPayload:
+    """Step 6 协议载荷测试。"""
+
+    def setup_method(self):
+        with ROOMS_V2_LOCK:
+            ROOMS_V2.clear()
+
+    def test_room_payload_hides_unrevealed_moves_from_broadcast(self):
+        room, _, tok1 = create_room_v2("alice")
+        _, tok2 = room.add_player("bob")
+        room.start_game()
+
+        room.submit_move(tok1, "QI")
+        room.submit_move(tok2, "SHIELD")
+
+        broadcast_payload = get_room_v2_payload(room)
+        broadcast_players = {
+            p["player_id"]: p for p in broadcast_payload["game"]["players"]
+        }
+        assert broadcast_players["p1"]["pending_move"] is None
+        assert broadcast_players["p2"]["pending_move"] is None
+
+        own_payload = get_room_v2_payload(room, requester_token=tok1)
+        own_players = {
+            p["player_id"]: p for p in own_payload["game"]["players"]
+        }
+        assert own_players["p1"]["pending_move"] == "QI"
+        assert own_players["p2"]["pending_move"] is None
+
+    def test_step6_routes_are_under_v2_room_api_prefix(self):
+        from server.app import app
+
+        rules = {rule.rule for rule in app.url_map.iter_rules()}
+        assert "/api/v2/rooms/<room_id>/decision" in rules
+        assert "/api/v2/rooms/<room_id>/decisions" in rules
+
+        client = app.test_client()
+        response = client.get("/api/v2/rooms/NOEXIST/decisions")
+        assert response.status_code == 404
+        assert response.get_json()["error_code"] == "ROOM_NOT_FOUND"
+
+    def test_pending_decisions_endpoint_filters_by_player_token(self):
+        from server.app import app
+
+        room, _, tok1 = create_room_v2("alice")
+        _, tok2 = room.add_player("bob")
+        room.start_game()
+        room.game_state.current_decision_requests = [
+            DecisionRequest(
+                decision_id="target_p1_9",
+                decision_type="target_select",
+                speed_layer=9,
+                player_id="p1",
+                options=[DecisionOption(option_id="p2", label="Bob")],
+            ),
+            DecisionRequest(
+                decision_id="target_p2_9",
+                decision_type="target_select",
+                speed_layer=9,
+                player_id="p2",
+                options=[DecisionOption(option_id="p1", label="Alice")],
+            ),
+        ]
+
+        client = app.test_client()
+        public_response = client.get(f"/api/v2/rooms/{room.room_id}/decisions")
+        public_data = public_response.get_json()
+        assert public_response.status_code == 200
+        assert public_data["decision_requests"] == []
+        assert len(public_data["decision_requests_summary"]) == 2
+        assert "options" not in public_data["decision_requests_summary"][0]
+
+        own_response = client.get(
+            f"/api/v2/rooms/{room.room_id}/decisions",
+            query_string={"player_token": tok1},
+        )
+        own_data = own_response.get_json()
+        assert own_response.status_code == 200
+        assert [r["player_id"] for r in own_data["decision_requests"]] == ["p1"]
+        assert own_data["decision_requests"][0]["options"][0]["option_id"] == "p2"
+
+        invalid_response = client.get(
+            f"/api/v2/rooms/{room.room_id}/decisions",
+            query_string={"player_token": "bad-token"},
+        )
+        assert invalid_response.status_code == 403
