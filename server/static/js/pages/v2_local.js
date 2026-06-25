@@ -1,7 +1,7 @@
 /**
  * ClapClap 2.0 本地模拟对战 —— 主控制器
  *
- * 事件绑定、API 调用、结算流程驱动。采用 v1 内联风格。
+ * 事件绑定、API 调用、结算流程驱动。对齐 v1 local_page.js 风格。
  */
 
 /* ═══════════════════════════════════════════════════════════════
@@ -103,7 +103,7 @@ async function startGame() {
     hideEndCard();
 
     renderV2State(result.data.state);
-    setMessage(result.data.message || "对局已创建。");
+    setMessage(result.data.message || "对局已创建，请为每位玩家选择动作。");
 }
 
 function confirmReset() {
@@ -155,7 +155,7 @@ async function submitMoves() {
         moves[pid] = v2SelectedMoves[pid];
     }
 
-    setMessage("正在提交动作...");
+    setMessage("正在提交动作并结算...");
     var result = await ApiUtils.apiPost("/api/v2/local/step", {
         moves: moves,
         auto_resolve: v2Settings.autoResolve,
@@ -180,7 +180,7 @@ function handleSettlementResult(settlement) {
 
     if (action === "request_decision") {
         renderSettlementProgress(settlement);
-        setMessage("⚠️ 等待决策 — 请在上方「结算进度」中选择目标。");
+        setMessage("等待决策 — 请在「结算进度」卡片中选择目标。");
         // 滚动到结算卡片
         var card = document.getElementById("settlement-card");
         if (card) card.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -201,6 +201,7 @@ function handleSettlementResult(settlement) {
         return;
     }
 
+    // 其他状态（waiting 等）
     renderSettlementProgress(settlement);
     setMessage("结算中...");
 }
@@ -265,7 +266,7 @@ function buildSummaryFromLog(log, state) {
 
 async function submitDecision() {
     var decisions = collectDecisionData();
-    if (Object.keys(decisions).length === 0) { setMessage("请至少选择一个选项。"); return; }
+    if (Object.keys(decisions).length === 0) { setMessage("请至少为每位玩家选择一个选项（可放空）。"); return; }
 
     hideDecisionArea();
     setMessage("正在提交决策...");
@@ -311,6 +312,9 @@ function continueToNextRound() {
     v2SettlementResult = null;
     if (v2LatestState) renderV2State(v2LatestState);
     setMessage("新回合开始，请选择动作。");
+    // 滚动到动作选择区
+    var moveCard = document.getElementById("move-selection-card");
+    if (moveCard) moveCard.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -339,7 +343,7 @@ function handleKeyboard(event) {
         return;
     }
 
-    // Backspace：撤销焦点玩家选择
+    // Backspace：撤销焦点玩家选择 / 关闭弹窗
     if (key === "Backspace") {
         if (!v2IsSetupPhase && v2FocusedPlayer) {
             v2SelectedMoves[v2FocusedPlayer] = null;
@@ -352,17 +356,20 @@ function handleKeyboard(event) {
     // Enter：提交 / 确认决策 / 继续
     if (key === "Enter") {
         // 决策区可见 → 提交决策
-        if (document.getElementById("decision-area").style.display !== "none") {
+        var decisionArea = document.getElementById("decision-area");
+        if (decisionArea && decisionArea.style.display !== "none") {
             submitDecision();
             return;
         }
         // 回合总结可见 → 继续
-        if (document.getElementById("round-summary-card").style.display !== "none") {
+        var summaryCard = document.getElementById("round-summary-card");
+        if (summaryCard && summaryCard.style.display !== "none") {
             continueToNextRound();
             return;
         }
         // 对局结束可见 → 重新开始
-        if (document.getElementById("end-card").style.display !== "none") {
+        var endCard = document.getElementById("end-card");
+        if (endCard && endCard.style.display !== "none") {
             hideEndCard();
             resetToSetup();
             return;

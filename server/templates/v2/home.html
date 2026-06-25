@@ -3,33 +3,179 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>ClapClap 2.0</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/v2_rooms.css') }}" />
+    <title>ClapClap 2.0 大厅</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/auth.css') }}" />
+    <style>
+        :root {
+            --bg: #f4f6fb;
+            --card: #ffffff;
+            --text: #1f2937;
+            --muted: #6b7280;
+            --shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+            --blue: #2563eb;
+            --border: #e5e7eb;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            font-family: Arial, "Microsoft YaHei", sans-serif;
+            background: var(--bg);
+            color: var(--text);
+        }
+
+        .container {
+            max-width: 1120px;
+            margin: 0 auto;
+            padding: 28px 18px 40px;
+        }
+
+        .hero {
+            text-align: center;
+            margin-bottom: 28px;
+            position: relative;
+        }
+
+        .hero h1 { margin: 0 0 10px 0; font-size: 38px; }
+        .hero p { margin: 0; color: var(--muted); font-size: 16px; }
+
+        .version-switch-btn {
+            position: absolute; left: 0; top: 8px;
+            display: inline-block; text-decoration: none;
+            padding: 4px 12px; border-radius: 8px;
+            background: #fef3c7; color: #92400e;
+            border: 1px solid #f59e0b; font-size: 13px; font-weight: bold;
+            transition: background 0.15s;
+        }
+        .version-switch-btn:hover { background: #fde68a; }
+
+        .rule-link {
+            position: absolute; right: 90px; top: 12px;
+            display: inline-block; text-decoration: none;
+            font-size: 13px; color: #2563eb; font-weight: bold;
+        }
+        .rule-link:hover { text-decoration: underline; }
+
+        .mode-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 18px;
+        }
+
+        .mode-card {
+            background: var(--card);
+            border-radius: 18px;
+            padding: 22px;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        .mode-card h2 { margin: 0; font-size: 24px; }
+        .mode-card p { margin: 0; line-height: 1.8; color: #374151; }
+
+        .badge {
+            display: inline-block; width: fit-content;
+            padding: 5px 10px; border-radius: 999px;
+            background: #eff6ff; color: #1d4ed8;
+            font-size: 13px; font-weight: bold;
+        }
+        .badge.warn {
+            background: #fef3c7; color: #92400e;
+        }
+
+        .actions { margin-top: auto; }
+
+        .btn {
+            display: inline-block; text-decoration: none;
+            border: none; border-radius: 12px;
+            padding: 11px 16px; font-size: 15px; font-weight: bold;
+            cursor: pointer; background: var(--blue); color: white;
+        }
+        .btn.secondary { background: #6b7280; }
+
+        .footer-note {
+            margin-top: 26px; text-align: center;
+            color: var(--muted); font-size: 14px;
+        }
+
+        /* 账号按钮 — 与 v1 一致 */
+        .header-account-btn {
+            position: absolute; right: 0; top: 8px;
+            border: none; background: #e5e7eb;
+            padding: 5px 14px; border-radius: 8px;
+            cursor: pointer; font-size: 13px; font-weight: bold;
+            color: #111827;
+        }
+
+        @media (max-width: 820px) {
+            .mode-grid { grid-template-columns: 1fr; }
+            .hero h1 { font-size: 30px; }
+        }
+    </style>
 </head>
 <body>
     <div class="container">
-        <div class="top-row">
-            <div>
-                <h1>ClapClap 2.0</h1>
-                <div class="sub">多人在线对战 · 本地模拟 · 更多玩法</div>
+        <div class="hero">
+            <a class="version-switch-btn" href="/" title="切换到 1.0 双人版">1.0</a>
+            <h1>ClapClap 2.0</h1>
+            <p>多人在线对战 · 本地模拟 · 新规则 · 新体验</p>
+            <a class="rule-link" href="/rules/2.0">查看 2.0 游戏规则</a>
+            <button class="header-account-btn" id="header-account-btn">账号</button>
+        </div>
+
+        <div class="mode-grid">
+            <div class="mode-card">
+                <span class="badge">推荐入口</span>
+                <h2>本地模拟对战</h2>
+                <p>一人操作所有玩家，在同一设备上快速体验 2.0 多人规则。支持裁判模式，适合测试规则和练习玩法。</p>
+                <div class="actions">
+                    <a class="btn" href="/v2/local">进入模式</a>
+                </div>
             </div>
-            <div class="top-actions">
-                <button class="action-btn secondary" id="header-account-btn">账号</button>
-                <a class="action-btn secondary" href="/">返回 1.0 大厅</a>
+
+            <div class="mode-card">
+                <span class="badge">联机对战</span>
+                <h2>多人房间对战</h2>
+                <p>创建或加入在线房间，与朋友进行真正的多人对战。支持最多 6 人同时竞技，含实时聊天和观战。</p>
+                <div class="actions">
+                    <a class="btn" href="/v2/rooms">进入模式</a>
+                </div>
+            </div>
+
+            <div class="mode-card">
+                <span class="badge warn">开发中</span>
+                <h2>电脑 AI 对战</h2>
+                <p>和电脑 AI 进行 2.0 规则对战。AI 正在训练中，后续版本接入。</p>
+                <div class="actions">
+                    <a class="btn secondary" href="/v2">暂不可用</a>
+                </div>
+            </div>
+
+            <div class="mode-card">
+                <span class="badge warn">开发中</span>
+                <h2>2.0 对局回放</h2>
+                <p>查看已完成的 2.0 多人对局记录，支持逐回合回放和速度层时间线。</p>
+                <div class="actions">
+                    <a class="btn secondary" href="/v2">暂不可用</a>
+                </div>
             </div>
         </div>
 
-        <div class="grid">
-            <div class="card">
-                <h2>🎮 本地模拟对战</h2>
-                <p>一人操作所有玩家，快速体验 2.0 多人规则。支持裁判模式，在同一设备上完成整局对战。</p>
-                <a class="action-btn primary" href="/v2/local">进入本地模拟</a>
-            </div>
-            <div class="card">
-                <h2>🌐 多人房间对战</h2>
-                <p>创建或加入在线房间，与朋友进行真正的多人对战。支持最多 6 人同时竞技。</p>
-                <a class="action-btn primary" href="/v2/rooms">进入房间对战</a>
+        <div class="footer-note">
+            当前开发进度：2.0 规则引擎与本地模拟已完成，多人房间联机开发中。
+        </div>
+
+        <!-- 全局弹窗遮罩 -->
+        <div class="modal-mask" id="global-modal-mask" style="z-index: 1100;">
+            <div class="modal-card" id="global-modal-card">
+                <div class="modal-icon" id="global-modal-icon" style="display: none;"></div>
+                <div class="modal-title" id="global-modal-title"></div>
+                <div class="modal-body" id="global-modal-body"></div>
+                <div class="modal-actions" id="global-modal-actions"></div>
             </div>
         </div>
     </div>
@@ -54,15 +200,9 @@
                 });
             }
         }
+        if (typeof ModalUtils !== "undefined" && ModalUtils.bindGlobalModalEvents) {
+            ModalUtils.bindGlobalModalEvents();
+        }
     </script>
-    <div class="modal-mask" id="global-modal-mask" style="z-index: 1100;">
-        <div class="modal-card" id="global-modal-card">
-            <div class="modal-icon" id="global-modal-icon" style="display: none;"></div>
-            <div class="modal-title" id="global-modal-title"></div>
-            <div class="modal-body" id="global-modal-body"></div>
-            <div class="modal-actions" id="global-modal-actions"></div>
-        </div>
-    </div>
-    <script>if (typeof ModalUtils !== "undefined" && ModalUtils.bindGlobalModalEvents) { ModalUtils.bindGlobalModalEvents(); }</script>
 </body>
 </html>

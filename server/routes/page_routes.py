@@ -34,6 +34,11 @@ def match_mode():
     )
 
 
+@page_bp.get("/rules/1.0")
+def rules_1_0():
+    return render_template("rule.html", version="1.0")
+
+
 @page_bp.get("/ai")
 def ai_mode():
     return render_template("ai.html")

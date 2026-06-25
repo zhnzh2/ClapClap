@@ -802,15 +802,19 @@ class TestEdgeCases(unittest.TestCase):
         self.assertEqual(state.round_num, 3)
 
     def test_attack_after_being_resolved_in_earlier_layer(self):
-        """在较早速度层被攻击变为已操作 → 在后面层不能发起攻击。"""
+        """在较早速度层被攻击变为已操作 → 在后面层不能发起攻击。
+
+        场景：P1 出破（层 9，攻 2.0）攻击 P2 出十字（防 3.0），攻不穿，但
+        P2 因"被别人攻击"变为已操作对象。P2 在层 9 不能再用破攻击别人。
+        """
         state = _make_state([
-            {"player_id": "p1", "username": "A", "qi": 2},    # gi（层 8）
-            {"player_id": "p2", "username": "B", "qi": 3},    # 破（层 9）
-            {"player_id": "p3", "username": "C"},              # 气
+            {"player_id": "p1", "username": "A", "qi": 3},    # 破（层 9），需 2 气
+            {"player_id": "p2", "username": "B", "qi": 3},    # 十字（防御），需 2 气
+            {"player_id": "p3", "username": "C"},              # 气（层 12）
         ])
-        _run_round(state, {"p1": Move.GI, "p2": Move.PO, "p3": Move.QI})
-        # P1 gi（层 8）攻击 P2（层 9 的破），P1 攻击力 1 < P2 防御 2 → 攻击被挡
-        # 但 P2 被攻击 → 变为已操作 → 层 9 不能攻击
+        _run_round(state, {"p1": Move.PO, "p2": Move.SHI_ZI, "p3": Move.QI})
+        # P1 破（攻 2.0）攻击 P2 十字（防 3.0）→ 攻击力不足被挡
+        # 但 P2 被攻击了 → 变为已操作对象
         self.assertTrue(state.players[1].is_resolved())
         # P3 未被攻击 → 存活
         self.assertEqual(state.players[2].hp, 1)

@@ -53,7 +53,7 @@ def _auto_advance(engine: GameEngineV2, result) -> dict:
     """如果引擎不需要玩家决策，自动推进到下一个决策点或完成。
 
     仅在本地模式使用——房间模式中决策由各玩家通过 Socket 提交。
-    自动决策时向日志追加原因说明事件。
+    自动决策时向事件日志追加原因说明（决策记录由引擎内部 handler 负责）。
     """
     while result.action == STEP_ACTION_REQUEST_DECISION:
         layer = result.current_speed_layer
@@ -62,7 +62,7 @@ def _auto_advance(engine: GameEngineV2, result) -> dict:
         # 先生成默认决策
         default_decisions = GameEngineV2._make_default_decisions(result.decision_requests)
 
-        # 为每个决策请求生成原因说明并记录
+        # 为每个决策请求生成原因说明，写入速度层事件流
         for req in result.decision_requests:
             req_dict = req.to_dict() if hasattr(req, 'to_dict') else req
             dtype = req_dict.get("decision_type", "")
@@ -104,6 +104,7 @@ def _auto_advance(engine: GameEngineV2, result) -> dict:
             else:
                 reason = f"自动决策 [{layer_name}]：{player_name} 使用默认值。"
 
+            # 追加到速度层事件流（供前端展示）
             engine.log.add_event(SpeedLayerEvent(
                 event_type=EventType.RESOLVED,
                 speed_layer=layer,
@@ -111,15 +112,6 @@ def _auto_advance(engine: GameEngineV2, result) -> dict:
                 detail=reason,
                 data={"auto_decision": True, "decision_type": dtype},
             ))
-            chosen_val = default_decisions.get(player_id, [])
-            engine.log.add_decision(
-                layer=layer,
-                player_id=player_id,
-                decision_type=dtype,
-                options=options,
-                chosen=chosen_val if isinstance(chosen_val, list) else [chosen_val],
-                reason=reason,
-            )
 
         result = engine.continue_settlement(default_decisions)
     return result

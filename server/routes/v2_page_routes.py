@@ -19,6 +19,11 @@ def v2_local():
     return render_template("v2/local.html")
 
 
+@v2_page_bp.get("/rules/2.0")
+def rules_2_0():
+    return render_template("rule.html", version="2.0")
+
+
 @v2_page_bp.get("/v2/rooms")
 def v2_rooms():
     """2.0 多人房间列表/创建/加入页。"""

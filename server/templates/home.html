@@ -68,6 +68,13 @@
 
         .version-switch-btn:hover { background: #fde68a; }
 
+        .rule-link {
+            position: absolute; right: 90px; top: 12px;
+            display: inline-block; text-decoration: none;
+            font-size: 13px; color: #2563eb; font-weight: bold;
+        }
+        .rule-link:hover { text-decoration: underline; }
+
         .mode-grid {
             display: grid;
             grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -155,6 +162,7 @@
     <div class="container">
         <div class="hero">
             <a class="version-switch-btn" href="/v2" title="切换到 2.0 多人版">2.0</a>
+            <a class="rule-link" href="/rules/1.0">查看 1.0 游戏规则</a>
             <h1>ClapClap</h1>
             <p>选择一种模式开始游戏</p>
         </div>

@@ -1,6 +1,6 @@
 /**
  * ClapClap 2.0 本地模拟对战 —— UI 渲染层
- * 使用与 v1 local_page_ui.js 一致的 CSS class 命名
+ * 对齐 v1 local_page_ui.js 风格，扩展多人布局 + 结算进度 + 内联决策区
  */
 
 /* ═══════════════════════════════════════════════════════════════
@@ -10,18 +10,30 @@
 function renderSetupPhase() {
     var countEl = document.getElementById("setup-count");
     countEl.textContent = v2PlayerCount;
-    var namesEl = document.getElementById("setup-names");
+
+    var grid = document.getElementById("setup-players-grid");
+
+    // 根据人数设置列数
+    var cols;
+    if (v2PlayerCount <= 2) cols = 2;
+    else if (v2PlayerCount === 3) cols = 3;
+    else if (v2PlayerCount === 4) cols = 2;
+    else cols = 3;  // 5~6
+
+    grid.style.gridTemplateColumns = "repeat(" + cols + ", 1fr)";
+
     var html = "";
     for (var i = 0; i < v2PlayerCount; i++) {
         var name = v2PlayerNames[i] || ("玩家" + (i + 1));
         var color = V2_PLAYER_COLORS[i];
-        html += '<div class="setup-name-row">';
-        html += '<span class="player-color-dot" style="background:' + color + ';"></span>';
-        html += '<span style="font-size:13px;">玩家' + (i + 1) + '</span>';
-        html += '<input type="text" id="setup-name-' + i + '" value="' + escHtml(name) + '" maxlength="10" />';
+        html += '<div class="setup-player-card">';
+        html += '<div class="setup-player-avatar" style="background:' + color + ';">' + (i + 1) + '</div>';
+        html += '<div class="setup-player-number">玩家 ' + (i + 1) + '</div>';
+        html += '<input type="text" id="setup-name-' + i + '" value="' + escHtml(name) + '" maxlength="10" placeholder="输入名称" />';
         html += '</div>';
     }
-    namesEl.innerHTML = html;
+    grid.innerHTML = html;
+
     for (var i2 = 0; i2 < v2PlayerCount; i2++) {
         var input = document.getElementById("setup-name-" + i2);
         if (input) {
@@ -35,7 +47,7 @@ function renderSetupPhase() {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   对局入口
+   对局主入口
    ═══════════════════════════════════════════════════════════════ */
 
 function renderV2State(state) {
@@ -46,13 +58,13 @@ function renderV2State(state) {
     var logs = state.history || [];
 
     // 状态栏
-    var winnerText = state.winner === null ? "未结束" :
+    var winnerText = state.winner === null ? "进行中" :
         (state.winner === "" ? "平局" : (getPlayerName(state.winner, players) + " 获胜"));
     var aliveCount = state.alive_count || 0;
     document.getElementById("status-bar").innerHTML =
-        '<span class="status-badge">回合：' + state.round_num + '</span>' +
-        '<span class="winner-badge">胜负：' + winnerText + '</span>' +
-        '<span class="turn-badge">存活：' + aliveCount + ' 人</span>';
+        '<span class="status-badge">回合 ' + state.round_num + '</span>' +
+        '<span class="winner-badge">' + winnerText + '</span>' +
+        '<span class="turn-badge">存活 ' + aliveCount + ' 人</span>';
 
     document.getElementById("reset-btn").style.display = "";
 
@@ -76,24 +88,31 @@ function renderV2State(state) {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   玩家资源卡片 —— 使用 v1 的 resource-item 风格
+   玩家资源卡片 —— 与 v1 风格一致，根据人数调整列数
    ═══════════════════════════════════════════════════════════════ */
 
 function renderPlayerCards(players) {
     var container = document.getElementById("player-cards");
-    // 按存活人数设置列数
     var aliveCount = players.filter(function(p) { return p.status === "alive"; }).length || players.length;
-    var cols = aliveCount <= 2 ? 2 : (aliveCount <= 4 ? aliveCount : 3);
+
+    // 根据存活人数动态调整列数
+    var cols;
+    if (aliveCount <= 2) cols = 2;
+    else if (aliveCount === 3) cols = 3;
+    else if (aliveCount === 4) cols = 2;   // 2x2
+    else cols = 3;                          // 5~6: 3x2
+
     container.style.gridTemplateColumns = "repeat(" + cols + ", 1fr)";
+
     var html = "";
     for (var i = 0; i < players.length; i++) {
         var p = players[i];
-        var color = V2_PLAYER_COLORS[i] || "#ccc";
+        var color = V2_PLAYER_COLORS[i] || "#888";
         var isDead = p.status === "dead";
         var isFocused = p.player_id === v2FocusedPlayer;
         var cls = "player-panel" + (isDead ? " dead" : "") + (isFocused ? " focused" : "");
 
-        html += '<div class="' + cls + '" style="border-left:3px solid ' + color + ';" data-player-id="' + p.player_id + '" title="点击切换焦点">';
+        html += '<div class="' + cls + '" data-player-id="' + p.player_id + '" title="点击切换焦点">';
         html += '<div class="player-name">';
         html += '<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:' + color + ';"></span> ';
         html += escHtml(p.username);
@@ -110,7 +129,7 @@ function renderPlayerCards(players) {
             if (p.move_revealed && p.pending_move) st = '亮招: ' + (V2_MOVE_LABELS[p.pending_move] || p.pending_move);
             else if (p.move_submitted) st = '已提交';
             else st = '等待出招';
-            if (p.is_flashed) st += " ⚡闪";
+            if (p.is_flashed) st += " [闪]";
             if (p.resolution_status === "resolved") st += " ✓已操作";
             html += '<div class="player-status">' + st + '</div>';
         }
@@ -122,7 +141,7 @@ function renderPlayerCards(players) {
         html += resourceItem("火种", p.spark, "spark");
         html += resourceItem("电池", p.battery, "battery");
         html += resourceItem("镐", p.pickaxe, "pickaxe");
-        html += resourceItem("闪次数", 2 - p.flash_used, "flash");
+        html += resourceItem("闪次数", (p.flash_used != null ? (2 - p.flash_used) : 2), "flash");
         html += '</div>';
         html += '</div>';
     }
@@ -147,7 +166,7 @@ function resourceItem(label, value, key) {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   动作选择区 —— 使用 v1 的 move-btn-wrap / move-btn 风格
+   动作选择区 —— 与 v1 风格一致，根据人数调整列数
    ═══════════════════════════════════════════════════════════════ */
 
 function v2GetMoveGroups(catalog) {
@@ -172,14 +191,23 @@ function v2CategoryTitle(cat) {
 function renderMoveSelectors(players, legalMoves, catalog) {
     var container = document.getElementById("move-selectors");
     var aliveOnly = players.filter(function(p) { return p.status === "alive"; });
-    // 按人数设置列数：2→2列, 3→3列, 4→2列, 5-6→3列
-    var cols = aliveOnly.length <= 2 ? aliveOnly.length : (aliveOnly.length === 4 ? 2 : 3);
+
+    // 根据存活人数动态调整列数
+    var n = aliveOnly.length;
+    var cols;
+    if (n <= 2) cols = n;
+    else if (n === 3) cols = 3;
+    else if (n === 4) cols = 2;    // 2x2
+    else cols = 3;                 // 5~6: 3x2
+
     container.style.gridTemplateColumns = "repeat(" + cols + ", 1fr)";
-    if (aliveOnly.length === 0) {
+
+    if (n === 0) {
         container.innerHTML = '<div class="muted">所有玩家已淘汰。</div>';
         return;
     }
 
+    // 确保焦点玩家有效
     if (!v2FocusedPlayer || !aliveOnly.some(function(p) { return p.player_id === v2FocusedPlayer; })) {
         v2FocusedPlayer = aliveOnly[0].player_id;
     }
@@ -187,7 +215,6 @@ function renderMoveSelectors(players, legalMoves, catalog) {
     var focusedName = getPlayerName(v2FocusedPlayer, players);
     document.getElementById("focused-player-label").textContent = "键盘焦点：" + focusedName + "（Tab 切换）";
 
-    // 生成全部分组
     var allGroups = v2GetMoveGroups(catalog);
 
     var html = "";
@@ -199,14 +226,14 @@ function renderMoveSelectors(players, legalMoves, catalog) {
         var movesForPlayer = legalMoves[pid] || [];
         var selectedMove = v2SelectedMoves[pid] || null;
 
-        html += '<div class="move-side' + (isFocused ? " focused" : "") + '" style="border-left:2px solid ' + color + ';">';
+        html += '<div class="move-side' + (isFocused ? " focused" : "") + '" style="border-left:3px solid ' + color + ';">';
         html += '<h3>' + escHtml(p.username) + '<span class="active-turn-tip">' + (selectedMove ? '已选' : '未选') + '</span></h3>';
         html += '<div class="selector-selected">';
         html += selectedMove ? ('<b>' + (V2_MOVE_LABELS[selectedMove] || selectedMove) + '</b>') : '<span class="muted">—</span>';
         html += '</div>';
 
         // 按类别输出
-        var catKeys = ["resource", "defense", "attack_qi", "attack_shield", "trick", "special"];
+        var catKeys = ["resource", "defense", "trick", "attack_qi", "attack_shield", "special"];
         for (var c = 0; c < catKeys.length; c++) {
             var cat = catKeys[c];
             var items = allGroups[cat] || [];
@@ -218,11 +245,10 @@ function renderMoveSelectors(players, legalMoves, catalog) {
             for (var m = 0; m < catMoves.length; m++) {
                 var mv = catMoves[m];
                 var isSelected = selectedMove === mv.name;
-                var hotkey = V2_KEY_FOR_MOVE(mv.name);
+                var hotkey = v2KeyForMove(mv.name);
                 html += '<div class="move-btn-wrap">';
                 html += '<button class="move-btn' + (isSelected ? " selected" : "") + '"';
                 html += ' data-player="' + pid + '" data-move="' + mv.name + '"';
-                // 动态选中颜色
                 if (isSelected) html += ' style="border-color:' + color + ';background:' + color + '15;color:' + color + ';"';
                 html += '>';
                 if (hotkey) html += '<span class="move-hotkey">' + hotkey + '</span>';
@@ -249,7 +275,7 @@ function renderMoveSelectors(players, legalMoves, catalog) {
     }
 
     updateStepButton(aliveOnly);
-    updateSelectionInfo(aliveOnly);
+    updateSelectionInfo(aliveOnly, cols);
 }
 
 function updateStepButton(alivePlayers) {
@@ -262,9 +288,10 @@ function updateStepButton(alivePlayers) {
     btn.textContent = allSelected ? "提交本回合" : "等待全部选择完成";
 }
 
-function updateSelectionInfo(alivePlayers) {
+function updateSelectionInfo(alivePlayers, cols) {
     var row = document.getElementById("selection-info-row");
     if (!row) return;
+    row.style.gridTemplateColumns = "repeat(" + (cols || 2) + ", 1fr)";
     var html = "";
     for (var i = 0; i < alivePlayers.length; i++) {
         var p = alivePlayers[i];
@@ -293,12 +320,17 @@ function renderSettlementProgress(result) {
     var phaseName = progressData.phase_name || result.phase || "";
     document.getElementById("settlement-phase-label").textContent = "— " + escHtml(phaseName);
 
-    var barHtml = '<div class="phase-indicator">📍 速度层 ' + layer + '/12' + (layerName ? ' — ' + layerName : '') + '</div>';
+    // 速度层进度条
+    var barHtml = '<div class="phase-indicator">速度层 ' + layer + '/12' + (layerName ? ' — ' + layerName : '') + '</div>';
     barHtml += renderSpeedLayerBar(layer);
     document.getElementById("settlement-phase-bar").innerHTML = barHtml;
 
+    // 事件流（含自动决策原因）
     var events = getEventsFromLatestRound(v2LatestState);
+    var decisionLog = getDecisionLogFromLatestRound(v2LatestState);
     var feedHtml = "";
+
+    // 先显示结算事件
     if (events.length > 0) {
         for (var i = 0; i < events.length; i++) {
             var ev = events[i];
@@ -308,11 +340,26 @@ function renderSettlementProgress(result) {
             feedHtml += '</div>';
         }
     }
+
+    // 再显示自动决策原因日志
+    if (decisionLog.length > 0) {
+        feedHtml += '<div class="auto-decision-log">';
+        feedHtml += '<div style="padding:6px 10px;font-weight:bold;font-size:12px;color:#e67e22;border-bottom:1px solid #f0f0f0;">自动决策原因</div>';
+        for (var d = 0; d < decisionLog.length; d++) {
+            var dl = decisionLog[d];
+            feedHtml += '<div class="ad-item">';
+            feedHtml += '[L' + (dl.speed_layer || "?") + '] <b>' + escHtml(getPlayerName(dl.player_id)) + '</b>: ' + escHtml(dl.reason || "");
+            feedHtml += '</div>';
+        }
+        feedHtml += '</div>';
+    }
+
     document.getElementById("settlement-event-feed").innerHTML = feedHtml;
 
+    // 决策请求
     var decisionReqs = result.decision_requests || [];
     if (result.action === "request_decision" && decisionReqs.length > 0) {
-        renderDecisionArea(decisionReqs);
+        renderDecisionArea(decisionReqs, layer, layerName);
     }
 }
 
@@ -339,16 +386,18 @@ function hideSettlementProgress() {
    内联决策区
    ═══════════════════════════════════════════════════════════════ */
 
-function renderDecisionArea(decisionRequests) {
+function renderDecisionArea(decisionRequests, layer, layerName) {
     var area = document.getElementById("decision-area");
     area.style.display = "";
-    // 更新标题显示当前速度层
-    var layer = (v2SettlementResult && v2SettlementResult.current_speed_layer) || 0;
-    var layerName = V2_SPEED_LAYER_NAMES[layer] || "";
+
+    layer = layer || ((v2SettlementResult && v2SettlementResult.current_speed_layer) || 0);
+    layerName = layerName || V2_SPEED_LAYER_NAMES[layer] || "";
+
     var heading = area.querySelector(".decision-heading");
     if (heading) {
-        heading.textContent = "⚡ 速度层 " + layer + " — " + (layerName || "选择") + " — 请选择目标";
+        heading.textContent = "速度层 " + layer + " — " + (layerName || "选择目标");
     }
+
     var content = document.getElementById("decision-content");
     var html = "";
     for (var r = 0; r < decisionRequests.length; r++) {
@@ -356,7 +405,6 @@ function renderDecisionArea(decisionRequests) {
     }
     content.innerHTML = html;
     bindDecisionOptionClicks();
-    // 自动选中每个 segment 的第一个合法选项
     autoSelectFirstValidOptions();
 }
 
@@ -364,10 +412,11 @@ function autoSelectFirstValidOptions() {
     var segments = document.querySelectorAll("#decision-content .decision-options");
     for (var i = 0; i < segments.length; i++) {
         var opts = segments[i].querySelectorAll(".decision-option");
+        var selected = false;
         for (var j = 0; j < opts.length; j++) {
-            if (opts[j].getAttribute("data-valid") !== "false") {
+            if (opts[j].getAttribute("data-valid") !== "false" && !selected) {
                 opts[j].classList.add("selected");
-                break;
+                selected = true;
             }
         }
     }
@@ -381,17 +430,21 @@ function renderSingleDecision(req) {
     var options = req.options || [];
     var splitCount = req.split_count || 1;
 
+    // 决策提示
     html += '<div class="decision-prompt"><b>' + escHtml(playerName) + '</b>：' + escHtml(prompt);
-    if (splitCount > 1) html += '（需选 ' + splitCount + ' 段）';
+    if (splitCount > 1) html += '（需选 ' + splitCount + ' 段，请为每段分别选择目标）';
     html += '</div>';
 
     if (splitCount > 1) {
+        // 多段选择（如黑洞3段、Shining2段、双吃2段）
         for (var seg = 0; seg < splitCount; seg++) {
             html += '<div class="decision-segment"><div class="seg-title">第 ' + (seg + 1) + ' 段</div>';
             html += '<div class="decision-options" data-player="' + playerId + '" data-segment="' + seg + '">';
             html += decisionOptionList(options);
             html += '</div></div>';
         }
+        // 添加放空全部按钮
+        html += '<div style="margin-top:4px;font-size:11px;color:#888;">提示：每段独立选择。可选同一目标多次，或选择「放空」跳过某段。</div>';
     } else {
         html += '<div class="decision-options" data-player="' + playerId + '" data-segment="0">';
         html += decisionOptionList(options);
@@ -409,7 +462,7 @@ function decisionOptionList(options) {
         if (optId === "") optLabel = "放空";
         var isValid = opt.is_valid !== false;
         h += '<div class="decision-option' + (!isValid ? " invalid" : "") + '"';
-        h += ' data-option-id="' + escHtml(optId) + '" data-valid="' + isValid + '">';
+        h += ' data-option-id="' + escHtml(String(optId)) + '" data-valid="' + isValid + '">';
         h += '<span class="option-label">' + escHtml(optLabel) + '</span>';
         if (!isValid && opt.reason) h += ' <span class="option-reason">' + escHtml(opt.reason) + '</span>';
         h += '</div>';
@@ -423,6 +476,7 @@ function bindDecisionOptionClicks() {
         options[i].addEventListener("click", function() {
             if (this.getAttribute("data-valid") === "false") return;
             var parent = this.parentElement;
+            // 同一 segment 内只能单选
             var siblings = parent.querySelectorAll(".decision-option");
             for (var s = 0; s < siblings.length; s++) siblings[s].classList.remove("selected");
             this.classList.add("selected");
@@ -430,18 +484,45 @@ function bindDecisionOptionClicks() {
     }
 }
 
+/**
+ * 收集决策数据。
+ * 对于拆分技能（多段），返回 {player_id: [target1, target2, ...]}。
+ * 对于单段技能，返回 {player_id: target_id}。
+ */
 function collectDecisionData() {
     var decisions = {};
     var segments = document.querySelectorAll("#decision-content .decision-options");
     for (var i = 0; i < segments.length; i++) {
         var seg = segments[i];
         var playerId = seg.getAttribute("data-player");
+        var segIdx = parseInt(seg.getAttribute("data-segment") || "0");
         var selected = seg.querySelector(".decision-option.selected");
-        if (!selected) continue;
-        var optId = selected.getAttribute("data-option-id");
-        if (!decisions[playerId]) decisions[playerId] = optId;
-        else if (Array.isArray(decisions[playerId])) decisions[playerId].push(optId);
-        else decisions[playerId] = [decisions[playerId], optId];
+        var optId = selected ? selected.getAttribute("data-option-id") : "";
+
+        if (!decisions[playerId]) {
+            decisions[playerId] = [];
+            // 预填充空值以保证索引位置正确
+            for (var s = 0; s < segIdx; s++) {
+                decisions[playerId].push("");
+            }
+        }
+
+        // 确保数组长度足够
+        while (decisions[playerId].length <= segIdx) {
+            decisions[playerId].push("");
+        }
+        decisions[playerId][segIdx] = optId;
+    }
+
+    // 如果只有一个选项且是单段，简化为字符串
+    var keys = Object.keys(decisions);
+    for (var k = 0; k < keys.length; k++) {
+        var arr = decisions[keys[k]];
+        // 过滤掉全空的段
+        var nonEmpty = arr.filter(function(x) { return x !== ""; });
+        if (arr.length === 1) {
+            decisions[keys[k]] = arr[0];
+        }
     }
     return decisions;
 }
@@ -465,6 +546,7 @@ function renderRoundSummaryCard(summary) {
     var content = document.getElementById("round-summary-content");
     var html = "";
 
+    // 本回合动作
     var moves = summary.moves || {};
     var moveKeys = Object.keys(moves);
     if (moveKeys.length > 0) {
@@ -476,21 +558,24 @@ function renderRoundSummaryCard(summary) {
         html += '</div></div>';
     }
 
-    var tc = summary.three_chain || {};
-    if (tc.groups && tc.groups.length > 0) {
-        html += '<div class="summary-section"><h3>三连</h3>';
-        for (var g = 0; g < tc.groups.length; g++) {
-            html += '<div>' + escHtml((tc.groups[g].players || []).map(function(pid) { return getPlayerName(pid); }).join(" → ")) + '</div>';
-        }
-        if (tc.two_groups) html += '<div class="danger-text">两组独立三连！</div>';
-        html += '</div>';
-    }
-
+    // 闪
     var flashed = summary.flashed_players || [];
     if (flashed.length > 0) {
         html += '<div class="summary-section"><h3>使用闪</h3>' + flashed.map(function(pid) { return escHtml(getPlayerName(pid)); }).join(" · ") + '</div>';
     }
 
+    // 三连
+    var tc = summary.three_chain || {};
+    if (tc.groups && tc.groups.length > 0) {
+        html += '<div class="summary-section"><h3>三连</h3>';
+        for (var g = 0; g < tc.groups.length; g++) {
+            html += '<div style="color:#e67e22;font-weight:bold;">' + escHtml((tc.groups[g].players || []).map(function(pid) { return getPlayerName(pid); }).join(" → ")) + '</div>';
+        }
+        if (tc.two_groups) html += '<div class="danger-text">两组独立三连！本回合结束。</div>';
+        html += '</div>';
+    }
+
+    // 死亡
     var deaths = summary.deaths || [];
     if (deaths.length > 0) {
         html += '<div class="summary-section"><h3>死亡</h3>';
@@ -500,6 +585,7 @@ function renderRoundSummaryCard(summary) {
         html += '</div>';
     }
 
+    // 资源变化
     var changes = summary.resource_changes || {};
     var chgKeys = Object.keys(changes);
     if (chgKeys.length > 0) {
@@ -518,17 +604,18 @@ function renderRoundSummaryCard(summary) {
         html += '</div>';
     }
 
+    // 对局状态
     if (summary.game_ended) {
         html += '<div class="summary-section"><h3>对局结束</h3>';
-        html += '<div class="end-modal-content"><div class="big-result">' + escHtml(summary.winner === "" ? "平局！" : (getPlayerName(summary.winner) + " 获胜！")) + '</div></div>';
+        html += '<div class="end-inline-content"><div class="big-result">' + escHtml(summary.winner === "" ? "平局！" : (getPlayerName(summary.winner) + " 获胜！")) + '</div></div>';
         html += '</div>';
     } else {
-        html += '<div class="summary-section">存活 ' + (summary.alive_count || 0) + ' 人</div>';
+        html += '<div class="summary-section">存活 ' + (summary.alive_count || 0) + ' 人，准备下一回合。</div>';
     }
 
     content.innerHTML = html;
     var contBtn = document.getElementById("round-summary-continue-btn");
-    contBtn.textContent = summary.game_ended ? "查看最终结果" : "继续下一回合";
+    contBtn.textContent = summary.game_ended ? "查看最终排名" : "继续下一回合";
 }
 
 function hideRoundSummaryCard() {
@@ -541,7 +628,8 @@ function renderEndCard(state) {
     v2EndShown = true;
     var players = state.players || [];
     var winnerId = state.winner;
-    var resultText = winnerId === "" ? "平局" : (getPlayerName(winnerId, players) + " 获胜！");
+    var resultText = winnerId === "" ? "平局！" : (getPlayerName(winnerId, players) + " 获胜！");
+
     var ranked = players.filter(function(p) { return p.final_rank != null; }).sort(function(a, b) { return (a.final_rank || 99) - (b.final_rank || 99); });
     var detailText = ranked.map(function(p) { return "第" + p.final_rank + "名: " + p.username; }).join(" · ");
 
@@ -556,7 +644,7 @@ function hideEndCard() {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   最近回合 + 历史记录 —— 使用 v1 的 round-box / history-item
+   最近回合 + 历史记录 —— 与 v1 一致
    ═══════════════════════════════════════════════════════════════ */
 
 function renderLatestRound(log, players) {
@@ -603,24 +691,27 @@ function renderHistory(logs, players) {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   辅助
+   辅助函数
    ═══════════════════════════════════════════════════════════════ */
 
 function getPlayerName(playerId, players) {
-    if (!players) return playerId || "?";
+    if (!playerId) return "?";
+    if (!players) return playerId;
     for (var i = 0; i < players.length; i++) {
         if (players[i].player_id === playerId) return players[i].username || playerId;
     }
-    return playerId || "?";
+    return playerId;
 }
 
 function escHtml(str) {
-    if (!str) return "";
+    if (str == null) return "";
     return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
 
-function V2_KEY_FOR_MOVE(moveName) {
-    for (var k in V2_KEY_TO_MOVE) { if (V2_KEY_TO_MOVE[k] === moveName) return k.toUpperCase(); }
+function v2KeyForMove(moveName) {
+    for (var k in V2_KEY_TO_MOVE) {
+        if (V2_KEY_TO_MOVE[k] === moveName) return k.toUpperCase();
+    }
     return "";
 }
 
@@ -629,4 +720,11 @@ function getEventsFromLatestRound(state) {
     var logs = state.history;
     if (logs.length === 0) return [];
     return logs[logs.length - 1].speed_layer_events || [];
+}
+
+function getDecisionLogFromLatestRound(state) {
+    if (!state || !state.history) return [];
+    var logs = state.history;
+    if (logs.length === 0) return [];
+    return logs[logs.length - 1].decision_log || [];
 }

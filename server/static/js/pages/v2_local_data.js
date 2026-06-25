@@ -5,30 +5,30 @@
  */
 
 /* ── 全局状态 ────────────────────────────────────────── */
-var v2LatestState = null;            // GameStateV2 payload（来自 get_game_state_v2_payload）
+var v2LatestState = null;            // GameStateV2 payload
 var v2SettlementResult = null;       // 当前 SettlementStepResult
 var v2SelectedMoves = {};            // {player_id: move_name}
 var v2FocusedPlayer = null;          // 当前键盘焦点 player_id
 var v2PlayerCount = 2;              // 准备阶段的玩家数量
 var v2PlayerNames = [];             // 准备阶段的玩家名称
 var v2IsSetupPhase = true;          // 是否在准备阶段
-var v2EndShown = false;             // 结束弹窗是否已显示
+var v2EndShown = false;             // 结束卡片是否已显示
 var v2RoundSummaryShown = false;    // 回合总结是否已显示
 
 /* ── 玩家颜色 ────────────────────────────────────────── */
 var V2_PLAYER_COLORS = [
-    "#e74c3c", "#3498db", "#2ecc71",
-    "#f39c12", "#9b59b6", "#1abc9c"
+    "#2563eb", "#dc2626", "#16a34a",
+    "#f59e0b", "#8b5cf6", "#06b6d4"
 ];
 
 /* ── 设置 ────────────────────────────────────────────── */
 var V2_SETTINGS_KEY = "clapclap_v2_ui_settings";
 var v2Settings = {
-    autoResolve: false,    // 自动决策
+    autoResolve: false,    // 自动决策（默认关闭）
     showHistory: true,
 };
 
-/* ── 动作快捷键映射（与 v1 一致） ────────────────────── */
+/* ── 动作快捷键映射 ──────────────────────────────────── */
 var V2_KEY_TO_MOVE = {
     /* 锦囊 */
     "1": "CHI", "2": "SHUANG_CHI", "3": "HEI_DONG", "4": "RU_LAI",
@@ -40,12 +40,12 @@ var V2_KEY_TO_MOVE = {
     "z": "LIE_YAN", "x": "FIRE", "c": "SHAN", "v": "BA_GUA",
 };
 
-/* ── 动作类别（用于分組显示） ────────────────────────── */
+/* ── 动作类别（用于分组显示） ────────────────────────── */
 var V2_MOVE_CATEGORIES = [
     { key: "resource", label: "资源", moves: ["QI", "SHIELD", "GAO"] },
+    { key: "trick", label: "锦囊", moves: ["CHI", "SHUANG_CHI", "HEI_DONG", "RU_LAI"] },
     { key: "attack_qi", label: "气系攻击", moves: ["GI", "PO", "SHAN_DIAN", "LENG_FENG", "SHINING"] },
     { key: "attack_shield", label: "盾系攻击", moves: ["LIE_YAN", "FIRE"] },
-    { key: "trick", label: "锦囊", moves: ["CHI", "SHUANG_CHI", "HEI_DONG", "RU_LAI"] },
     { key: "defense", label: "防御", moves: ["SHI_ZI", "BA_GUA"] },
     { key: "special", label: "特殊", moves: ["SHAN"] },
 ];
