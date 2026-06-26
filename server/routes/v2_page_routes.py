@@ -44,3 +44,9 @@ def v2_room_detail(room_id: str):
         room_id=room_id,
         server_boot_id=current_app.config.get("SERVER_BOOT_ID", "")
     )
+
+
+@v2_page_bp.get("/v2/match")
+def v2_match():
+    """2.0 自动匹配页面。"""
+    return render_template("v2/match.html")

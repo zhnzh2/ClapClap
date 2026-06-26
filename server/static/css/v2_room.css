@@ -996,3 +996,87 @@ body.v2-compact-cards .resource-item .res-value {
     .lobby-seats-grid { grid-template-columns: 1fr 1fr; }
     .move-grid { grid-template-columns: repeat(4, 1fr); }
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   Step8: 观战 Banner
+   ═══════════════════════════════════════════════════════════════ */
+
+.spectate-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 16px;
+    border-radius: 10px;
+    margin-bottom: 12px;
+    font-size: 14px;
+    font-weight: 500;
+    animation: bannerSlideIn 0.3s ease;
+}
+.spectate-banner.banner-spectator {
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    color: #1d4ed8;
+}
+.spectate-banner.banner-dead {
+    background: #fef2f2;
+    border: 1px solid #fca5a5;
+    color: #991b1b;
+}
+.spectate-banner .banner-text {
+    flex: 1;
+}
+.spectate-banner .banner-close-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 16px;
+    color: inherit;
+    opacity: 0.5;
+    padding: 0 4px;
+    margin-left: 12px;
+}
+.spectate-banner .banner-close-btn:hover {
+    opacity: 1;
+}
+
+@keyframes bannerSlideIn {
+    from { opacity: 0; transform: translateY(-8px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* 观战者数量（对局状态栏） */
+.status-spectator {
+    font-size: 13px;
+    color: var(--muted);
+    margin-left: 8px;
+}
+
+/* Step8: 观战者聊天标记 */
+.chat-sender-spectator {
+    font-weight: 600;
+    color: #7c3aed;
+}
+
+/* Step8: 按钮样式补充 */
+.btn-small.spectate {
+    background: #7c3aed;
+    color: #fff;
+    border: none;
+    padding: 4px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 600;
+    margin-left: 4px;
+}
+.btn-small.spectate:hover {
+    background: #6d28d9;
+}
+.btn-small.nospectate {
+    background: #e5e7eb;
+    color: #6b7280;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    cursor: default;
+}

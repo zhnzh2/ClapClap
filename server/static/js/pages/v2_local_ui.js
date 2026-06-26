@@ -325,7 +325,7 @@ function renderSettlementProgress(result) {
     barHtml += renderSpeedLayerBar(layer);
     document.getElementById("settlement-phase-bar").innerHTML = barHtml;
 
-    // 事件流（含自动决策原因）
+    // 事件流（含自动决策原因）—— Step8: 默认折叠
     var events = getEventsFromLatestRound(v2LatestState);
     var decisionLog = getDecisionLogFromLatestRound(v2LatestState);
     var feedHtml = "";
@@ -354,7 +354,34 @@ function renderSettlementProgress(result) {
         feedHtml += '</div>';
     }
 
-    document.getElementById("settlement-event-feed").innerHTML = feedHtml;
+    // Step8: 默认折叠详细日志
+    var collapsed = v2Settings.collapseSettlementLog !== false; // 默认 true
+    var feedEl = document.getElementById("settlement-event-feed");
+    feedEl.innerHTML = feedHtml;
+    var collapseToggle = document.getElementById("settlement-collapse-toggle");
+    if (collapseToggle) {
+        if (collapsed) {
+            feedEl.classList.add("collapsed");
+            collapseToggle.textContent = "▶ 展开详细日志 (" + events.length + " 条事件)";
+        } else {
+            feedEl.classList.remove("collapsed");
+            collapseToggle.textContent = "▼ 收起详细日志";
+        }
+        collapseToggle.style.display = (events.length > 0 || decisionLog.length > 0) ? "" : "none";
+        collapseToggle.onclick = function () {
+            var isCollapsed = feedEl.classList.contains("collapsed");
+            if (isCollapsed) {
+                feedEl.classList.remove("collapsed");
+                collapseToggle.textContent = "▼ 收起详细日志";
+                v2Settings.collapseSettlementLog = false;
+            } else {
+                feedEl.classList.add("collapsed");
+                collapseToggle.textContent = "▶ 展开详细日志 (" + events.length + " 条事件)";
+                v2Settings.collapseSettlementLog = true;
+            }
+            v2SaveSettings();
+        };
+    }
 
     // 决策请求
     var decisionReqs = result.decision_requests || [];

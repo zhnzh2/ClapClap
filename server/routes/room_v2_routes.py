@@ -32,8 +32,22 @@ room_v2_bp = Blueprint("room_v2", __name__)
 
 @room_v2_bp.get("/api/v2/rooms")
 def api_list_public_rooms_v2():
-    """列出所有公开的 v2 房间。"""
-    rooms = list_public_rooms_v2()
+    """列出所有公开的 v2 房间。支持筛选参数。"""
+    status_filter = request.args.get("status", type=str)
+    min_slots_str = request.args.get("min_slots", type=str)
+    min_slots = None
+    if min_slots_str:
+        try:
+            min_slots = int(min_slots_str)
+        except ValueError:
+            pass
+    allow_spectate_only = request.args.get("spectate_only", "0") == "1"
+
+    rooms = list_public_rooms_v2(
+        status_filter=status_filter,
+        min_slots=min_slots,
+        allow_spectate_only=allow_spectate_only,
+    )
     return jsonify({"ok": True, "rooms": rooms})
 
 
@@ -105,16 +119,21 @@ def api_join_room_v2(room_id: str):
     data = request.get_json(silent=True) or {}
     as_spectator = data.get("as_spectator", False)
     seat_index = data.get("seat_index")
+    password = data.get("password")
 
     try:
         result = join_room_v2_service(
             room_id, player_name,
             as_spectator=as_spectator,
             seat_index=seat_index,
+            password=password,
         )
         return jsonify(result)
     except ValueError as exc:
-        return jsonify({"ok": False, "error": str(exc)}), 400
+        error_msg = str(exc)
+        if error_msg == "PASSWORD_REQUIRED":
+            return jsonify({"ok": False, "error": "此房间需要密码。", "error_code": "PASSWORD_REQUIRED"}), 403
+        return jsonify({"ok": False, "error": error_msg}), 400
 
 
 # ═══════════════════════════════════════════════════════════

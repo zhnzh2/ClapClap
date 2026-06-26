@@ -108,13 +108,36 @@ def get_room_v2(room_id: str) -> RoomV2 | None:
         return restored_room
 
 
-def list_public_rooms_v2() -> list[dict]:
-    """列出所有公开 v2 房间（用于房间列表展示）。"""
+def list_public_rooms_v2(
+    status_filter: str | None = None,
+    min_slots: int | None = None,
+    allow_spectate_only: bool = False,
+) -> list[dict]:
+    """列出公开 v2 房间（用于房间列表展示）。
+
+    Args:
+        status_filter: 逗号分隔的状态过滤，如 "lobby,playing"。None 表示全部。
+        min_slots: 最少空余参战席位。None 表示不过滤。
+        allow_spectate_only: 仅返回允许观战的房间。
+    """
+    allowed_statuses = None
+    if status_filter:
+        allowed_statuses = set(s.strip() for s in status_filter.split(",") if s.strip())
+
     result = []
     with ROOMS_V2_LOCK:
         for room_id, room in ROOMS_V2.items():
             if not room.public:
                 continue
+            if allowed_statuses is not None and room.status not in allowed_statuses:
+                continue
+            if min_slots is not None:
+                free_slots = room.max_players - room.player_count()
+                if free_slots < min_slots:
+                    continue
+            if allow_spectate_only and not room.allow_spectate:
+                continue
+
             host_name = ""
             host_seat = room.get_seat_by_index(room.host_seat_index)
             if host_seat:
@@ -123,10 +146,12 @@ def list_public_rooms_v2() -> list[dict]:
                 "room_id": room.room_id,
                 "host_name": host_name,
                 "max_players": room.max_players,
+                "min_players": room.min_players,
                 "player_count": room.player_count(),
                 "spectator_count": room.spectator_count(),
                 "status": room.status,
                 "allow_spectate": room.allow_spectate,
+                "has_password": room.password is not None,
                 "created_at": room.created_at.isoformat() if room.created_at else "",
             })
     return result
@@ -138,11 +163,23 @@ def join_room_v2(
     *,
     as_spectator: bool = False,
     seat_index: int | None = None,
+    password: str | None = None,
 ) -> tuple[RoomV2, int, str]:
-    """加入 2.0 房间。返回 (room, seat_index | -1, token)。"""
+    """加入 2.0 房间。返回 (room, seat_index | -1, token)。
+
+    Raises:
+        ValueError: 房间不存在 / 密码错误 / 席位已满等
+    """
     room = get_room_v2(room_id)
     if room is None:
         raise ValueError("房间不存在。")
+
+    # 密码检查（参战和观战都需要）
+    if room.password is not None:
+        if password is None:
+            raise ValueError("PASSWORD_REQUIRED")
+        if password.strip() != room.password:
+            raise ValueError("密码不正确。")
 
     with ROOMS_V2_LOCK:
         if as_spectator:

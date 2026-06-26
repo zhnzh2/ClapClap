@@ -121,6 +121,7 @@ def join_room_v2_service(
     *,
     as_spectator: bool = False,
     seat_index: int | None = None,
+    password: str | None = None,
 ) -> dict:
     """加入 2.0 房间。"""
     room, seat_index_or_none, token = join_room_v2(
@@ -128,6 +129,7 @@ def join_room_v2_service(
         username.strip(),
         as_spectator=as_spectator,
         seat_index=seat_index,
+        password=password,
     )
 
     from server.socket_events_v2 import emit_room_v2_state

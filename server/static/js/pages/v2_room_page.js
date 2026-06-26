@@ -46,8 +46,8 @@ function initV2RoomPage() {
     // 加载身份
     var identity = window.V2RoomIdentity ? window.V2RoomIdentity.load(v2RoomId) : null;
     if (identity) {
-        v2MyPlayerToken = identity.player_token;
-        v2MySeatIndex = identity.seat_index;
+        v2MyPlayerToken = identity.player_token || identity.spectator_token || null;
+        v2MySeatIndex = identity.seat_index || null;
     }
 
     // 账号按钮
@@ -577,7 +577,13 @@ function _bindOverlayEvents() {
    ═══════════════════════════════════════════════════════════════ */
 
 function _updateIdentityFromRoom(room) {
-    if (room && room.my_seat_index != null && v2MyPlayerToken) {
+    if (!room) return;
+    if (room.my_role === "spectator") {
+        // 观战者：保存 spectator_token
+        if (v2MyPlayerToken && window.V2RoomIdentity) {
+            window.V2RoomIdentity.saveSpectator(v2RoomId, v2MyPlayerToken);
+        }
+    } else if (room.my_seat_index != null && v2MyPlayerToken) {
         window.V2RoomIdentity.save(v2RoomId, v2MyPlayerToken, room.my_seat_index);
     }
 }

@@ -497,6 +497,38 @@ input[type="checkbox"] { transform: scale(1.12); }
     }
     .speed-layer-dot { width: 22px; height: 22px; font-size: 9px; }
 }
+/* Step8: 结算日志折叠 */
+.collapse-toggle-btn {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: 6px 10px;
+    margin: 8px 0;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--blue);
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+.collapse-toggle-btn:hover { background: #dbeafe; }
+
+.event-feed.collapsed {
+    display: none;
+}
+
+/* v2_local 内联数据字段样式 */
+.v2-setting-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--text);
+    cursor: pointer;
+}
+
 @media (max-width: 720px) {
     .resource-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .move-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }

@@ -82,6 +82,7 @@
                 <span id="settlement-phase-label"></span>
             </h2>
             <div id="settlement-phase-bar"></div>
+            <button id="settlement-collapse-toggle" class="collapse-toggle-btn" style="display:none;"></button>
             <div id="settlement-event-feed" class="event-feed"></div>
             <div id="decision-area" style="display:none;">
                 <div class="decision-heading">等待决策</div>
@@ -156,8 +157,17 @@
                 <h3>结算流程</h3>
                 <div>资源检查 → 亮招 → 闪 → 三连 → 速度层 3~12 → 死亡判定 → 回合总结</div>
                 <div style="margin-top:8px;">
+                    <strong>速度层顺序：</strong>
+                    层1 闪、层2 三连、层3 你吃/双吃、层4 gi→黑洞、层5 黑洞、层6 如来/Shining、
+                    层7 冷锋/烈焰、层8 gi攻击/抢镐、层9 破/闪电、层10 Fire、层11 gi无目标、层12 气/盾/加镐
+                </div>
+                <div style="margin-top:8px;">
                     <strong>注意：</strong>初始资源全为 0。第一回合只能出「气」「盾」「闪」来收集资源，
                     后续回合才能使用消耗资源的手势。
+                </div>
+                <div style="margin-top:8px;">
+                    <strong>自动决策：</strong>勾选后，所有决策点（目标选择、冲突协商）自动使用默认值，
+                    无需手动操作。适合快速测试和体验规则流程。取消勾选则每个决策点都需要手动选择。
                 </div>
             </div>
         </div>

@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ClapClap 2.0 自动匹配</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/v2_match.css') }}" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/auth.css') }}" />
+</head>
+<body>
+<div class="container">
+    <!-- 顶部栏 -->
+    <div class="top-bar">
+        <div>
+            <h1>ClapClap 2.0 自动匹配</h1>
+            <div class="subtitle">加入队列，自动匹配多人房间</div>
+        </div>
+        <div class="top-actions">
+            <button class="btn-ghost" id="header-account-btn">账号</button>
+            <a class="btn-ghost" href="/v2">返回大厅</a>
+        </div>
+    </div>
+
+    <!-- 匹配配置区 -->
+    <div class="match-card" id="setup-card">
+        <h2>匹配设置</h2>
+        <div class="form-row">
+            <label>期望人数</label>
+            <div class="stepper">
+                <button id="pref-dec-btn">−</button>
+                <span id="pref-count">4</span>
+                <button id="pref-inc-btn">+</button>
+            </div>
+            <span class="hint">系统会尽量匹配相同期望人数的玩家，也可能合并相邻人数组</span>
+        </div>
+        <div class="actions">
+            <button class="btn-primary" id="join-queue-btn">加入匹配队列</button>
+        </div>
+        <div id="setup-message" class="message"></div>
+    </div>
+
+    <!-- 排队状态区（初始隐藏） -->
+    <div class="match-card" id="queue-card" style="display:none;">
+        <h2>正在寻找对手...</h2>
+        <div class="queue-status">
+            <div class="spinner"></div>
+            <div class="queue-info">
+                <p id="queue-text">匹配中，请稍候...</p>
+                <p class="queue-detail" id="queue-detail"></p>
+                <p class="queue-time" id="queue-time"></p>
+            </div>
+        </div>
+        <div class="actions">
+            <button class="btn-danger" id="cancel-queue-btn">取消匹配</button>
+        </div>
+        <div id="queue-message" class="message"></div>
+    </div>
+
+    <!-- 匹配成功区（初始隐藏） -->
+    <div class="match-card" id="matched-card" style="display:none;">
+        <h2>🎉 匹配成功！</h2>
+        <div class="matched-info">
+            <p id="matched-text"></p>
+            <p class="matched-room" id="matched-room"></p>
+        </div>
+        <div class="actions">
+            <button class="btn-primary" id="enter-room-btn">进入房间</button>
+        </div>
+        <div id="matched-message" class="message"></div>
+    </div>
+
+    <!-- 队列状态栏 -->
+    <div class="match-card" id="status-card">
+        <h2>队列状态</h2>
+        <div id="queue-status-text" class="status-text">加载中...</div>
+        <div id="queue-players" class="queue-players"></div>
+    </div>
+</div>
+
+<!-- 全局弹窗遮罩 -->
+<div class="modal-mask" id="global-modal-mask" style="z-index: 1100;">
+    <div class="modal-card" id="global-modal-card">
+        <div class="modal-icon" id="global-modal-icon" style="display: none;"></div>
+        <div class="modal-title" id="global-modal-title"></div>
+        <div class="modal-body" id="global-modal-body"></div>
+        <div class="modal-actions" id="global-modal-actions"></div>
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/core/storage.js') }}"></script>
+<script src="{{ url_for('static', filename='js/core/session.js') }}"></script>
+<script src="{{ url_for('static', filename='js/core/api.js') }}"></script>
+<script src="{{ url_for('static', filename='js/core/modal.js') }}"></script>
+<script src="{{ url_for('static', filename='js/online/v2_room_identity.js') }}"></script>
+<script src="{{ url_for('static', filename='js/pages/account_modal.js') }}"></script>
+<script src="{{ url_for('static', filename='js/pages/admin_users_modal.js') }}"></script>
+<script>
+if (!window.SessionUtils || !window.SessionUtils.isLoggedIn()) {
+    window.location.href = "/login";
+}
+var btn = document.getElementById("header-account-btn");
+if (btn) {
+    var user = window.SessionUtils.getSessionUser();
+    if (user) {
+        btn.textContent = user.username;
+        btn.addEventListener("click", function () { window.location.href = "/user/" + user.uid; });
+    }
+}
+if (typeof ModalUtils !== "undefined" && ModalUtils.bindGlobalModalEvents) {
+    ModalUtils.bindGlobalModalEvents();
+}
+</script>
+<script src="{{ url_for('static', filename='js/pages/v2_match_page.js') }}"></script>
+</body>
+</html>

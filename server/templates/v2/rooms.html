@@ -79,6 +79,10 @@
                     允许观战
                 </label>
             </div>
+            <div class="form-group">
+                <label>房间密码（可选）</label>
+                <input type="text" id="create-password" placeholder="留空则无密码" maxlength="20" style="width:100%;padding:6px 10px;border:1px solid var(--border);border-radius:6px;" />
+            </div>
         </div>
         <div class="form-row">
             <div class="form-group">
@@ -110,6 +114,20 @@
 
         <!-- 公开房间列表 -->
         <div class="section-divider"><span>公开房间</span></div>
+        <!-- 筛选栏 -->
+        <div class="filter-bar">
+            <select id="filter-status" class="filter-select">
+                <option value="">全部状态</option>
+                <option value="lobby">等待中</option>
+                <option value="playing">游戏中</option>
+            </select>
+            <select id="filter-min-slots" class="filter-select">
+                <option value="">全部空位</option>
+                <option value="1">至少 1 个空位</option>
+                <option value="2">至少 2 个空位</option>
+                <option value="3">至少 3 个空位</option>
+            </select>
+        </div>
         <div class="room-table-wrap">
             <table class="room-table" id="public-rooms-table">
                 <thead>
@@ -117,6 +135,7 @@
                         <th>房间号</th>
                         <th>房主</th>
                         <th>人数</th>
+                        <th>观战</th>
                         <th>状态</th>
                         <th>操作</th>
                     </tr>
@@ -139,7 +158,6 @@
 <script src="{{ url_for('static', filename='js/online/v2_room_identity.js') }}"></script>
 <script src="{{ url_for('static', filename='js/pages/account_modal.js') }}"></script>
 <script src="{{ url_for('static', filename='js/pages/admin_users_modal.js') }}"></script>
-<script src="{{ url_for('static', filename='js/pages/v2_rooms_page.js') }}"></script>
 <script>
 if (!window.SessionUtils || !window.SessionUtils.isLoggedIn()) {
     window.location.href = "/login";
@@ -153,6 +171,21 @@ if (btn) {
     }
 }
 </script>
+<script src="{{ url_for('static', filename='js/pages/v2_rooms_page.js') }}"></script>
+<!-- 密码弹窗 -->
+<div class="modal-mask" id="password-modal-mask" style="z-index:1050;">
+    <div class="modal-card" style="max-width:360px;">
+        <div class="modal-title">此房间需要密码</div>
+        <div class="modal-body">
+            <input type="password" id="password-input" placeholder="请输入房间密码" maxlength="20" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-size:15px;" />
+        </div>
+        <div class="modal-actions">
+            <button class="action-btn primary" id="password-submit-btn">确认</button>
+            <button class="action-btn secondary" id="password-cancel-btn">取消</button>
+        </div>
+    </div>
+</div>
+
 <div class="modal-mask" id="global-modal-mask" style="z-index: 1100;">
     <div class="modal-card" id="global-modal-card">
         <div class="modal-icon" id="global-modal-icon" style="display:none;"></div>

@@ -65,6 +65,22 @@
 
         document.getElementById("top-subtitle").textContent = "房间号：" + room.room_id;
 
+        // ── Step8: 观战 Banner ──
+        var banner = document.getElementById("spectate-banner");
+        if (banner) {
+            if (room.my_role === "spectator") {
+                banner.style.display = "";
+                banner.querySelector(".banner-text").textContent = "👁 你正在观战此房间 — 可以查看状态和聊天，但不能参与对局";
+                banner.className = "spectate-banner banner-spectator";
+            } else if (room.my_role === "dead_spectator") {
+                banner.style.display = "";
+                banner.querySelector(".banner-text").textContent = "💀 你已死亡，正在观战剩余对局";
+                banner.className = "spectate-banner banner-dead";
+            } else {
+                banner.style.display = "none";
+            }
+        }
+
         switch (room.status) {
         case "lobby":
             document.getElementById("lobby-phase").style.display = "";
@@ -138,12 +154,15 @@
         }
         document.getElementById("lobby-seats").innerHTML = seatsHtml;
 
-        // 观战者
+        // 观战者列表
         var specCount = room.spectator_count || 0;
         var specArea = document.getElementById("lobby-spectators-area");
-        if (specCount > 0) {
+        if (specCount > 0 && room.spectators && room.spectators.length > 0) {
             specArea.style.display = "";
-            var specs = room.seats ? room.seats.filter(function (s) { return !s; }) : [];
+            var specNames = room.spectators.map(function (s) { return _esc(s.username || "?"); }).join("、");
+            document.getElementById("lobby-spectators").textContent = specNames + "（" + specCount + " 人）";
+        } else if (specCount > 0) {
+            specArea.style.display = "";
             document.getElementById("lobby-spectators").textContent = specCount + " 人观战中";
         } else {
             specArea.style.display = "none";
@@ -169,7 +188,26 @@
         }
 
         // 消息
-        setMessage("（邀请制）将房间号发给朋友即可加入。加入后房主可开始对局。", "muted");
+        var inviteUrl = window.location.origin + "/v2/room/" + room.room_id + "?invite=1";
+        setMessage("", "muted");
+
+        // 邀请链接按钮
+        var copyInviteBtn = document.getElementById("copy-invite-link-btn");
+        if (copyInviteBtn) {
+            copyInviteBtn.style.display = "";
+            copyInviteBtn.onclick = function () {
+                navigator.clipboard.writeText(inviteUrl).then(function () {
+                    setMessage("邀请链接已复制！", "success");
+                }).catch(function () {
+                    setMessage("复制失败，链接：" + inviteUrl, "error");
+                });
+            };
+        }
+
+        // 检查 invite 参数显示欢迎提示
+        if (window.location.search.indexOf("invite=1") >= 0) {
+            setMessage("🎉 欢迎！你已通过邀请链接进入房间。", "success");
+        }
     };
 
     // ═══════════════════════════════════════════════════════
@@ -191,6 +229,13 @@
         document.getElementById("battle-phase-label").textContent = phaseLabel;
         document.getElementById("battle-alive-count").textContent = game.alive_count;
 
+        // 观战者数量
+        var specCountEl = document.getElementById("battle-spectator-count");
+        if (specCountEl) {
+            var sc = room.spectator_count || 0;
+            specCountEl.textContent = sc > 0 ? "👁 " + sc : "";
+        }
+
         // 速度层进度条
         window.renderSpeedLayerBar(game);
 
@@ -198,14 +243,24 @@
         window.renderPlayerCards(game, room.seats, myPlayerId);
 
         // 动作选择
-        if (myPlayerId && game.phase === "waiting_moves") {
+        var isDeadSpectator = (room.my_role === "dead_spectator");
+        if (myPlayerId && game.phase === "waiting_moves" && !isDeadSpectator) {
             document.getElementById("move-selection-card").style.display = "";
             window.renderMoveSelection(game, myPlayerId);
+        } else if (isDeadSpectator) {
+            // 死亡观战者：显示提示但隐藏动作区
+            document.getElementById("move-selection-card").style.display = "";
+            document.getElementById("move-groups").innerHTML = '<div style="text-align:center;color:var(--muted);padding:20px;">💀 你已死亡，正在观战中...</div>';
+            document.getElementById("move-selection-status").textContent = "";
+            document.getElementById("submit-move-btn").disabled = true;
+            document.getElementById("cancel-move-btn").disabled = true;
         } else if (myPlayerId && game.phase !== "waiting_moves") {
             // 结算中：显示动作区但禁用
             document.getElementById("move-selection-card").style.display = "";
             document.getElementById("move-groups").innerHTML = '<div style="text-align:center;color:var(--muted);padding:20px;">结算中，请等待...</div>';
             document.getElementById("move-selection-status").textContent = "";
+            document.getElementById("submit-move-btn").disabled = true;
+            document.getElementById("cancel-move-btn").disabled = true;
         } else {
             // 观战者无动作选择
             document.getElementById("move-selection-card").style.display = "none";
@@ -396,7 +451,8 @@
         }
 
         document.getElementById("move-groups").innerHTML = groupsHtml;
-        document.getElementById("submit-move-btn").disabled = !selectedMove;
+        document.getElementById("submit-move-btn").disabled = player.move_submitted || !selectedMove;
+        document.getElementById("cancel-move-btn").disabled = player.move_submitted;
     };
 
     // ═══════════════════════════════════════════════════════

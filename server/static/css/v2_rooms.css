@@ -343,6 +343,35 @@ select:focus, input:focus {
 .btn-small.join:hover { background: #1d4ed8; }
 .btn-small.full { background: #f3f4f6; color: #9ca3af; cursor: not-allowed; }
 .btn-small.playing { background: #fef3c7; color: #92400e; cursor: not-allowed; }
+.btn-small.spectate { background: #7c3aed; color: #fff; margin-left: 4px; }
+.btn-small.spectate:hover { background: #6d28d9; }
+.btn-small.nospectate { background: #f3f4f6; color: #6b7280; cursor: not-allowed; }
+
+/* ── 筛选栏 ── */
+.filter-bar {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+.filter-select {
+    padding: 6px 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 13px;
+    background: var(--card);
+    color: var(--text);
+    cursor: pointer;
+}
+.filter-select:focus {
+    outline: none;
+    border-color: var(--blue);
+}
+
+/* ── 观战数列 ── */
+.spec-count {
+    font-size: 12px;
+    color: var(--muted);
+}
 
 /* ── 消息 ── */
 .message {

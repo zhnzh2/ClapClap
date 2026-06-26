@@ -143,8 +143,16 @@ def get_room_v2_payload(
         seat = room.get_seat_by_token(requester_token)
         if seat is not None:
             my_seat_index = seat.seat_index
-            my_role = "player"
             my_player_id = seat.player_id
+            # Step8: 死亡玩家自动转为观战态
+            if room.game_state is not None:
+                player = room.game_state.get_player(seat.player_id)
+                if player is not None and not player.is_alive():
+                    my_role = "dead_spectator"
+                else:
+                    my_role = "player"
+            else:
+                my_role = "player"
         else:
             spec = room.get_spectator_by_token(requester_token)
             if spec is not None:
@@ -186,6 +194,15 @@ def get_room_v2_payload(
             requester_player_id=my_player_id,
         )
 
+    # ── 构建观战者列表：仅下发展示信息，不暴露 spectator_token ──
+    spectators_payload = [
+        {
+            "username": spectator.username,
+            "joined_at": spectator.joined_at.isoformat() if spectator.joined_at else None,
+        }
+        for spectator in room.spectators
+    ]
+
     # ── 公开重赛票数：不要把 player_token 暴露给其他客户端 ──
     rematch_votes: dict[str, bool] = {}
     for token, vote in room.rematch_votes.items():
@@ -203,6 +220,7 @@ def get_room_v2_payload(
         "seats": seats_payload,
         "occupied_seats": sorted(room._occupied_seats()),
         "spectator_count": room.spectator_count(),
+        "spectators": spectators_payload,
 
         # 请求者身份
         "my_seat_index": my_seat_index,

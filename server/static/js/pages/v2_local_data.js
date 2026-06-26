@@ -24,8 +24,9 @@ var V2_PLAYER_COLORS = [
 /* ── 设置 ────────────────────────────────────────────── */
 var V2_SETTINGS_KEY = "clapclap_v2_ui_settings";
 var v2Settings = {
-    autoResolve: false,    // 自动决策（默认关闭）
+    autoResolve: false,         // 自动决策（默认关闭）
     showHistory: true,
+    collapseSettlementLog: true, // Step8: 结算日志默认折叠
 };
 
 /* ── 动作快捷键映射 ──────────────────────────────────── */

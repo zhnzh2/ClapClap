@@ -10,19 +10,43 @@
     var IDENTITY_PREFIX = "clapclap_v2_room_";
 
     window.V2RoomIdentity = {
-        /** 保存 v2 房间身份 */
+        /** 保存 v2 房间身份（参战者） */
         save: function (roomId, playerToken, seatIndex) {
             try {
-                localStorage.setItem(
-                    IDENTITY_PREFIX + roomId,
-                    JSON.stringify({
-                        player_token: playerToken,
-                        seat_index: seatIndex,
-                        saved_at: new Date().toISOString(),
-                    })
-                );
+                var data = {
+                    player_token: playerToken,
+                    seat_index: seatIndex,
+                    role: "player",
+                    saved_at: new Date().toISOString(),
+                };
+                // 保留已有的 spectator_token
+                var existing = this.load(roomId);
+                if (existing && existing.spectator_token) {
+                    data.spectator_token = existing.spectator_token;
+                }
+                localStorage.setItem(IDENTITY_PREFIX + roomId, JSON.stringify(data));
             } catch (e) {
                 // localStorage 不可用，忽略
+            }
+        },
+
+        /** 保存观战者身份 */
+        saveSpectator: function (roomId, spectatorToken) {
+            try {
+                var data = {
+                    spectator_token: spectatorToken,
+                    role: "spectator",
+                    saved_at: new Date().toISOString(),
+                };
+                // 保留已有的 player_token
+                var existing = this.load(roomId);
+                if (existing && existing.player_token) {
+                    data.player_token = existing.player_token;
+                    data.seat_index = existing.seat_index;
+                }
+                localStorage.setItem(IDENTITY_PREFIX + roomId, JSON.stringify(data));
+            } catch (e) {
+                // 忽略
             }
         },
 
