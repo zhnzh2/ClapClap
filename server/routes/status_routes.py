@@ -30,6 +30,26 @@ def api_modes_status():
                     "label": "后续接入",
                     "description": "AI 模式入口已预留，后续接入自动对战。",
                 },
+                "v2_local": {
+                    "status": "available",
+                    "label": "2.0 已可用",
+                    "description": "2.0 本地多人裁判模式，适合验证速度层结算和完整回合记录。",
+                },
+                "v2_rooms": {
+                    "status": "available",
+                    "label": "2.0 已可用",
+                    "description": "2.0 多人房间模式，支持参战、观战、决策暂停恢复和聊天。",
+                },
+                "v2_match": {
+                    "status": "available",
+                    "label": "2.0 已可用",
+                    "description": "2.0 多人匹配队列，按目标人数凑齐后自动创建多人房间。",
+                },
+                "v2_records": {
+                    "status": "available",
+                    "label": "2.0 已可用",
+                    "description": "2.0 对局记录与回放，展示速度层、冲突、资源变化和最终名次。",
+                },
             },
         }
     )

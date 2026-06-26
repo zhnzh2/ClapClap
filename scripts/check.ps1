@@ -2,15 +2,34 @@ $ErrorActionPreference = "Stop"
 
 Write-Host "Running Python tests..."
 $env:PYTHONDONTWRITEBYTECODE = "1"
-python -m unittest discover -s tests
+python -m pytest
+if ($LASTEXITCODE -ne 0) {
+    exit $LASTEXITCODE
+}
+
+Write-Host "Validating persisted data compatibility..."
+python scripts/validate_data.py --strict --summary
 if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
 }
 
 Write-Host "Compiling Python files..."
-python -m compileall -q app server scripts tests
+$env:PYTHONPYCACHEPREFIX = Join-Path (Get-Location) "test_artifacts\pycache"
+python -m compileall -q app server scripts
 if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
+}
+
+$pyCompileFailed = $false
+Get-ChildItem tests -Filter *.py -File | ForEach-Object {
+    python -m py_compile $_.FullName
+    if ($LASTEXITCODE -ne 0) {
+        $pyCompileFailed = $true
+    }
+}
+
+if ($pyCompileFailed) {
+    exit 1
 }
 
 Write-Host "Checking frontend JavaScript..."

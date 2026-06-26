@@ -36,6 +36,7 @@ import json
 import os
 import shutil
 import threading
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -86,7 +87,15 @@ def _write_battle(battle_id: str, data: dict) -> None:
         json.dumps(data, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
-    os.replace(temporary, target)
+    for attempt in range(5):
+        try:
+            os.replace(temporary, target)
+            return
+        except PermissionError:
+            if attempt == 4:
+                raise
+            # Windows/OneDrive can briefly lock JSON files right after writes.
+            time.sleep(0.05 * (attempt + 1))
 
 
 # ── 命名 ──────────────────────────────────────────────────────
