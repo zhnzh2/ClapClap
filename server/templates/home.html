@@ -50,6 +50,50 @@
             font-size: 16px;
         }
 
+        .header-actions {
+            position: fixed;
+            top: 18px;
+            right: 18px;
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 6px;
+            border: 1px solid rgba(229, 231, 235, 0.92);
+            border-radius: 18px;
+            background: rgba(255, 255, 255, 0.82);
+            box-shadow: 0 12px 30px rgba(15, 23, 42, 0.10);
+            backdrop-filter: blur(14px);
+        }
+
+        .header-actions .header-account-btn {
+            position: static;
+            top: auto;
+            right: auto;
+            min-height: 40px;
+            padding: 0 16px;
+            border-radius: 12px;
+            box-shadow: none;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            white-space: nowrap;
+        }
+
+        .header-actions .header-account-btn:hover {
+            background: #eff6ff;
+        }
+
+        .header-actions .header-account-btn.danger {
+            background: #ef4444;
+            color: #ffffff;
+            border-color: #ef4444;
+        }
+
+        .header-actions .header-account-btn.danger:hover {
+            background: #dc2626;
+        }
+
         .version-switch-btn {
             position: absolute;
             left: 0;
@@ -141,6 +185,15 @@
         }
 
         @media (max-width: 820px) {
+            .header-actions {
+                position: static;
+                width: fit-content;
+                max-width: 100%;
+                margin: 0 0 18px auto;
+                flex-wrap: wrap;
+                justify-content: flex-end;
+            }
+
             .mode-grid {
                 grid-template-columns: 1fr;
             }
@@ -149,20 +202,35 @@
                 font-size: 30px;
             }
         }
+
+        @media (max-width: 560px) {
+            .header-actions {
+                width: 100%;
+                justify-content: stretch;
+                gap: 8px;
+            }
+
+            .header-actions .header-account-btn {
+                flex: 1 1 calc(50% - 4px);
+                min-width: 0;
+            }
+        }
     </style>
 </head>
 <body>
     <div class="container">
+        <div class="header-actions">
+            <a class="header-account-btn" href="/rules/1.0">规则界面</a>
+            <button class="header-account-btn" id="header-admin-btn" style="display:none;">查看用户</button>
+            <button class="header-account-btn" id="header-account-btn">账号</button>
+            <button class="header-account-btn danger" id="header-logout-btn">退出登录</button>
+        </div>
+
         <div class="hero">
             <a class="version-switch-btn" href="/v2" title="切换到 2.0 多人版">2.0</a>
             <h1>ClapClap</h1>
             <p>选择一种模式开始游戏</p>
         </div>
-
-        <button class="header-account-btn" id="header-logout-btn" style="background:#ef4444;color:white;border-color:#ef4444;">退出登录</button>
-        <button class="header-account-btn" id="header-account-btn" style="right:100px;">账号</button>
-        <button class="header-account-btn" id="header-admin-btn" style="display:none;right:184px;">查看用户</button>
-        <a class="header-account-btn" href="/rules/1.0" style="right:268px;">规则界面</a>
 
         <div class="mode-grid">
             <div class="mode-card">
