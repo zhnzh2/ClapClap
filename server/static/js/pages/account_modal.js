@@ -7,7 +7,7 @@
     function open() {
         var user = window.SessionUtils ? window.SessionUtils.getSessionUser() : null;
         if (!user) {
-            window.location.href = "/login";
+            window.location.href = "/login?expired=1";
             return;
         }
 

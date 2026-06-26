@@ -1,7 +1,7 @@
 window.initHomePage = function () {
     // 未登录则跳转到登录页
     if (!window.SessionUtils || !window.SessionUtils.isLoggedIn()) {
-        window.location.href = "/login";
+        window.location.href = "/login?expired=1";
         return;
     }
 

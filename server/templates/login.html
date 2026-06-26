@@ -5,6 +5,24 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>ClapClap 登录</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/auth.css') }}" />
+    <style>
+        .login-expired-banner {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 14px 18px;
+            margin-bottom: 18px;
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            border-radius: 12px;
+            color: #991b1b;
+            font-size: 15px;
+            font-weight: bold;
+        }
+        .login-expired-icon {
+            font-size: 22px;
+        }
+    </style>
 </head>
 <body>
     <div class="login-container">
@@ -12,6 +30,12 @@
             <div class="login-hero">
                 <h1>ClapClap</h1>
                 <p>双人手势对战游戏</p>
+            </div>
+
+            <!-- 登录已过期横幅 -->
+            <div class="login-expired-banner" id="login-expired-banner" style="display:none;">
+                <div class="login-expired-icon">⚠️</div>
+                <div class="login-expired-text">登录已过期，请重新登录</div>
             </div>
 
             <!-- 登录表单 -->

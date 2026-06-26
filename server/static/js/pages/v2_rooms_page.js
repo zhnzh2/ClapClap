@@ -6,7 +6,7 @@
     "use strict";
 
     if (!window.SessionUtils || !window.SessionUtils.isLoggedIn()) {
-        window.location.href = "/login";
+        window.location.href = "/login?expired=1";
         return;
     }
 

@@ -397,6 +397,8 @@ body {
     cursor: pointer;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
     transition: background 0.15s;
+    text-decoration: none;
+    display: inline-block;
 }
 
 .header-account-btn:hover {

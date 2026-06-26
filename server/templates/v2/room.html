@@ -9,6 +9,12 @@
 </head>
 <body>
 <div class="container">
+
+    <button class="header-account-btn" id="header-logout-btn" style="background:#ef4444;color:white;border-color:#ef4444;">退出登录</button>
+    <button class="header-account-btn" id="header-account-btn" style="right:100px;">账号</button>
+    <button class="header-account-btn" id="header-admin-btn" style="display:none;right:184px;">管理</button>
+    <a class="header-account-btn" href="/rules/2.0" style="right:268px;">规则界面</a>
+
     <!-- ═══════════════════════════════════════════════════════ -->
     <!-- 顶部栏 -->
     <!-- ═══════════════════════════════════════════════════════ -->
@@ -18,8 +24,6 @@
             <div class="sub" id="top-subtitle">房间号加载中...</div>
         </div>
         <div class="top-actions">
-            <button class="action-btn secondary" id="header-account-btn">账号</button>
-            <button class="action-btn secondary" id="header-admin-btn" style="display:none;">管理</button>
             <button class="action-btn secondary" id="open-v2-settings-btn" type="button">设置</button>
             <a class="action-btn secondary" href="/">返回大厅</a>
             <button class="action-btn danger" id="leave-room-btn">退出房间</button>
@@ -248,6 +252,7 @@ if (typeof io !== "function") {
 <script src="{{ url_for('static', filename='js/core/session.js') }}"></script>
 <script src="{{ url_for('static', filename='js/core/message.js') }}"></script>
 <script src="{{ url_for('static', filename='js/core/api.js') }}"></script>
+<script src="{{ url_for('static', filename='js/core/logout_button.js') }}"></script>
 <script src="{{ url_for('static', filename='js/core/modal.js') }}"></script>
 <script src="{{ url_for('static', filename='js/core/boot.js') }}"></script>
 <script src="{{ url_for('static', filename='js/online/v2_room_identity.js') }}"></script>

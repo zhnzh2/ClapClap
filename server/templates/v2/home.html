@@ -50,13 +50,6 @@
         }
         .version-switch-btn:hover { background: #fde68a; }
 
-        .rule-link {
-            position: absolute; right: 90px; top: 12px;
-            display: inline-block; text-decoration: none;
-            font-size: 13px; color: #2563eb; font-weight: bold;
-        }
-        .rule-link:hover { text-decoration: underline; }
-
         .mode-grid {
             display: grid;
             grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -102,15 +95,6 @@
             color: var(--muted); font-size: 14px;
         }
 
-        /* 账号按钮 — 与 v1 一致 */
-        .header-account-btn {
-            position: absolute; right: 0; top: 8px;
-            border: none; background: #e5e7eb;
-            padding: 5px 14px; border-radius: 8px;
-            cursor: pointer; font-size: 13px; font-weight: bold;
-            color: #111827;
-        }
-
         @media (max-width: 820px) {
             .mode-grid { grid-template-columns: 1fr; }
             .hero h1 { font-size: 30px; }
@@ -123,9 +107,12 @@
             <a class="version-switch-btn" href="/" title="切换到 1.0 双人版">1.0</a>
             <h1>ClapClap 2.0</h1>
             <p>多人在线对战 · 本地模拟 · 新规则 · 新体验</p>
-            <a class="rule-link" href="/rules/2.0">查看 2.0 游戏规则</a>
-            <button class="header-account-btn" id="header-account-btn">账号</button>
         </div>
+
+        <button class="header-account-btn" id="header-logout-btn" style="background:#ef4444;color:white;border-color:#ef4444;">退出登录</button>
+        <button class="header-account-btn" id="header-account-btn" style="right:100px;">账号</button>
+        <button class="header-account-btn" id="header-admin-btn" style="display:none;right:184px;">查看用户</button>
+        <a class="header-account-btn" href="/rules/2.0" style="right:268px;">规则界面</a>
 
         <div class="mode-grid">
             <div class="mode-card">
@@ -183,6 +170,7 @@
     <script src="{{ url_for('static', filename='js/core/storage.js') }}"></script>
     <script src="{{ url_for('static', filename='js/core/session.js') }}"></script>
     <script src="{{ url_for('static', filename='js/core/api.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/core/logout_button.js') }}"></script>
     <script src="{{ url_for('static', filename='js/core/modal.js') }}"></script>
     <script src="{{ url_for('static', filename='js/pages/account_modal.js') }}"></script>
     <script src="{{ url_for('static', filename='js/pages/admin_users_modal.js') }}"></script>

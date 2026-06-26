@@ -13,8 +13,10 @@
     <div class="container">
         <div class="top-row">
             <h1>房间对战</h1>
+                <button class="header-account-btn" id="header-logout-btn" style="position:static;box-shadow:none;margin-right:8px;background:#ef4444;color:white;border-color:#ef4444;">退出登录</button>
                 <button class="header-account-btn" id="header-account-btn" style="position:static;box-shadow:none;margin-right:8px;">账号</button>
                 <button class="header-account-btn" id="header-admin-btn" style="display:none;position:static;box-shadow:none;margin-right:8px;">查看用户</button>
+                <a class="header-account-btn" href="/rules/1.0" style="position:static;box-shadow:none;margin-right:8px;">规则界面</a>
                 <div class="top-actions">
                     <button class="secondary" id="open-help-btn" type="button">帮助</button>
                     <button class="secondary" id="open-settings-btn" type="button">设置</button>
@@ -238,6 +240,7 @@
     <script src="{{ url_for('static', filename='js/core/session.js') }}"></script>
     <script src="{{ url_for('static', filename='js/core/message.js') }}"></script>
     <script src="{{ url_for('static', filename='js/core/api.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/core/logout_button.js') }}"></script>
     <script src="{{ url_for('static', filename='js/core/modal.js') }}"></script>
     <script src="{{ url_for('static', filename='js/core/boot.js') }}"></script>
     <script src="{{ url_for('static', filename='js/online/room_identity.js') }}"></script>

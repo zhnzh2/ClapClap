@@ -184,4 +184,15 @@ window.initLoginPage = function () {
         window.location.href = "/";
         return;
     }
+
+    // 检查是否因登录过期被重定向
+    (function checkExpiredBanner() {
+        var params = new URLSearchParams(window.location.search);
+        if (params.get("expired") === "1") {
+            var banner = document.getElementById("login-expired-banner");
+            if (banner) {
+                banner.style.display = "flex";
+            }
+        }
+    })();
 };

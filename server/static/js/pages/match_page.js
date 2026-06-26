@@ -230,7 +230,7 @@ window.initMatchPage = function () {
             var name = sessionUser ? sessionUser.username : "";
             if (!name) {
                 setMatchMessage("登录信息丢失，请重新登录。", "error");
-                window.location.href = "/login";
+                window.location.href = "/login?expired=1";
                 return;
             }
             setPlayerName(name);

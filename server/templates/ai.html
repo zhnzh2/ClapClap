@@ -48,8 +48,10 @@
 </head>
 <body>
     <div class="container">
-        <button class="header-account-btn" id="header-account-btn">账号</button>
-        <button class="header-account-btn" id="header-admin-btn" style="display:none;right:100px;">查看用户</button>
+        <button class="header-account-btn" id="header-logout-btn" style="background:#ef4444;color:white;border-color:#ef4444;">退出登录</button>
+        <button class="header-account-btn" id="header-account-btn" style="right:100px;">账号</button>
+        <button class="header-account-btn" id="header-admin-btn" style="display:none;right:184px;">查看用户</button>
+        <a class="header-account-btn" href="/rules/1.0" style="right:268px;">规则界面</a>
         <div class="card">
             <h1>和电脑 AI 对战</h1>
             <p>这个页面是 AI 模式的入口占位页。后面会在 AI 训练完成后，把它正式接入对战流程。</p>
@@ -59,6 +61,7 @@
     <script src="{{ url_for('static', filename='js/core/storage.js') }}"></script>
     <script src="{{ url_for('static', filename='js/core/session.js') }}"></script>
     <script src="{{ url_for('static', filename='js/core/api.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/core/logout_button.js') }}"></script>
     <script src="{{ url_for('static', filename='js/core/modal.js') }}"></script>
     <script src="{{ url_for('static', filename='js/pages/account_modal.js') }}"></script>
     <script src="{{ url_for('static', filename='js/pages/admin_users_modal.js') }}"></script>

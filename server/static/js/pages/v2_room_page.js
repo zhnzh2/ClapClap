@@ -34,7 +34,7 @@ var V2_DEFAULT_UI_SETTINGS = {
 function initV2RoomPage() {
     // 登录检查
     if (typeof SessionUtils === "undefined" || !SessionUtils.isLoggedIn()) {
-        window.location.href = "/login";
+        window.location.href = "/login?expired=1";
         return;
     }
 

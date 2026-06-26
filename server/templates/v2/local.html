@@ -9,6 +9,12 @@
 </head>
 <body>
 <div class="container">
+
+    <button class="header-account-btn" id="header-logout-btn" style="background:#ef4444;color:white;border-color:#ef4444;">退出登录</button>
+    <button class="header-account-btn" id="header-account-btn" style="right:100px;">账号</button>
+    <button class="header-account-btn" id="header-admin-btn" style="display:none;right:184px;">查看用户</button>
+    <a class="header-account-btn" href="/rules/2.0" style="right:268px;">规则界面</a>
+
     <!-- ═══════════════════════════════════ 顶部栏 ═══════════════════════════════════ -->
     <div class="top-bar">
         <div class="title-box">
@@ -18,9 +24,7 @@
         <div class="top-actions">
             <a class="action-btn version-switch-btn" href="/local" title="切换到 1.0 双人版">1.0</a>
             <button class="action-btn secondary" id="help-open-btn">帮助</button>
-            <a class="action-btn secondary" href="/rules/2.0">游戏规则</a>
             <button class="action-btn" id="reset-btn" style="display:none;">重新开始</button>
-            <button class="action-btn secondary" id="header-account-btn">账号</button>
             <a class="action-btn secondary" href="/v2">返回大厅</a>
         </div>
     </div>
@@ -185,6 +189,7 @@
 
     <script src="{{ url_for('static', filename='js/core/session.js') }}"></script>
     <script src="{{ url_for('static', filename='js/core/api.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/core/logout_button.js') }}"></script>
     <script src="{{ url_for('static', filename='js/core/modal.js') }}"></script>
     <script src="{{ url_for('static', filename='js/pages/account_modal.js') }}"></script>
     <script src="{{ url_for('static', filename='js/pages/admin_users_modal.js') }}"></script>
