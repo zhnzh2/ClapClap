@@ -455,6 +455,7 @@
 
         $content.innerHTML = '<div class="user-panel">'
             + '<h2 class="user-panel-title">历史对局</h2>'
+            + '<div class="battle-stats" id="battle-stats" style="display:none;"></div>'
             + '<div class="battle-list" id="battle-list">'
             + '<div class="battle-list-loading">加载中...</div>'
             + '</div>'
@@ -483,6 +484,7 @@
                 }
 
                 if (!append) listEl.innerHTML = "";
+                if (!append) renderBattleStats(res.data.stats || null);
                 battles.forEach(function (b) {
                     listEl.appendChild(createBattleItem(b));
                 });
@@ -510,7 +512,52 @@
             });
     }
 
+    function renderBattleStats(stats) {
+        var el = document.getElementById("battle-stats");
+        if (!el || !stats) return;
+
+        var v1 = stats.v1 || {};
+        var v2 = stats.v2 || {};
+        var v2Avg = v2.average_rank == null ? "—" : v2.average_rank;
+        var v2Rates = v2.total
+            ? Math.round((v2.championships || 0) * 100 / v2.total) + "%"
+            : "—";
+
+        var byCount = v2.by_player_count || {};
+        var countKeys = Object.keys(byCount).sort(function (a, b) { return parseInt(a) - parseInt(b); });
+        var countHtml = countKeys.length
+            ? countKeys.map(function (key) {
+                var item = byCount[key];
+                var avg = item.average_rank == null ? "—" : item.average_rank;
+                return '<span class="battle-stat-pill">' + item.player_count + '人局 '
+                    + item.total + '场 · 冠军 ' + item.championships + ' · 平均 ' + avg + '</span>';
+            }).join("")
+            : '<span class="battle-stat-pill muted">暂无 2.0 分人数统计</span>';
+
+        el.innerHTML = '<div class="battle-stat-card">'
+            + '<div class="battle-stat-title">1.0 双人战绩</div>'
+            + '<div class="battle-stat-main">' + (v1.total || 0) + ' 场</div>'
+            + '<div class="battle-stat-sub">胜 ' + (v1.wins || 0)
+            + ' · 负 ' + (v1.losses || 0)
+            + ' · 平 ' + (v1.draws || 0)
+            + (v1.ongoing ? ' · 进行中 ' + v1.ongoing : '')
+            + '</div>'
+            + '</div>'
+            + '<div class="battle-stat-card accent">'
+            + '<div class="battle-stat-title">2.0 多人战绩</div>'
+            + '<div class="battle-stat-main">' + (v2.total || 0) + ' 场 · 冠军 ' + (v2.championships || 0) + '</div>'
+            + '<div class="battle-stat-sub">冠军率 ' + v2Rates + ' · 平均名次 ' + v2Avg + '</div>'
+            + '<div class="battle-stat-pills">' + countHtml + '</div>'
+            + '</div>';
+        el.style.display = "";
+    }
+
     function createBattleItem(b) {
+        var isV2 = b.rule_version && String(b.rule_version).startsWith("2.");
+        if (isV2) {
+            return createV2BattleItem(b);
+        }
+
         var result = b.result || "unknown";
         var p1Name = b.p1_name || "P1";
         var p2Name = b.p2_name || "P2";
@@ -555,6 +602,71 @@
         // 点击跳转到回放页面
         div.addEventListener("click", function () {
             window.location.href = "/record/" + encodeURIComponent(b.battle_id);
+        });
+
+        return div;
+    }
+
+    function createV2BattleItem(b) {
+        var playerCount = b.player_count || 0;
+        var modeLabel = b.mode_label || "对局";
+        var myRank = b.my_rank;
+        var isWinner = b.is_winner;
+        var participantNames = b.participant_names || [];
+        var namesPreview = participantNames.slice(0, 4).join("、");
+        if (participantNames.length > 4) namesPreview += " 等" + participantNames.length + "人";
+
+        // 名次标签
+        var rankBadge = "";
+        var rankClass = "";
+        if (myRank === 1 && isWinner) {
+            rankBadge = "🏆 冠军";
+            rankClass = "win";
+        } else if (myRank != null) {
+            rankBadge = "第" + myRank + "名";
+            rankClass = myRank <= 2 ? "win" : (myRank >= playerCount ? "loss" : "draw");
+        } else if (!b.end_time) {
+            rankBadge = "进行中";
+            rankClass = "ongoing";
+        } else {
+            rankBadge = "?";
+            rankClass = "unknown";
+        }
+
+        // 格式化时间
+        var timeStr = "";
+        try {
+            var d = new Date(b.start_time);
+            if (!isNaN(d.getTime())) {
+                timeStr = d.toLocaleString("zh-CN");
+            }
+        } catch (e) {
+            timeStr = b.start_time || "";
+        }
+
+        var roundsText = (b.round_count || 0) + " 回合";
+        var modeBadge = modeLabel === "房间对战"
+            ? '<span class="v2-mode-badge room">' + escHtml(modeLabel) + '</span>'
+            : '<span class="v2-mode-badge local">' + escHtml(modeLabel) + '</span>';
+
+        var div = document.createElement("div");
+        div.className = "battle-item battle-item-v2";
+        div.innerHTML = '<div class="battle-result-badge battle-result-' + rankClass + '">' + escHtml(rankBadge) + '</div>'
+            + '<div class="battle-info">'
+            + '<div class="battle-info-row">'
+            + modeBadge
+            + '<span class="battle-opponent">多人对局 · ' + playerCount + '人</span>'
+            + '<span class="battle-rounds">' + roundsText + '</span>'
+            + '</div>'
+            + '<div class="battle-info-row">'
+            + '<span class="battle-time">' + escHtml(timeStr) + '</span>'
+            + '<span class="battle-participants-v2">' + escHtml(namesPreview) + '</span>'
+            + '</div>'
+            + '</div>'
+            + '<span class="battle-result-text result-' + rankClass + '">' + escHtml(rankBadge) + '</span>';
+
+        div.addEventListener("click", function () {
+            window.location.href = "/v2/record/" + encodeURIComponent(b.battle_id);
         });
 
         return div;

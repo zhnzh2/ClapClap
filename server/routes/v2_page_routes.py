@@ -50,3 +50,9 @@ def v2_room_detail(room_id: str):
 def v2_match():
     """2.0 自动匹配页面。"""
     return render_template("v2/match.html")
+
+
+@v2_page_bp.get("/v2/record/<battle_id>")
+def v2_record_page(battle_id: str):
+    """2.0 对局回放页面。"""
+    return render_template("v2/record.html", battle_id=battle_id)

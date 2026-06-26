@@ -9,6 +9,137 @@ from server.auth_middleware import require_auth
 auth_bp = Blueprint("auth", __name__)
 
 
+def _get_participant_player_id(participants: dict, uid: int) -> str | None:
+    for player_id, info in participants.items():
+        if info.get("uid") == uid:
+            return player_id
+    return None
+
+
+def _latest_v2_rank(data: dict, player_id: str | None):
+    if not player_id:
+        return None
+
+    final_result = data.get("final_result", {}) or {}
+    for item in final_result.get("rankings", []) or []:
+        if item.get("player_id") == player_id:
+            return item.get("rank")
+
+    for round_data in reversed(data.get("rounds", []) or []):
+        result = round_data.get("result", {}) or {}
+        rank_updates = result.get("rank_updates") or round_data.get("rank_updates") or {}
+        if player_id in rank_updates:
+            return rank_updates.get(player_id)
+    return None
+
+
+def _v2_is_winner(data: dict, player_id: str | None) -> bool:
+    if not player_id:
+        return False
+    final_result = data.get("final_result", {}) or {}
+    winner = final_result.get("winner", data.get("winner"))
+    if winner is not None:
+        return str(winner) == str(player_id)
+    return _latest_v2_rank(data, player_id) == 1 and data.get("end_time") is not None
+
+
+def _build_user_battle_stats(uid: int, battle_ids: list[str]) -> dict:
+    stats = {
+        "v1": {
+            "total": 0,
+            "wins": 0,
+            "losses": 0,
+            "draws": 0,
+            "ongoing": 0,
+        },
+        "v2": {
+            "total": 0,
+            "completed": 0,
+            "championships": 0,
+            "ranked_count": 0,
+            "average_rank": None,
+            "by_player_count": {},
+        },
+    }
+
+    rank_sum = 0
+    player_count_rank_sums: dict[str, int] = {}
+
+    for bid in battle_ids:
+        data = read_battle(bid)
+        if data is None:
+            continue
+
+        rule_version = str(data.get("rule_version", "1.0"))
+        participants = data.get("participants", {}) or {}
+
+        if rule_version.startswith("2."):
+            player_id = _get_participant_player_id(participants, uid)
+            if player_id is None:
+                continue
+
+            v2 = stats["v2"]
+            v2["total"] += 1
+            player_count = len(participants)
+            key = str(player_count)
+            bucket = v2["by_player_count"].setdefault(key, {
+                "player_count": player_count,
+                "total": 0,
+                "completed": 0,
+                "championships": 0,
+                "ranked_count": 0,
+                "average_rank": None,
+            })
+            bucket["total"] += 1
+
+            if data.get("end_time") is not None:
+                v2["completed"] += 1
+                bucket["completed"] += 1
+
+            if _v2_is_winner(data, player_id):
+                v2["championships"] += 1
+                bucket["championships"] += 1
+
+            rank = _latest_v2_rank(data, player_id)
+            if isinstance(rank, int):
+                v2["ranked_count"] += 1
+                rank_sum += rank
+                bucket["ranked_count"] += 1
+                player_count_rank_sums[key] = player_count_rank_sums.get(key, 0) + rank
+            continue
+
+        p1 = participants.get("p1", {})
+        p2 = participants.get("p2", {})
+        my_seat = None
+        if p1.get("uid") == uid:
+            my_seat = "p1"
+        elif p2.get("uid") == uid:
+            my_seat = "p2"
+        if my_seat is None:
+            continue
+
+        v1 = stats["v1"]
+        v1["total"] += 1
+        winner = data.get("winner")
+        if data.get("end_time") is None and winner is None:
+            v1["ongoing"] += 1
+        elif winner == 0:
+            v1["draws"] += 1
+        elif (winner == 1 and my_seat == "p1") or (winner == 2 and my_seat == "p2"):
+            v1["wins"] += 1
+        else:
+            v1["losses"] += 1
+
+    v2 = stats["v2"]
+    if v2["ranked_count"]:
+        v2["average_rank"] = round(rank_sum / v2["ranked_count"], 2)
+    for key, bucket in v2["by_player_count"].items():
+        if bucket["ranked_count"]:
+            bucket["average_rank"] = round(player_count_rank_sums.get(key, 0) / bucket["ranked_count"], 2)
+
+    return stats
+
+
 @auth_bp.post("/api/auth/register")
 def api_register():
     """注册：用户名、密码、确认密码、介绍信（可选）。"""
@@ -228,6 +359,8 @@ def api_user_battles(uid: int):
     limit = min(max(limit or 50, 1), 100)
     offset = max(offset or 0, 0)
     battle_ids, total = users.get_user_battle_page(uid, limit, offset)
+    all_battle_ids = users.get_user_battle_ids(uid)
+    stats = _build_user_battle_stats(uid, all_battle_ids)
     battles: list[dict] = []
 
     for bid in battle_ids:
@@ -235,49 +368,90 @@ def api_user_battles(uid: int):
         if data is None:
             continue
 
+        rule_version = str(data.get("rule_version", "1.0"))
         participants = data.get("participants", {})
-        p1 = participants.get("p1", {})
-        p2 = participants.get("p2", {})
+        round_count = len(data.get("rounds", []))
 
-        # 判断当前用户是哪一方
-        my_seat = None
-        opponent = None
-        if p1.get("uid") == uid:
-            my_seat = "p1"
-            opponent = p2.get("username", "?")
-        elif p2.get("uid") == uid:
-            my_seat = "p2"
-            opponent = p1.get("username", "?")
+        if rule_version.startswith("2."):
+            # ── 2.0 摘要 ──────────────────────────────────────────
+            final_result = data.get("final_result", {})
+            rankings = final_result.get("rankings", [])
+            my_player_id = _get_participant_player_id(participants, uid)
+            my_rank = None
+            is_winner = False
+            for r in rankings:
+                if participants.get(r.get("player_id", ""), {}).get("uid") == uid:
+                    my_rank = r.get("rank")
+                    is_winner = r.get("is_winner", False)
+                    break
+            if my_rank is None:
+                my_rank = _latest_v2_rank(data, my_player_id)
+                is_winner = _v2_is_winner(data, my_player_id)
 
-        # 判断结果
-        winner = data.get("winner")
-        result = "unknown"
-        if winner is not None and my_seat is not None:
-            if winner == 0:
-                result = "draw"
-            elif (winner == 1 and my_seat == "p1") or (winner == 2 and my_seat == "p2"):
-                result = "win"
-            else:
-                result = "loss"
-        elif data.get("end_time") is None:
-            result = "ongoing"
+            participant_names = [
+                p.get("username", "?") for p in participants.values()
+            ]
 
-        battles.append({
-            "battle_id": bid,
-            "start_time": data.get("start_time", ""),
-            "end_time": data.get("end_time"),
-            "p1_name": p1.get("username", "?"),
-            "p2_name": p2.get("username", "?"),
-            "opponent": opponent or "?",
-            "result": result,
-            "round_count": len(data.get("rounds", [])),
-            "winner": winner,
-        })
+            battles.append({
+                "battle_id": bid,
+                "rule_version": rule_version,
+                "start_time": data.get("start_time", ""),
+                "end_time": data.get("end_time"),
+                "mode": data.get("mode"),
+                "mode_label": data.get("mode_label", ""),
+                "player_count": len(participants),
+                "my_rank": my_rank,
+                "is_winner": is_winner,
+                "participant_names": participant_names,
+                "round_count": round_count,
+                "winner": data.get("winner"),
+            })
+        else:
+            # ── 1.0 摘要（保持现有逻辑）────────────────────────────
+            p1 = participants.get("p1", {})
+            p2 = participants.get("p2", {})
+
+            # 判断当前用户是哪一方
+            my_seat = None
+            opponent = None
+            if p1.get("uid") == uid:
+                my_seat = "p1"
+                opponent = p2.get("username", "?")
+            elif p2.get("uid") == uid:
+                my_seat = "p2"
+                opponent = p1.get("username", "?")
+
+            # 判断结果
+            winner = data.get("winner")
+            result = "unknown"
+            if winner is not None and my_seat is not None:
+                if winner == 0:
+                    result = "draw"
+                elif (winner == 1 and my_seat == "p1") or (winner == 2 and my_seat == "p2"):
+                    result = "win"
+                else:
+                    result = "loss"
+            elif data.get("end_time") is None:
+                result = "ongoing"
+
+            battles.append({
+                "battle_id": bid,
+                "rule_version": rule_version,
+                "start_time": data.get("start_time", ""),
+                "end_time": data.get("end_time"),
+                "p1_name": p1.get("username", "?"),
+                "p2_name": p2.get("username", "?"),
+                "opponent": opponent or "?",
+                "result": result,
+                "round_count": round_count,
+                "winner": winner,
+            })
 
     next_offset = offset + len(battle_ids)
     return jsonify({
         "ok": True,
         "battles": battles,
+        "stats": stats,
         "total": total,
         "has_more": next_offset < total,
         "next_offset": next_offset,

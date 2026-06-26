@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>2.0 对局回放 - ClapClap</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/auth.css') }}" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/record.css') }}" />
+    <style>
+        :root {
+            --bg: #f4f6fb;
+            --card: #ffffff;
+            --text: #1f2937;
+            --muted: #6b7280;
+            --shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+            --blue: #2563eb;
+            --border: #e5e7eb;
+            --input-focus: #f0f3ff;
+            --accent: #446aa5;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: Arial, "Microsoft YaHei", sans-serif;
+            background: var(--bg);
+            color: var(--text);
+        }
+    </style>
+</head>
+<body>
+    <!-- 右上角账号按钮 -->
+    <button class="header-account-btn" id="header-account-btn">账号</button>
+    <button class="header-account-btn" id="header-admin-btn" style="display:none;right:100px;">查看用户</button>
+
+    <!-- 加载中 -->
+    <div class="record-loading" id="record-loading">
+        <div class="record-loading-text">加载对局数据...</div>
+    </div>
+
+    <!-- 错误 -->
+    <div class="record-error" id="record-error" style="display:none;">
+        <div class="record-error-text" id="record-error-text"></div>
+        <button class="record-error-back" id="record-error-back">返回大厅</button>
+    </div>
+
+    <!-- 回放主体 -->
+    <div class="record-page" id="record-page" style="display:none;">
+        <!-- 顶部信息栏 -->
+        <header class="record-header v2-record-header">
+            <button class="record-back-btn" id="record-back-btn">← 返回</button>
+            <div class="record-title-group">
+                <h1 class="record-title">2.0 对局回放</h1>
+                <div class="v2-record-subtitle" id="v2-record-subtitle"></div>
+            </div>
+            <div class="record-meta" id="record-meta"></div>
+        </header>
+
+        <!-- 两栏布局 -->
+        <div class="record-body v2-record-body">
+            <!-- 左侧回合列表 -->
+            <nav class="record-round-list" id="record-round-list">
+                <!-- 由 JS 动态填充 -->
+            </nav>
+
+            <!-- 右侧回合详情 -->
+            <main class="record-detail v2-record-detail" id="record-detail">
+                <div class="record-detail-placeholder">← 点击左侧回合查看详情</div>
+            </main>
+        </div>
+    </div>
+
+    <!-- JS -->
+    <script src="{{ url_for('static', filename='js/core/session.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/core/api.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/core/modal.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/pages/account_modal.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/pages/admin_users_modal.js') }}"></script>
+    <script>
+        window.V2_RECORD_BATTLE_ID = {{ battle_id|tojson }};
+    </script>
+    <script src="{{ url_for('static', filename='js/pages/v2_record_page.js') }}"></script>
+</body>
+</html>

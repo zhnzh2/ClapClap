@@ -89,6 +89,11 @@
                     showError("对局数据为空。");
                     return;
                 }
+                // 2.0 对局重定向到 v2 回放页面
+                if (battle.rule_version && String(battle.rule_version).startsWith("2.")) {
+                    window.location.replace("/v2/record/" + encodeURIComponent(battleId));
+                    return;
+                }
                 showPage();
                 renderHeader();
                 renderRoundList();

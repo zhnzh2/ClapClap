@@ -142,8 +142,39 @@ def _increment_name(name: str) -> str:
 
 # ── 创建 / 更新 ──────────────────────────────────────────────
 
-def create_battle(participants: dict, start_time: datetime | None = None, rule_version: str = "1.0") -> str:
-    """创建对局记录。participants = {seat: {username, uid}}。返回 battle_id。"""
+def _format_timestamp(dt: datetime) -> str:
+    return dt.strftime("%Y-%m-%dT%H:%M:%S.") + f"{dt.microsecond // 1000:03d}Z"
+
+
+def _mode_label(mode: str | None) -> str:
+    if mode == "local":
+        return "本地对战"
+    if mode == "room":
+        return "房间对战"
+    return ""
+
+
+def _schema_version_for(rule_version: str) -> str:
+    if str(rule_version).startswith("2."):
+        return "2.0.0"
+    return "1.0.0"
+
+
+def create_battle(
+    participants: dict,
+    start_time: datetime | None = None,
+    rule_version: str = "1.0",
+    *,
+    mode: str | None = None,
+    seats: list[dict] | None = None,
+    host: dict | None = None,
+    room: dict | None = None,
+    schema_version: str | None = None,
+) -> str:
+    """创建对局记录。participants = {seat: {username, uid}}。返回 battle_id。
+
+    1.0 调用保持原样；2.0 可传入 mode/seats/host/room 形成完整表头。
+    """
     if start_time is None:
         start_time = datetime.now(timezone.utc)
 
@@ -153,13 +184,26 @@ def create_battle(participants: dict, start_time: datetime | None = None, rule_v
 
         data = {
             "battle_id": battle_id,
+            "schema_version": schema_version or _schema_version_for(rule_version),
             "rule_version": rule_version,
-            "start_time": start_time.strftime("%Y-%m-%dT%H:%M:%S.") + f"{start_time.microsecond // 1000:03d}Z",
+            "mode": mode,
+            "mode_label": _mode_label(mode),
+            "start_time": _format_timestamp(start_time),
             "end_time": None,
             "participants": {
-                seat: {"username": info["username"], "uid": info["uid"], "status": "active"}
+                seat: {
+                    "username": info["username"],
+                    "uid": info["uid"],
+                    "status": "active",
+                    **({"seat_index": info["seat_index"]} if "seat_index" in info else {}),
+                    **({"player_id": info["player_id"]} if "player_id" in info else {}),
+                    **({"is_host": info["is_host"]} if "is_host" in info else {}),
+                }
                 for seat, info in participants.items()
             },
+            "seats": seats or [],
+            "host": host,
+            "room": room or {},
             "spectators": [],
             "rounds": [],
             "chat": [],
@@ -168,9 +212,94 @@ def create_battle(participants: dict, start_time: datetime | None = None, rule_v
         _write_battle(battle_id, data)
 
         for info in participants.values():
-            _append_user_battle(info["uid"], battle_id)
+            uid = info.get("uid")
+            if isinstance(uid, int) and uid >= 0:
+                _append_user_battle(uid, battle_id)
 
     return battle_id
+
+
+def _snapshot_changes(pre: dict, post: dict) -> dict:
+    """计算每名玩家回合前后资源变化，供回放直接展示。"""
+    changes: dict[str, dict] = {}
+    player_ids = set(pre.keys()) | set(post.keys())
+    for pid in sorted(player_ids):
+        before = pre.get(pid, {}) or {}
+        after = post.get(pid, {}) or {}
+        delta = {}
+        for key in sorted(set(before.keys()) | set(after.keys())):
+            old = before.get(key)
+            new = after.get(key)
+            if old != new:
+                if isinstance(old, (int, float)) and isinstance(new, (int, float)):
+                    delta[key] = {"before": old, "after": new, "delta": new - old}
+                else:
+                    delta[key] = {"before": old, "after": new}
+        if delta:
+            changes[pid] = delta
+    return changes
+
+
+def _normalize_v2_round(round_data: dict) -> dict:
+    """把 RoundLogV2.to_dict() 补成适合回放读取的完整事件化结构。"""
+    normalized = dict(round_data)
+    normalized["record_schema"] = "v2_round_full"
+
+    declarations_by_layer = round_data.get("target_declarations_by_layer", {}) or {}
+    conflicts_by_layer = round_data.get("conflicts_by_layer", {}) or {}
+    decisions = round_data.get("decision_log", []) or []
+    events = round_data.get("speed_layer_events", []) or []
+
+    layer_numbers: set[int] = set()
+    for source in (declarations_by_layer, conflicts_by_layer):
+        for layer in source.keys():
+            try:
+                layer_numbers.add(int(layer))
+            except (TypeError, ValueError):
+                continue
+    for item in events:
+        try:
+            layer_numbers.add(int(item.get("speed_layer", 0)))
+        except (TypeError, ValueError):
+            continue
+    for item in decisions:
+        try:
+            layer_numbers.add(int(item.get("speed_layer", 0)))
+        except (TypeError, ValueError):
+            continue
+
+    speed_layers = []
+    for layer in sorted(layer_numbers):
+        layer_key = str(layer)
+        layer_events = [
+            item for item in events
+            if int(item.get("speed_layer", 0) or 0) == layer
+        ]
+        layer_decisions = [
+            item for item in decisions
+            if int(item.get("speed_layer", 0) or 0) == layer
+        ]
+        speed_layers.append({
+            "layer": layer,
+            "declarations": declarations_by_layer.get(layer_key, declarations_by_layer.get(layer, {})),
+            "conflicts": conflicts_by_layer.get(layer_key, conflicts_by_layer.get(layer, [])),
+            "decisions": layer_decisions,
+            "events": layer_events,
+            "had_conflict": bool(conflicts_by_layer.get(layer_key, conflicts_by_layer.get(layer, []))),
+        })
+
+    normalized["speed_layers"] = speed_layers
+    normalized["changes"] = _snapshot_changes(
+        round_data.get("pre_snapshots", {}) or {},
+        round_data.get("post_snapshots", {}) or {},
+    )
+    normalized["result"] = {
+        "deaths": round_data.get("deaths", []) or [],
+        "rank_updates": round_data.get("rank_updates", {}) or {},
+        "winner": round_data.get("winner"),
+        "game_ended": bool(round_data.get("game_ended", False)),
+    }
+    return normalized
 
 
 def record_round(battle_id: str, round_data: dict) -> None:
@@ -180,6 +309,8 @@ def record_round(battle_id: str, round_data: dict) -> None:
         data = read_battle(battle_id)
         if data is None:
             return
+        if str(data.get("rule_version", "1.0")).startswith("2."):
+            round_data = _normalize_v2_round(round_data)
         data.setdefault("rounds", []).append(round_data)
         _write_battle(battle_id, data)
 
@@ -198,15 +329,45 @@ def record_chat(battle_id: str, timestamp: str, sender: str, message: str) -> No
         _write_battle(battle_id, data)
 
 
-def end_battle(battle_id: str, winner: int | None) -> None:
+def _derive_v2_final_result(data: dict, winner) -> dict:
+    rankings = []
+    latest_ranks = {}
+    for round_data in reversed(data.get("rounds", [])):
+        latest_ranks = round_data.get("rank_updates", {}) or round_data.get("result", {}).get("rank_updates", {})
+        if latest_ranks:
+            break
+
+    participants = data.get("participants", {}) or {}
+    for player_id, info in participants.items():
+        rankings.append({
+            "player_id": player_id,
+            "seat_index": info.get("seat_index"),
+            "username": info.get("username", player_id),
+            "rank": latest_ranks.get(player_id),
+            "is_winner": player_id == winner,
+        })
+    rankings.sort(key=lambda item: (
+        item["rank"] is None,
+        item["rank"] if item["rank"] is not None else 999,
+        item["seat_index"] if item["seat_index"] is not None else 999,
+    ))
+    return {
+        "winner": winner,
+        "rankings": rankings,
+    }
+
+
+def end_battle(battle_id: str, winner: int | str | None) -> None:
     """标记对局结束。winner: 1=P1胜, 2=P2胜, 0=平局, None=未知。"""
     with _lock:
         data = read_battle(battle_id)
         if data is None:
             return
         now = datetime.now(timezone.utc)
-        data["end_time"] = now.strftime("%Y-%m-%dT%H:%M:%S.") + f"{now.microsecond // 1000:03d}Z"
+        data["end_time"] = _format_timestamp(now)
         data["winner"] = winner
+        if str(data.get("rule_version", "1.0")).startswith("2."):
+            data["final_result"] = _derive_v2_final_result(data, winner)
         _write_battle(battle_id, data)
 
 
@@ -316,6 +477,7 @@ def mark_user_deleted_in_battles(username: str, uid: int) -> None:
                 for info in data.get("participants", {}).values()
             )
             if all_deleted:
+                _write_battle(battle_id, data)
                 # 移入 rub
                 rub_path = _rub_path(battle_id)
                 shutil.move(str(path), str(rub_path))

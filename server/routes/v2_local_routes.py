@@ -319,30 +319,34 @@ def _handle_settlement_complete(state: GameStateV2) -> None:
 
     # ── 创建对局记录（首次回合时）──
     if rt.CURRENT_BATTLE_ID_V2 is None:
-        from app.battle_recorder import create_battle, read_battle, _write_battle
+        from app.battle_recorder import create_battle
         participants = {}
         seats = []
         for p in state.players:
             participants[p.player_id] = {
                 "username": p.username,
                 "uid": -1,  # 本地模式
+                "seat_index": p.seat_index,
+                "player_id": p.player_id,
+                "is_host": False,
             }
             seats.append({
                 "seat_index": p.seat_index,
                 "player_id": p.player_id,
                 "username": p.username,
+                "uid": -1,
+                "is_host": False,
             })
-        rt.CURRENT_BATTLE_ID_V2 = create_battle(participants, rule_version="2.0")
-
-        # 写入模式、席位、房主等信息
-        if rt.CURRENT_BATTLE_ID_V2:
-            data = read_battle(rt.CURRENT_BATTLE_ID_V2)
-            if data is not None:
-                data["mode"] = "local"
-                data["max_players"] = state.max_players
-                data["seats"] = seats
-                data["host"] = None  # 本地无房主
-                _write_battle(rt.CURRENT_BATTLE_ID_V2, data)
+        rt.CURRENT_BATTLE_ID_V2 = create_battle(
+            participants,
+            rule_version="2.0",
+            mode="local",
+            seats=seats,
+            host=None,
+            room={
+                "max_players": state.max_players,
+            },
+        )
 
     # ── 记录回合 ──
     if state.history:

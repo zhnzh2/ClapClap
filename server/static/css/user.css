@@ -387,6 +387,67 @@
 
 /* ---- 历史对局面板 ---- */
 
+.battle-stats {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    margin-bottom: 14px;
+}
+
+.battle-stat-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 14px 16px;
+}
+
+.battle-stat-card.accent {
+    background: linear-gradient(135deg, #f8fbff, #eef6ff);
+    border-color: #bfdbfe;
+}
+
+.battle-stat-title {
+    font-size: 12px;
+    font-weight: 800;
+    color: var(--muted);
+    margin-bottom: 6px;
+}
+
+.battle-stat-main {
+    font-size: 18px;
+    font-weight: 900;
+    color: var(--text);
+}
+
+.battle-stat-sub {
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 4px;
+}
+
+.battle-stat-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 10px;
+}
+
+.battle-stat-pill {
+    display: inline-flex;
+    padding: 3px 8px;
+    border-radius: 999px;
+    background: #fff;
+    border: 1px solid #dbeafe;
+    color: #1d4ed8;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.battle-stat-pill.muted {
+    color: var(--muted);
+    border-color: var(--border);
+}
+
 .battle-list {
     display: flex;
     flex-direction: column;
@@ -538,9 +599,50 @@
     color: #6b7280;
 }
 
+/* ---- 2.0 对局项 ----- */
+
+.battle-item-v2 .battle-info-row:first-child {
+    align-items: center;
+    gap: 8px;
+}
+
+.v2-mode-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    flex-shrink: 0;
+}
+
+.v2-mode-badge.room {
+    background: #eff6ff;
+    color: #1d4ed8;
+    border: 1px solid #bfdbfe;
+}
+
+.v2-mode-badge.local {
+    background: #f0fdf4;
+    color: #166534;
+    border: 1px solid #bbf7d0;
+}
+
+.battle-participants-v2 {
+    font-size: 11px;
+    color: var(--muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 200px;
+}
+
 /* ========== 响应式 ========== */
 
 @media (max-width: 640px) {
+    .battle-stats {
+        grid-template-columns: 1fr;
+    }
+
     .user-page {
         grid-template-columns: 1fr;
     }

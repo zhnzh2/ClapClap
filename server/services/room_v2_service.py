@@ -38,16 +38,52 @@ def _try_create_battle(room: RoomV2) -> str | None:
     from app.battle_recorder import create_battle
 
     participants: dict[str, dict] = {}
+    seats: list[dict] = []
+    host_payload: dict | None = None
     for seat in room.seats:
         uid = _lookup_uid(seat.username)
+        is_host = seat.seat_index == room.host_seat_index
+        seat_payload = {
+            "seat_index": seat.seat_index,
+            "player_id": seat.player_id,
+            "username": seat.username,
+            "uid": uid,
+            "is_host": is_host,
+        }
+        seats.append(seat_payload)
+        if is_host:
+            host_payload = {
+                "seat_index": seat.seat_index,
+                "player_id": seat.player_id,
+                "username": seat.username,
+                "uid": uid,
+            }
         if uid >= 0:
             participants[seat.player_id] = {
                 "username": seat.username,
                 "uid": uid,
+                "seat_index": seat.seat_index,
+                "player_id": seat.player_id,
+                "is_host": is_host,
             }
 
     if len(participants) >= room.min_players:
-        return create_battle(participants, rule_version=room.rule_version)
+        return create_battle(
+            participants,
+            rule_version=room.rule_version,
+            mode="room",
+            seats=seats,
+            host=host_payload,
+            room={
+                "room_id": room.room_id,
+                "max_players": room.max_players,
+                "min_players": room.min_players,
+                "start_condition": room.start_condition,
+                "allow_spectate": room.allow_spectate,
+                "public": room.public,
+                "has_password": room.password is not None,
+            },
+        )
     return None
 
 
