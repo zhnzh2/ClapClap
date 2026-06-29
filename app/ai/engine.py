@@ -20,13 +20,20 @@ from app.v1.models import GameState, PlayerState
 from app.ai.space import (
     ACTION_SPACE_SIZE,
     get_move_by_index,
-    get_index_by_move,
 )
 
 
 # ---------------------------------------------------------------------------
 # 合法动作掩码
 # ---------------------------------------------------------------------------
+
+
+def _get_player_state(state: GameState, controlled_player: int) -> PlayerState:
+    if controlled_player == 1:
+        return state.p1
+    if controlled_player == 2:
+        return state.p2
+    raise ValueError(f"controlled_player 必须为 1 或 2，收到: {controlled_player}")
 
 
 def get_legal_action_mask(state: GameState, controlled_player: int) -> List[bool]:
@@ -37,7 +44,7 @@ def get_legal_action_mask(state: GameState, controlled_player: int) -> List[bool
 
     合法性判断完全来自 GameEngine.can_afford()，不自行推导资源规则。
     """
-    player = state.p1 if controlled_player == 1 else state.p2
+    player = _get_player_state(state, controlled_player)
     mask: List[bool] = []
     for i in range(ACTION_SPACE_SIZE):
         move = get_move_by_index(i)
@@ -76,14 +83,13 @@ def get_player_view(state: GameState, controlled_player: int) -> Dict[str, Any]:
             "legal_actions": list[Move],      # AI 合法动作列表
         }
     """
+    _get_player_state(state, controlled_player)
     if controlled_player == 1:
         self_p = state.p1.copy()
         opponent_p = state.p2.copy()
-    elif controlled_player == 2:
+    else:
         self_p = state.p2.copy()
         opponent_p = state.p1.copy()
-    else:
-        raise ValueError(f"controlled_player 必须为 1 或 2，收到: {controlled_player}")
 
     return {
         "self": self_p,

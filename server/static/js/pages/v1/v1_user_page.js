@@ -517,6 +517,7 @@
         if (!el || !stats) return;
 
         var v1 = stats.v1 || {};
+        var ai = stats.ai || {};
         var v2 = stats.v2 || {};
         var v2Avg = v2.average_rank == null ? "—" : v2.average_rank;
         var v2Rates = v2.total
@@ -543,6 +544,15 @@
             + (v1.ongoing ? ' · 进行中 ' + v1.ongoing : '')
             + '</div>'
             + '</div>'
+            + '<div class="battle-stat-card">'
+            + '<div class="battle-stat-title">AI 人机对战</div>'
+            + '<div class="battle-stat-main">' + (ai.total || 0) + ' 场</div>'
+            + '<div class="battle-stat-sub">胜 ' + (ai.wins || 0)
+            + ' · 负 ' + (ai.losses || 0)
+            + ' · 平 ' + (ai.draws || 0)
+            + (ai.ongoing ? ' · 进行中 ' + ai.ongoing : '')
+            + '</div>'
+            + '</div>'
             + '<div class="battle-stat-card accent">'
             + '<div class="battle-stat-title">2.0 多人战绩</div>'
             + '<div class="battle-stat-main">' + (v2.total || 0) + ' 场 · 冠军 ' + (v2.championships || 0) + '</div>'
@@ -561,6 +571,7 @@
         var result = b.result || "unknown";
         var p1Name = b.p1_name || "P1";
         var p2Name = b.p2_name || "P2";
+        var isAiBattle = b.mode === "ai" || b.opponent_type === "ai";
 
         // 结果标签映射
         var resultLabels = {
@@ -584,6 +595,9 @@
         }
 
         var roundsText = (b.round_count || 0) + " 回合";
+        var modeText = isAiBattle
+            ? ' · AI ' + (b.ai_difficulty ? difficultyText(b.ai_difficulty) : '')
+            : '';
 
         var div = document.createElement("div");
         div.className = "battle-item";
@@ -595,6 +609,7 @@
             + '</div>'
             + '<div class="battle-info-row">'
             + '<span class="battle-time">' + escHtml(timeStr) + '</span>'
+            + (modeText ? '<span class="battle-time">' + escHtml(modeText) + '</span>' : '')
             + '</div>'
             + '</div>'
             + '<span class="battle-result-text result-' + result + '">' + escHtml(resultLabel) + '</span>';
@@ -684,6 +699,12 @@
             .replace(/>/g, "&gt;")
             .replace(/"/g, "&quot;")
             .replace(/'/g, "&#39;");
+    }
+
+    function difficultyText(diff) {
+        if (diff === "easy") return "简单";
+        if (diff === "hard") return "困难";
+        return "普通";
     }
 
 })();

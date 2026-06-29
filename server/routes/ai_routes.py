@@ -5,6 +5,11 @@ ClapClap 1.0 AI 对战 API。
   GET  /api/ai/state  — 获取当前 AI 对战状态
   POST /api/ai/reset  — 重置 AI 对战
   POST /api/ai/step   — 提交真人动作 + AI 决策 + 结算
+
+兼容 1.0 版本化路径:
+  GET  /v1/api/ai/state
+  POST /v1/api/ai/reset
+  POST /v1/api/ai/step
 """
 
 from __future__ import annotations
@@ -28,17 +33,24 @@ import server.runtime as runtime
 ai_bp = Blueprint("ai", __name__)
 
 
+def _get_ai_state_payload() -> dict:
+    payload = get_game_state_payload(runtime.AI_STATE, include_history=True)
+    payload["battle_id"] = runtime.CURRENT_AI_BATTLE_ID
+    return payload
+
+
 # ---------------------------------------------------------------------------
 # GET /api/ai/state
 # ---------------------------------------------------------------------------
 
 
+@ai_bp.get("/v1/api/ai/state")
 @ai_bp.get("/api/ai/state")
 @require_auth
 def get_ai_state():
     """返回当前 AI 对战状态。"""
     with runtime.AI_STATE_LOCK:
-        payload = get_game_state_payload(runtime.AI_STATE, include_history=True)
+        payload = _get_ai_state_payload()
     return jsonify(payload)
 
 
@@ -47,6 +59,7 @@ def get_ai_state():
 # ---------------------------------------------------------------------------
 
 
+@ai_bp.post("/v1/api/ai/reset")
 @ai_bp.post("/api/ai/reset")
 @require_auth
 def reset_ai_game():
@@ -54,7 +67,7 @@ def reset_ai_game():
     with runtime.AI_STATE_LOCK:
         runtime.AI_STATE = runtime.AI_STATE.__class__()
         runtime.CURRENT_AI_BATTLE_ID = None
-        payload = get_game_state_payload(runtime.AI_STATE, include_history=True)
+        payload = _get_ai_state_payload()
     return jsonify(
         {
             "ok": True,
@@ -69,6 +82,7 @@ def reset_ai_game():
 # ---------------------------------------------------------------------------
 
 
+@ai_bp.post("/v1/api/ai/step")
 @ai_bp.post("/api/ai/step")
 @require_auth
 def ai_step():
@@ -89,7 +103,10 @@ def ai_step():
             "state": {...},
             "ai_move": "QI",
             "ai_move_label": "气",
-            "difficulty": "normal"
+            "difficulty": "normal",
+            "human_seat": "p1",
+            "ai_seat": "p2",
+            "battle_id": "20260629000000000"
         }
     """
     # 1. 校验 JSON
@@ -148,9 +165,12 @@ def ai_step():
 
         # 7. AI 决策
         rng = random.Random()
-        ai_move = select_move(
-            state_for_ai, ai_player, rng, {"difficulty": difficulty}
-        )
+        try:
+            ai_move = select_move(
+                state_for_ai, ai_player, rng, {"difficulty": difficulty}
+            )
+        except ValueError as exc:
+            return jsonify({"ok": False, "error": str(exc)}), 400
 
         # 8. 结算回合
         if human_player == 1:
@@ -198,7 +218,8 @@ def ai_step():
         if state.winner is not None:
             end_battle(runtime.CURRENT_AI_BATTLE_ID, state.winner)
 
-        payload = get_game_state_payload(state, include_history=True)
+        payload = _get_ai_state_payload()
+        battle_id = runtime.CURRENT_AI_BATTLE_ID
 
     return jsonify(
         {
@@ -208,5 +229,8 @@ def ai_step():
             "ai_move": ai_move.name,
             "ai_move_label": ai_move.value,
             "difficulty": difficulty,
+            "human_seat": human_seat,
+            "ai_seat": f"p{ai_player}",
+            "battle_id": battle_id,
         }
     )

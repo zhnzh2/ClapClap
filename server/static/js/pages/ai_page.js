@@ -14,6 +14,8 @@ var aiSelectedMove = null;
 var aiDifficulty = "normal";
 var aiThinking = false;
 var aiEndModalShownForWinner = null;
+var aiLastMoveLabel = null;
+var aiLastMoveName = null;
 
 // =========================================================================
 // 动作说明（与 local 页面一致）
@@ -239,6 +241,7 @@ function aiRenderHistory(logs) {
 
 function aiRenderState(state) {
     aiLatestState = state;
+    window._aiBattleId = state.battle_id || window._aiBattleId || null;
 
     var catalog = state.move_catalog || [];
     var logs = state.history || [];
@@ -246,7 +249,8 @@ function aiRenderState(state) {
     // 基本信息
     document.getElementById("ai-basic-info").innerHTML =
         '<span class="status-badge">回合：' + state.round_num + '</span>' +
-        '<span class="winner-badge">胜负：' + aiWinnerText(state.winner) + '</span>';
+        '<span class="winner-badge">胜负：' + aiWinnerText(state.winner) + '</span>' +
+        '<span class="status-badge">难度：' + aiDifficultyLabel(aiDifficulty) + '</span>';
 
     // 双方资源
     document.getElementById("ai-p1-state").innerHTML = aiRenderPlayerState(state.p1);
@@ -265,6 +269,10 @@ function aiRenderState(state) {
     var aiMoveBox = document.getElementById("ai-move-box");
     if (aiThinking) {
         aiMoveBox.innerHTML = "<div class='muted'>AI 正在思考中...</div>";
+    } else if (aiLastMoveName && aiLastMoveLabel) {
+        aiMoveBox.innerHTML =
+            '<div><strong>AI 本回合出了：</strong></div>' +
+            '<div class="good-text">' + aiLastMoveLabel + ' (' + aiLastMoveName + ')</div>';
     } else if (state.winner === null && logs.length > 0) {
         var lastLog = logs[logs.length - 1];
         aiMoveBox.innerHTML =
@@ -311,9 +319,10 @@ function aiMaybeShowEndModal(state) {
 
     var detail = "最终回合数：" + state.round_num + " | 难度：" + aiDifficulty;
     // 如果有 battle_id，显示查看入口
-    if (window._aiBattleId) {
+    var battleId = state.battle_id || window._aiBattleId;
+    if (battleId) {
         detail +=
-            ' | <a href="/v1/record/' + window._aiBattleId + '" target="_blank">查看对局记录</a>';
+            ' | <a href="/v1/record/' + battleId + '" target="_blank">查看对局记录</a>';
     }
     document.getElementById("ai-end-result-detail").innerHTML = detail;
     document.getElementById("ai-end-modal-mask").classList.add("show");
@@ -328,7 +337,7 @@ function aiCloseEndModal() {
 // =========================================================================
 
 async function aiFetchState() {
-    var result = await ApiUtils.apiGet("/api/ai/state");
+    var result = await ApiUtils.apiGet("/v1/api/ai/state");
     if (!result.ok) {
         document.getElementById("ai-message").textContent =
             "获取状态失败：" + result.error;
@@ -339,7 +348,7 @@ async function aiFetchState() {
 }
 
 async function aiResetGame() {
-    var result = await ApiUtils.apiPost("/api/ai/reset");
+    var result = await ApiUtils.apiPost("/v1/api/ai/reset");
     if (!result.ok) {
         document.getElementById("ai-message").textContent =
             "重置失败：" + result.error;
@@ -349,6 +358,8 @@ async function aiResetGame() {
     aiSelectedMove = null;
     aiThinking = false;
     aiEndModalShownForWinner = null;
+    aiLastMoveLabel = null;
+    aiLastMoveName = null;
     window._aiBattleId = null;
     aiCloseEndModal();
 
@@ -372,7 +383,7 @@ async function aiStepGame() {
     aiRenderState(aiLatestState); // 更新按钮为"思考中"
     document.getElementById("ai-message").textContent = "AI 正在思考...";
 
-    var result = await ApiUtils.apiPost("/api/ai/step", {
+    var result = await ApiUtils.apiPost("/v1/api/ai/step", {
         human_move: aiSelectedMove,
         difficulty: aiDifficulty,
         human_seat: "p1"
@@ -390,6 +401,9 @@ async function aiStepGame() {
     // 更新 AI 侧信息
     var aiMove = result.data.ai_move;
     var aiMoveLabel = result.data.ai_move_label;
+    aiLastMoveName = aiMove;
+    aiLastMoveLabel = aiMoveLabel;
+    window._aiBattleId = result.data.battle_id || (result.data.state && result.data.state.battle_id) || window._aiBattleId;
     document.getElementById("ai-move-box").innerHTML =
         '<div><strong>AI 本回合出了：</strong></div>' +
         '<div class="good-text">' + aiMoveLabel + ' (' + aiMove + ')</div>';
@@ -397,12 +411,6 @@ async function aiStepGame() {
     // 清除选择，渲染新状态
     aiSelectedMove = null;
     aiRenderState(result.data.state);
-
-    // 记录 battle_id 用于游戏结束弹窗
-    if (result.data.state && result.data.state.winner !== null && window._aiBattleId === null) {
-        // 尝试从最近的回合计录中获取
-        window._aiBattleId = null;
-    }
 
     document.getElementById("ai-message").textContent =
         result.data.message || "本回合已结算。";
@@ -423,6 +431,12 @@ function aiSetDifficulty(diff) {
             btns[i].classList.remove("active");
         }
     }
+}
+
+function aiDifficultyLabel(diff) {
+    if (diff === "easy") return "简单";
+    if (diff === "hard") return "困难";
+    return "普通";
 }
 
 // =========================================================================

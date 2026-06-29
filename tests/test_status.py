@@ -12,7 +12,7 @@ class TestStatusApi(unittest.TestCase):
         self.assertTrue(result["ok"])
         self.assertEqual(result["modes"]["rooms"]["status"], "available")
         self.assertEqual(result["modes"]["match"]["status"], "available")
-        self.assertEqual(result["modes"]["ai"]["status"], "planned")
+        self.assertEqual(result["modes"]["ai"]["status"], "available")
 
 if __name__ == "__main__":
     unittest.main()

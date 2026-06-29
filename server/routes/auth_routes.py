@@ -64,6 +64,13 @@ def _build_user_battle_stats(uid: int, battle_ids: list[str]) -> dict:
             "draws": 0,
             "ongoing": 0,
         },
+        "ai": {
+            "total": 0,
+            "wins": 0,
+            "losses": 0,
+            "draws": 0,
+            "ongoing": 0,
+        },
         "v2": {
             "total": 0,
             "completed": 0,
@@ -84,6 +91,7 @@ def _build_user_battle_stats(uid: int, battle_ids: list[str]) -> dict:
 
         rule_version = str(data.get("rule_version", "1.0"))
         participants = data.get("participants", {}) or {}
+        mode = data.get("mode")
 
         if rule_version.startswith("2."):
             player_id = _get_participant_player_id(participants, uid)
@@ -130,17 +138,17 @@ def _build_user_battle_stats(uid: int, battle_ids: list[str]) -> dict:
         if my_seat is None:
             continue
 
-        v1 = stats["v1"]
-        v1["total"] += 1
+        bucket = stats["ai"] if mode == "ai" else stats["v1"]
+        bucket["total"] += 1
         winner = data.get("winner")
         if data.get("end_time") is None and winner is None:
-            v1["ongoing"] += 1
+            bucket["ongoing"] += 1
         elif winner == 0:
-            v1["draws"] += 1
+            bucket["draws"] += 1
         elif (winner == 1 and my_seat == "p1") or (winner == 2 and my_seat == "p2"):
-            v1["wins"] += 1
+            bucket["wins"] += 1
         else:
-            v1["losses"] += 1
+            bucket["losses"] += 1
 
     v2 = stats["v2"]
     if v2["ranked_count"]:
@@ -475,6 +483,11 @@ def api_user_battles(uid: int):
                 "rule_version": rule_version,
                 "start_time": data.get("start_time", ""),
                 "end_time": data.get("end_time"),
+                "mode": data.get("mode"),
+                "mode_label": data.get("mode_label", ""),
+                "opponent_type": data.get("opponent_type"),
+                "ai_difficulty": data.get("ai_difficulty"),
+                "ai_policy_type": data.get("ai_policy_type"),
                 "p1_name": p1.get("username", "?"),
                 "p2_name": p2.get("username", "?"),
                 "opponent": opponent or "?",

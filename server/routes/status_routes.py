@@ -26,9 +26,9 @@ def api_modes_status():
                     "description": "进入匹配队列，与在线玩家自动配对。",
                 },
                 "ai": {
-                    "status": "planned",
-                    "label": "后续接入",
-                    "description": "AI 模式入口已预留，后续接入自动对战。",
+                    "status": "available",
+                    "label": "当前可用",
+                    "description": "1.0 人机对战模式，后端自动生成 AI 动作并记录对局。",
                 },
                 "v2_local": {
                     "status": "available",

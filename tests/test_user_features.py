@@ -294,6 +294,51 @@ class TestUserFeatures(unittest.TestCase):
         self.assertTrue(item["is_winner"])
         self.assertIn(alice["username"], item["participant_names"])
 
+    def test_ai_battles_are_listed_but_counted_separately(self):
+        player, token = self._register_and_login("ai-stats-player")
+
+        battle_id = battle_recorder.create_battle(
+            {
+                "p1": {"username": player["username"], "uid": player["uid"]},
+                "p2": {"username": "ClapClap AI", "uid": -2},
+            },
+            rule_version="1.0",
+            mode="ai",
+        )
+        self.battle_ids.add(battle_id)
+        battle_recorder.set_battle_metadata(battle_id, {
+            "opponent_type": "ai",
+            "ai_policy_type": "heuristic",
+            "ai_difficulty": "normal",
+            "ai_model_version": None,
+            "ai_seat": "p2",
+        })
+        battle_recorder.record_round(battle_id, {
+            "round_num": 1,
+            "p1_move": "GI",
+            "p1_move_label": "gi",
+            "p2_move": "QI",
+            "p2_move_label": "气",
+            "winner_after_round": 1,
+        })
+        battle_recorder.end_battle(battle_id, 1)
+
+        response = self.client.get(
+            f"/v1/api/user/{player['uid']}/battles",
+            headers={"X-Session-Token": token},
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+
+        self.assertEqual(payload["stats"]["v1"]["total"], 0)
+        self.assertEqual(payload["stats"]["ai"]["total"], 1)
+        self.assertEqual(payload["stats"]["ai"]["wins"], 1)
+
+        item = payload["battles"][0]
+        self.assertEqual(item["mode"], "ai")
+        self.assertEqual(item["opponent_type"], "ai")
+        self.assertEqual(item["ai_difficulty"], "normal")
+
     def test_multiplayer_battle_moves_to_rub_only_after_all_participants_deleted(self):
         alice, _ = self._register_and_login("rub-v2-alice")
         bob, _ = self._register_and_login("rub-v2-bob")

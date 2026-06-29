@@ -324,6 +324,14 @@ class TestLegalActionMask(unittest.TestCase):
         self.assertTrue(mask_p1[get_index_by_move(Move.RU_LAI)])
         self.assertFalse(mask_p2[get_index_by_move(Move.RU_LAI)])
 
+    def test_invalid_player_index_raises(self):
+        """非法 controlled_player 不能静默当作 P2。"""
+        state = GameState()
+        with self.assertRaises(ValueError):
+            get_legal_action_mask(state, 0)
+        with self.assertRaises(ValueError):
+            get_legal_moves_list(state, 3)
+
 
 # ============================================================================
 # 玩家视角转换测试
@@ -530,6 +538,12 @@ class TestSelectMove(unittest.TestCase):
         state = GameState()
         with self.assertRaises(ValueError):
             select_move(state, 1, self.rng, {"difficulty": "impossible"})
+
+    def test_invalid_player_index_raises(self):
+        """select_move 对非法座位应直接拒绝。"""
+        state = GameState()
+        with self.assertRaises(ValueError):
+            select_move(state, 0, self.rng)
 
 
 # ============================================================================

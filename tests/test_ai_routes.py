@@ -2,14 +2,15 @@
 阶段 3 测试：AI API 端点。
 
 覆盖:
-  - GET  /api/ai/state
-  - POST /api/ai/reset
-  - POST /api/ai/step（正常流程、错误处理、边界条件）
+  - GET  /api/ai/state 与 /v1/api/ai/state
+  - POST /api/ai/reset 与 /v1/api/ai/reset
+  - POST /api/ai/step 与 /v1/api/ai/step（正常流程、错误处理、边界条件）
 """
 
 from __future__ import annotations
 
 import unittest
+from unittest.mock import patch
 from uuid import uuid4
 
 from app import battle_recorder, users
@@ -62,6 +63,7 @@ class TestAiApi(unittest.TestCase):
         data = resp.get_json()
         self.assertEqual(data["round_num"], 0)
         self.assertIsNone(data["winner"])
+        self.assertIsNone(data["battle_id"])
         self.assertIn("p1", data)
         self.assertIn("p2", data)
         self.assertIn("legal_moves", data)
@@ -83,6 +85,7 @@ class TestAiApi(unittest.TestCase):
         data = resp.get_json()
         self.assertTrue(data["ok"])
         self.assertEqual(data["state"]["round_num"], 0)
+        self.assertIsNone(data["state"]["battle_id"])
 
     def test_reset_clears_rounds(self):
         """重置后回合数归零。"""
@@ -97,6 +100,7 @@ class TestAiApi(unittest.TestCase):
         data = resp.get_json()
         self.assertEqual(data["state"]["round_num"], 0)
         self.assertIsNone(data["state"]["winner"])
+        self.assertIsNone(data["state"]["battle_id"])
 
     # ------------------------------------------------------------------
     # POST /api/ai/step — 正常流程
@@ -115,7 +119,34 @@ class TestAiApi(unittest.TestCase):
         self.assertIn("ai_move", data)
         self.assertIn("ai_move_label", data)
         self.assertIn("difficulty", data)
+        self.assertIn("battle_id", data)
+        self.assertEqual(data["battle_id"], data["state"]["battle_id"])
+        self.assertIsInstance(data["battle_id"], str)
+        self.assertEqual(data["human_seat"], "p1")
+        self.assertEqual(data["ai_seat"], "p2")
         self.assertEqual(data["difficulty"], "easy")
+
+    def test_v1_api_aliases_work(self):
+        """AI API 同时提供 /v1/api/ai/* 版本化路径。"""
+        state = self.client.get("/v1/api/ai/state", headers=self.headers)
+        self.assertEqual(state.status_code, 200)
+        self.assertEqual(state.get_json()["round_num"], 0)
+
+        reset = self.client.post("/v1/api/ai/reset", headers=self.headers)
+        self.assertEqual(reset.status_code, 200)
+        self.assertTrue(reset.get_json()["ok"])
+
+        step = self.client.post(
+            "/v1/api/ai/step",
+            json={"human_move": "QI", "difficulty": "easy"},
+            headers=self.headers,
+        )
+        self.assertEqual(step.status_code, 200)
+        data = step.get_json()
+        self.assertTrue(data["ok"], data)
+        self.assertEqual(data["human_seat"], "p1")
+        self.assertEqual(data["ai_seat"], "p2")
+        battle_recorder.delete_battle(data["battle_id"])
 
     def test_step_round_increments(self):
         """每步后 round_num 递增。"""
@@ -168,6 +199,72 @@ class TestAiApi(unittest.TestCase):
             data = resp.get_json()
             self.assertTrue(data["ok"], f"难度 {difficulty}: {data}")
             self.assertEqual(data["difficulty"], difficulty)
+
+    def test_step_supports_human_seat_p2(self):
+        """真人坐 P2 时，AI 应自动控制 P1 并正确记录座位。"""
+        resp = self.client.post(
+            "/api/ai/step",
+            json={"human_move": "QI", "difficulty": "easy", "human_seat": "p2"},
+            headers=self.headers,
+        )
+        self.assertEqual(resp.status_code, 200)
+        data = resp.get_json()
+        self.assertTrue(data["ok"], data)
+        self.assertEqual(data["human_seat"], "p2")
+        self.assertEqual(data["ai_seat"], "p1")
+
+        battle = battle_recorder.read_battle(data["battle_id"])
+        self.assertEqual(battle.get("ai_seat"), "p1")
+        participants = battle.get("participants", {})
+        self.assertEqual(participants["p1"]["username"], "ClapClap AI")
+        self.assertEqual(participants["p2"]["username"], self._test_username)
+        battle_recorder.delete_battle(data["battle_id"])
+
+    def test_state_exposes_existing_battle_id(self):
+        """首次 step 后 state 接口应返回同一个 AI battle_id。"""
+        step = self.client.post(
+            "/api/ai/step",
+            json={"human_move": "QI", "difficulty": "easy"},
+            headers=self.headers,
+        ).get_json()
+        battle_id = step["battle_id"]
+
+        state = self.client.get("/api/ai/state", headers=self.headers).get_json()
+        self.assertEqual(state["battle_id"], battle_id)
+
+        battle_recorder.delete_battle(battle_id)
+
+    def test_ai_decision_receives_round_start_state_only(self):
+        """路由层防作弊：AI 只接收真人动作结算前的状态副本。"""
+        seen_states = []
+
+        def fake_select_move(state, controlled_player, rng, config):
+            seen_states.append(state.copy())
+            return Move.QI
+
+        with patch("server.routes.ai_routes.select_move", side_effect=fake_select_move):
+            first = self.client.post(
+                "/api/ai/step",
+                json={"human_move": "QI", "difficulty": "easy"},
+                headers=self.headers,
+            ).get_json()
+        battle_recorder.delete_battle(first["battle_id"])
+
+        self.client.post("/api/ai/reset", headers=self.headers)
+
+        with patch("server.routes.ai_routes.select_move", side_effect=fake_select_move):
+            second = self.client.post(
+                "/api/ai/step",
+                json={"human_move": "SHIELD", "difficulty": "easy"},
+                headers=self.headers,
+            ).get_json()
+        battle_recorder.delete_battle(second["battle_id"])
+
+        self.assertEqual(len(seen_states), 2)
+        self.assertEqual(seen_states[0].round_num, 0)
+        self.assertEqual(seen_states[1].round_num, 0)
+        self.assertEqual(seen_states[0].p1.to_dict(), seen_states[1].p1.to_dict())
+        self.assertEqual(seen_states[0].p2.to_dict(), seen_states[1].p2.to_dict())
 
     def test_step_game_ends_properly(self):
         """
