@@ -3,116 +3,198 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>ClapClap AI 对战</title>
+    <title>ClapClap 1.0 AI 对战</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/v1/v1_local.css') }}" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/auth.css') }}" />
     <style>
-        body {
-            margin: 0;
-            font-family: Arial, "Microsoft YaHei", sans-serif;
-            background: #f4f6fb;
-            color: #1f2937;
+        /* AI 页面额外样式 */
+        .ai-diff-bar {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
         }
-
-        .container {
-            max-width: 840px;
-            margin: 0 auto;
-            padding: 36px 18px;
-        }
-
-        .card {
-            background: white;
-            border-radius: 18px;
-            padding: 24px;
-            box-shadow: 0 4px 14px rgba(0,0,0,0.08);
-        }
-
-        h1 {
-            margin-top: 0;
-        }
-
-        p {
-            line-height: 1.8;
-        }
-
-        .card a {
-            display: inline-block;
-            margin-top: 12px;
-            text-decoration: none;
-            background: #2563eb;
-            color: white;
-            padding: 10px 14px;
-            border-radius: 12px;
+        .ai-diff-bar .label {
             font-weight: bold;
+            color: var(--muted);
+            font-size: 13px;
         }
-
-        .page-mode-toolbar a {
-            display: inline-block;
-            text-decoration: none;
-            background: #6b7280;
-            color: white;
-            padding: 10px 14px;
-            border-radius: 12px;
+        .ai-diff-btn {
+            padding: 5px 16px;
+            border: 2px solid var(--border);
+            border-radius: 20px;
+            background: var(--card);
+            color: var(--text);
+            cursor: pointer;
+            font-size: 13px;
             font-weight: bold;
+            transition: all 0.15s;
+        }
+        .ai-diff-btn:hover { border-color: var(--blue); color: var(--blue); }
+        .ai-diff-btn.active {
+            background: var(--blue);
+            color: #fff;
+            border-color: var(--blue);
+        }
+        .ai-move-box {
+            min-height: 60px;
+            padding: 14px;
+            background: var(--status-bg);
+            border-radius: 10px;
+            border: 1px solid var(--border);
+        }
+        .ai-thinking-dot {
+            display: inline-block;
+            animation: ai-blink 1s infinite;
+        }
+        @keyframes ai-blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
         }
     </style>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/auth.css') }}" />
 </head>
 <body>
-    <div class="container">
-        <div class="page-top-shell">
-            <div class="header-actions">
-                <a class="header-account-btn" href="/v1/rules">规则界面</a>
-                <button class="header-account-btn" id="header-admin-btn" style="display:none;">查看用户</button>
-                <button class="header-account-btn" id="header-account-btn">账号</button>
-                <button class="header-account-btn danger" id="header-logout-btn">退出登录</button>
-            </div>
-            <div class="page-title-block">
-                <h1>1.0 AI 对战</h1>
-                <p>电脑对战入口预留，后续接入自动对战流程</p>
-            </div>
+<div class="container">
+    <!-- 顶部 -->
+    <div class="page-top-shell">
+        <a class="page-version-chip" href="/v2" title="切换到 2.0 多人版">2.0</a>
+        <div class="header-actions">
+            <a class="header-account-btn" href="/v1/rules">规则界面</a>
+            <button class="header-account-btn" id="header-admin-btn" style="display:none;">查看用户</button>
+            <button class="header-account-btn" id="header-account-btn">账号</button>
+            <button class="header-account-btn danger" id="header-logout-btn">退出登录</button>
         </div>
-
-        <div class="page-mode-toolbar">
-            <div class="page-mode-toolbar-label">模式操作</div>
-            <div class="page-mode-toolbar-group">
-                <a href="/v1">返回模式大厅</a>
-            </div>
+        <div class="page-title-block">
+            <h1>1.0 AI 对战</h1>
+            <p>人机对战 · 你（P1） vs AI（P2）</p>
         </div>
+    </div>
 
+    <!-- 工具栏 -->
+    <div class="page-mode-toolbar">
+        <div class="page-mode-toolbar-label">模式操作</div>
+        <div class="top-actions page-mode-toolbar-group">
+            <button class="action-btn secondary" id="ai-refresh-btn">刷新状态</button>
+            <button class="action-btn danger" id="ai-reset-btn">重新开始</button>
+            <a class="action-btn secondary" href="/v1">返回大厅</a>
+        </div>
+    </div>
+
+    <!-- 双方资源 -->
+    <div class="two-col">
         <div class="card">
-            <h1>和电脑 AI 对战</h1>
-            <p>这个页面是 AI 模式的入口占位页。后面会在 AI 训练完成后，把它正式接入对战流程。</p>
+            <h2>你的资源 (P1)</h2>
+            <div class="player-panel p1-theme">
+                <div id="ai-p1-state" class="resource-grid"></div>
+            </div>
+        </div>
+        <div class="card">
+            <h2>AI 资源 (P2)</h2>
+            <div class="player-panel p2-theme">
+                <div id="ai-p2-state" class="resource-grid"></div>
+            </div>
         </div>
     </div>
-    <script src="{{ url_for('static', filename='js/core/storage.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/core/session.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/core/api.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/core/logout_button.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/core/modal.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/pages/account_modal.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/pages/admin_users_modal.js') }}"></script>
-    <script>
-        if (!window.SessionUtils || !window.SessionUtils.isLoggedIn()) {
-            window.location.href = "/v1/login";
-        }
-        var btn = document.getElementById("header-account-btn");
-        if (btn) {
-            var user = window.SessionUtils.getSessionUser();
-            if (user) {
-                btn.textContent = user.username;
-                btn.addEventListener("click", function () {
-                    window.location.href = "/v1/user/" + user.uid;
-                });
-            }
-        }
-    </script>
-    <div class="modal-mask" id="global-modal-mask" style="z-index: 1100;">
-        <div class="modal-card" id="global-modal-card">
-            <div class="modal-icon" id="global-modal-icon" style="display: none;"></div>
-            <div class="modal-title" id="global-modal-title"></div>
-            <div class="modal-body" id="global-modal-body"></div>
-            <div class="modal-actions" id="global-modal-actions"></div>
+
+    <!-- 难度选择 + 动作选择 -->
+    <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
+            <h2 style="margin:0;">你的动作</h2>
+            <div class="ai-diff-bar">
+                <span class="label">AI 难度：</span>
+                <button class="ai-diff-btn" data-diff="easy">简单</button>
+                <button class="ai-diff-btn" data-diff="normal">普通</button>
+                <button class="ai-diff-btn" data-diff="hard">困难</button>
+            </div>
+        </div>
+
+        <div id="ai-p1-move-groups"></div>
+
+        <div class="submit-row">
+            <button class="action-btn primary" id="ai-step-btn">出招</button>
+            <button class="action-btn" id="ai-clear-btn">清空选择</button>
         </div>
     </div>
-    <script>if (typeof ModalUtils !== "undefined" && ModalUtils.bindGlobalModalEvents) { ModalUtils.bindGlobalModalEvents(); }</script>
+
+    <!-- AI 出招信息 -->
+    <div class="card">
+        <h2>AI 出招</h2>
+        <div class="ai-move-box" id="ai-move-box">
+            <div class="muted">等待你出招...</div>
+        </div>
+    </div>
+
+    <!-- 消息 -->
+    <div id="ai-message" class="message-box muted" style="padding:8px 14px;">页面已加载。</div>
+
+    <!-- 状态行 -->
+    <div class="card status-card">
+        <div id="ai-basic-info" class="status-line"></div>
+    </div>
+
+    <!-- 底部：最近回合 + 历史 -->
+    <div class="bottom-layout">
+        <div class="card" id="ai-latest-round-card">
+            <h2>最近一回合结果</h2>
+            <div id="ai-latest-round" class="muted">当前还没有回合记录。</div>
+        </div>
+        <div class="card" id="ai-history-card">
+            <h2>历史记录</h2>
+            <div id="ai-history" class="history-list"></div>
+        </div>
+    </div>
+</div>
+
+<!-- 结束弹窗 -->
+<div id="ai-end-modal-mask" class="modal-mask">
+    <div class="modal" style="max-width:460px;">
+        <div class="modal-close-row">
+            <button class="action-btn" id="ai-end-close-btn">关闭</button>
+        </div>
+        <div class="end-modal-content">
+            <div><strong>游戏结束</strong></div>
+            <div class="big-result" id="ai-end-result-text">结果</div>
+            <div id="ai-end-result-detail" class="muted"></div>
+            <div class="muted" style="margin-top:6px;">按 Enter 可快速重新开始，按 Backspace 可关闭弹窗。</div>
+            <div style="margin-top:14px;">
+                <button class="action-btn primary" id="ai-end-reset-btn">重新开始一局</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 全局弹窗遮罩 -->
+<div class="modal-mask" id="global-modal-mask" style="z-index:1100;">
+    <div class="modal-card" id="global-modal-card">
+        <div class="modal-icon" id="global-modal-icon" style="display:none;"></div>
+        <div class="modal-title" id="global-modal-title"></div>
+        <div class="modal-body" id="global-modal-body"></div>
+        <div class="modal-actions" id="global-modal-actions"></div>
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/core/session.js') }}"></script>
+<script src="{{ url_for('static', filename='js/core/api.js') }}"></script>
+<script src="{{ url_for('static', filename='js/core/logout_button.js') }}"></script>
+<script src="{{ url_for('static', filename='js/core/modal.js') }}"></script>
+<script src="{{ url_for('static', filename='js/pages/account_modal.js') }}"></script>
+<script src="{{ url_for('static', filename='js/pages/admin_users_modal.js') }}"></script>
+<script src="{{ url_for('static', filename='js/pages/ai_page.js') }}"></script>
+<script>
+    // 账号按钮
+    var btn = document.getElementById("header-account-btn");
+    if (btn) {
+        var user = window.SessionUtils.getSessionUser();
+        if (user) {
+            btn.textContent = user.username;
+            btn.addEventListener("click", function () {
+                window.location.href = "/v1/user/" + user.uid;
+            });
+        }
+    }
+    if (typeof ModalUtils !== "undefined" && ModalUtils.bindGlobalModalEvents) {
+        ModalUtils.bindGlobalModalEvents();
+    }
+</script>
 </body>
 </html>

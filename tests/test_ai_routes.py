@@ -1,0 +1,361 @@
+"""
+阶段 3 测试：AI API 端点。
+
+覆盖:
+  - GET  /api/ai/state
+  - POST /api/ai/reset
+  - POST /api/ai/step（正常流程、错误处理、边界条件）
+"""
+
+from __future__ import annotations
+
+import unittest
+from uuid import uuid4
+
+from app import battle_recorder, users
+from app.v1.constants import Move
+from app.v1.game import GameEngine
+from app.v1.models import GameState
+from server.app import app
+import server.runtime as runtime
+
+
+class TestAiApi(unittest.TestCase):
+    """6.5 API 测试"""
+
+    @classmethod
+    def setUpClass(cls):
+        # 注册一个测试专用用户，整个测试类共用
+        unique = f"ai-tester-{uuid4().hex[:8]}"
+        reg = users.register(unique, "test1234", verified="1")
+        if reg["ok"]:
+            cls._test_uid = reg["user"]["uid"]
+            cls._test_username = unique
+            login = users.login(unique, "test1234")
+            cls._token = login.get("session_token", "")
+        else:
+            cls._test_uid = -1
+            cls._token = ""
+
+    @classmethod
+    def tearDownClass(cls):
+        # 清理测试用户
+        if cls._test_uid >= 0:
+            users.delete_user(cls._test_uid)
+
+    def setUp(self):
+        self.client = app.test_client()
+        self.headers = {"X-Session-Token": self._token}
+        # 每个测试前重置 AI_STATE
+        with runtime.AI_STATE_LOCK:
+            runtime.AI_STATE = GameState()
+            runtime.CURRENT_AI_BATTLE_ID = None
+
+    # ------------------------------------------------------------------
+    # GET /api/ai/state
+    # ------------------------------------------------------------------
+
+    def test_get_state_returns_valid_payload(self):
+        """获取 AI 对战状态。"""
+        resp = self.client.get("/api/ai/state", headers=self.headers)
+        self.assertEqual(resp.status_code, 200)
+        data = resp.get_json()
+        self.assertEqual(data["round_num"], 0)
+        self.assertIsNone(data["winner"])
+        self.assertIn("p1", data)
+        self.assertIn("p2", data)
+        self.assertIn("legal_moves", data)
+        self.assertIn("move_catalog", data)
+
+    def test_get_state_unauthorized(self):
+        """未登录请求应返回 401。"""
+        resp = self.client.get("/api/ai/state")
+        self.assertEqual(resp.status_code, 401)
+
+    # ------------------------------------------------------------------
+    # POST /api/ai/reset
+    # ------------------------------------------------------------------
+
+    def test_reset_returns_valid_response(self):
+        """重置 AI 对战。"""
+        resp = self.client.post("/api/ai/reset", headers=self.headers)
+        self.assertEqual(resp.status_code, 200)
+        data = resp.get_json()
+        self.assertTrue(data["ok"])
+        self.assertEqual(data["state"]["round_num"], 0)
+
+    def test_reset_clears_rounds(self):
+        """重置后回合数归零。"""
+        # 先打一回合
+        self.client.post(
+            "/api/ai/step",
+            json={"human_move": "QI", "difficulty": "easy"},
+            headers=self.headers,
+        )
+        # 重置
+        resp = self.client.post("/api/ai/reset", headers=self.headers)
+        data = resp.get_json()
+        self.assertEqual(data["state"]["round_num"], 0)
+        self.assertIsNone(data["state"]["winner"])
+
+    # ------------------------------------------------------------------
+    # POST /api/ai/step — 正常流程
+    # ------------------------------------------------------------------
+
+    def test_step_returns_ai_move(self):
+        """step 响应必须包含 ai_move。"""
+        resp = self.client.post(
+            "/api/ai/step",
+            json={"human_move": "QI", "difficulty": "easy"},
+            headers=self.headers,
+        )
+        self.assertEqual(resp.status_code, 200)
+        data = resp.get_json()
+        self.assertTrue(data["ok"], data)
+        self.assertIn("ai_move", data)
+        self.assertIn("ai_move_label", data)
+        self.assertIn("difficulty", data)
+        self.assertEqual(data["difficulty"], "easy")
+
+    def test_step_round_increments(self):
+        """每步后 round_num 递增。"""
+        for expected_round in range(1, 4):
+            resp = self.client.post(
+                "/api/ai/step",
+                json={"human_move": "QI", "difficulty": "easy"},
+                headers=self.headers,
+            )
+            data = resp.get_json()
+            self.assertTrue(data["ok"], data)
+            self.assertEqual(data["state"]["round_num"], expected_round)
+
+    def test_step_ai_move_is_legal(self):
+        """AI 返回的动作不会导致非法判负（即 AI 动作对其座位合法）。"""
+        for _ in range(30):
+            resp = self.client.post(
+                "/api/ai/step",
+                json={"human_move": "QI", "difficulty": "easy"},
+                headers=self.headers,
+            )
+            data = resp.get_json()
+            self.assertTrue(data["ok"], data)
+
+            # 如果 AI（P2）动作非法，resolve_round 会判 P1 获胜
+            # 即 winner=1 且 p2_valid=False
+            # 检查最新回合记录
+            history = data["state"].get("history", [])
+            if history:
+                last_round = history[-1]
+                # AI 为 P2，p2_valid 应为 True
+                self.assertTrue(
+                    last_round.get("p2_valid", True),
+                    f"AI 动作 {data['ai_move']} 被判定为非法"
+                )
+
+            # 如果对局结束，重置后继续
+            if data["state"]["winner"] is not None:
+                self.client.post("/api/ai/reset", headers=self.headers)
+
+    def test_step_multiple_difficulties(self):
+        """三种难度都能正常结算。"""
+        for difficulty in ("easy", "normal", "hard"):
+            self.client.post("/api/ai/reset", headers=self.headers)
+            resp = self.client.post(
+                "/api/ai/step",
+                json={"human_move": "QI", "difficulty": difficulty},
+                headers=self.headers,
+            )
+            data = resp.get_json()
+            self.assertTrue(data["ok"], f"难度 {difficulty}: {data}")
+            self.assertEqual(data["difficulty"], difficulty)
+
+    def test_step_game_ends_properly(self):
+        """
+        连续出招直到终局，验证 API 正确处理终局。
+
+        AI 为 P2，真人 P1 一直出 QI。AI 可能随机获胜、失败或双败。
+        不管结果如何，游戏结束后应不能再提交。
+        """
+        max_steps = 200
+        for _ in range(max_steps):
+            resp = self.client.post(
+                "/api/ai/step",
+                json={"human_move": "QI", "difficulty": "easy"},
+                headers=self.headers,
+            )
+            data = resp.get_json()
+            if not data["ok"]:
+                # 可能是游戏已结束
+                self.assertIn("结束", data.get("error", ""))
+                break
+
+            state = data["state"]
+            if state["winner"] is not None:
+                # 游戏结束，再提交应报错
+                resp2 = self.client.post(
+                    "/api/ai/step",
+                    json={"human_move": "QI", "difficulty": "easy"},
+                    headers=self.headers,
+                )
+                data2 = resp2.get_json()
+                self.assertFalse(data2["ok"])
+                self.assertEqual(resp2.status_code, 400)
+                break
+        else:
+            self.fail(f"对局在 {max_steps} 回合内未结束")
+
+    # ------------------------------------------------------------------
+    # POST /api/ai/step — 错误处理
+    # ------------------------------------------------------------------
+
+    def test_step_non_json_returns_400(self):
+        """非 JSON 请求返回 400。"""
+        resp = self.client.post(
+            "/api/ai/step",
+            data="not json",
+            content_type="text/plain",
+            headers=self.headers,
+        )
+        self.assertEqual(resp.status_code, 400)
+
+    def test_step_missing_human_move_returns_400(self):
+        """缺少 human_move 返回 400。"""
+        resp = self.client.post(
+            "/api/ai/step",
+            json={"difficulty": "easy"},
+            headers=self.headers,
+        )
+        self.assertEqual(resp.status_code, 400)
+        data = resp.get_json()
+        self.assertFalse(data["ok"])
+
+    def test_step_invalid_move_returns_400(self):
+        """非法动作名返回 400。"""
+        resp = self.client.post(
+            "/api/ai/step",
+            json={"human_move": "NONEXISTENT", "difficulty": "easy"},
+            headers=self.headers,
+        )
+        self.assertEqual(resp.status_code, 400)
+
+    def test_step_illegal_move_returns_400(self):
+        """对当前玩家不合法的动作返回 400。"""
+        # 初始 qi=0，GI 不合法
+        resp = self.client.post(
+            "/api/ai/step",
+            json={"human_move": "GI", "difficulty": "easy"},
+            headers=self.headers,
+        )
+        self.assertEqual(resp.status_code, 400)
+        data = resp.get_json()
+        self.assertIn("不合法", data.get("error", ""))
+
+    def test_step_unknown_difficulty_returns_400(self):
+        """未知难度返回 400。"""
+        resp = self.client.post(
+            "/api/ai/step",
+            json={"human_move": "QI", "difficulty": "impossible"},
+            headers=self.headers,
+        )
+        self.assertEqual(resp.status_code, 400)
+
+    def test_step_after_game_over_returns_400(self):
+        """游戏结束后继续提交返回 400。"""
+        # 强制设 winner 模拟终局
+        with runtime.AI_STATE_LOCK:
+            runtime.AI_STATE.winner = 1
+
+        resp = self.client.post(
+            "/api/ai/step",
+            json={"human_move": "QI", "difficulty": "easy"},
+            headers=self.headers,
+        )
+        self.assertEqual(resp.status_code, 400)
+        data = resp.get_json()
+        self.assertIn("结束", data.get("error", ""))
+
+    def test_step_invalid_human_seat_returns_400(self):
+        """无效 human_seat 返回 400。"""
+        resp = self.client.post(
+            "/api/ai/step",
+            json={"human_move": "QI", "human_seat": "p3"},
+            headers=self.headers,
+        )
+        self.assertEqual(resp.status_code, 400)
+
+    # ------------------------------------------------------------------
+    # 状态隔离测试
+    # ------------------------------------------------------------------
+
+    def test_ai_state_independent_from_local(self):
+        """AI_STATE 与 CURRENT_STATE（本地模式）互不影响。"""
+        # 操作 AI 状态
+        self.client.post(
+            "/api/ai/step",
+            json={"human_move": "QI", "difficulty": "easy"},
+            headers=self.headers,
+        )
+        ai_state = self.client.get("/api/ai/state", headers=self.headers).get_json()
+
+        # 本地模式状态应保持初始
+        local_state = self.client.get("/v1/api/local/state").get_json()
+
+        self.assertNotEqual(ai_state["round_num"], local_state["round_num"],
+                            "AI 状态和本地模式状态应独立")
+
+    # ------------------------------------------------------------------
+    # 对战记录验证
+    # ------------------------------------------------------------------
+
+    def test_step_creates_battle_record(self):
+        """step 应创建对战记录，且包含 AI 元信息。"""
+        resp = self.client.post(
+            "/api/ai/step",
+            json={"human_move": "QI", "difficulty": "normal"},
+            headers=self.headers,
+        )
+        data = resp.get_json()
+        self.assertTrue(data["ok"])
+
+        # 检查 runtime 中有 battle_id
+        with runtime.AI_STATE_LOCK:
+            battle_id = runtime.CURRENT_AI_BATTLE_ID
+
+        self.assertIsNotNone(battle_id)
+
+        # 读取对战记录验证
+        battle = battle_recorder.read_battle(battle_id)
+        self.assertIsNotNone(battle, f"对战记录 {battle_id} 不存在")
+        self.assertEqual(battle.get("opponent_type"), "ai")
+        self.assertEqual(battle.get("ai_difficulty"), "normal")
+        self.assertEqual(battle.get("ai_seat"), "p2")  # 默认真人 P1, AI P2
+        self.assertEqual(battle.get("rule_version"), "1.0")
+        self.assertEqual(battle.get("mode"), "ai")
+        self.assertEqual(len(battle.get("rounds", [])), 1)
+
+        # 清理
+        battle_recorder.delete_battle(battle_id)
+
+    def test_battle_participants_have_ai_p2(self):
+        """对战记录参与者中 P2 为 ClapClap AI（uid=-2）。"""
+        resp = self.client.post(
+            "/api/ai/step",
+            json={"human_move": "QI", "difficulty": "easy"},
+            headers=self.headers,
+        )
+        data = resp.get_json()
+        self.assertTrue(data["ok"])
+
+        with runtime.AI_STATE_LOCK:
+            battle_id = runtime.CURRENT_AI_BATTLE_ID
+
+        battle = battle_recorder.read_battle(battle_id)
+        participants = battle.get("participants", {})
+        self.assertEqual(participants["p2"]["username"], "ClapClap AI")
+        self.assertEqual(participants["p2"]["uid"], -2)
+
+        battle_recorder.delete_battle(battle_id)
+
+
+if __name__ == "__main__":
+    unittest.main()

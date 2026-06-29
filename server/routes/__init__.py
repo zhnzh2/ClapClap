@@ -5,6 +5,7 @@ from server.routes.match_routes import match_bp
 from server.routes.status_routes import status_bp
 from server.routes.export_routes import export_bp
 from server.routes.auth_routes import auth_bp
+from server.routes.ai_routes import ai_bp
 from server.routes.v2_page_routes import v2_page_bp
 from server.routes.v2_local_routes import v2_local_bp
 
@@ -16,6 +17,7 @@ __all__ = [
     "status_bp",
     "export_bp",
     "auth_bp",
+    "ai_bp",
     "v2_page_bp",
     "v2_local_bp",
 ]

@@ -18,7 +18,7 @@ from app.storage import init_storage
 from app.users import ensure_admin_account
 
 from server.extensions import socketio
-from server.routes import page_bp, local_bp, room_bp, match_bp, status_bp, export_bp, auth_bp, v2_page_bp, v2_local_bp
+from server.routes import page_bp, local_bp, room_bp, match_bp, status_bp, export_bp, auth_bp, ai_bp, v2_page_bp, v2_local_bp
 from server.routes.room_v2_routes import room_v2_bp
 from server.routes.match_v2_routes import match_v2_bp
 
@@ -41,6 +41,7 @@ app.register_blueprint(match_bp)
 app.register_blueprint(status_bp)
 app.register_blueprint(export_bp)
 app.register_blueprint(auth_bp)
+app.register_blueprint(ai_bp)
 app.register_blueprint(room_v2_bp)
 app.register_blueprint(v2_page_bp)
 app.register_blueprint(v2_local_bp)

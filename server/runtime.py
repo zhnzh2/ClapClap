@@ -10,6 +10,12 @@ CURRENT_STATE = GameState()
 CURRENT_STATE_LOCK = Lock()
 CURRENT_BATTLE_ID: str | None = None
 
+# ── AI 对战独立状态 ──
+# 不能复用 CURRENT_STATE，否则会和 /local 本地双人模式串局。
+AI_STATE = GameState()
+AI_STATE_LOCK = Lock()
+CURRENT_AI_BATTLE_ID: str | None = None
+
 # ── v2 本地模式全局状态 ──
 CURRENT_STATE_V2: GameStateV2 = GameStateV2()
 CURRENT_STATE_V2_LOCK = Lock()

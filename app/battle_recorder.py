@@ -160,6 +160,8 @@ def _mode_label(mode: str | None) -> str:
         return "本地对战"
     if mode == "room":
         return "房间对战"
+    if mode == "ai":
+        return "人机对战"
     return ""
 
 
@@ -378,6 +380,24 @@ def end_battle(battle_id: str, winner: int | str | None) -> None:
         if str(data.get("rule_version", "1.0")).startswith("2."):
             data["final_result"] = _derive_v2_final_result(data, winner)
         _write_battle(battle_id, data)
+
+
+def set_battle_metadata(battle_id: str, metadata: dict) -> None:
+    """向已有对局记录写入额外元数据（如 AI 对局信息）。
+
+    不会覆盖已有字段的同名值；只写入尚不存在的键。
+    """
+    with _lock:
+        data = read_battle(battle_id)
+        if data is None:
+            return
+        changed = False
+        for key, value in metadata.items():
+            if key not in data:
+                data[key] = value
+                changed = True
+        if changed:
+            _write_battle(battle_id, data)
 
 
 def add_spectator(battle_id: str, spectator_name: str) -> None:
