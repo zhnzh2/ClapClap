@@ -22,7 +22,7 @@ from app.v2.room import RoomV2
 from app.v2.room_manager import create_room_v2, join_room_v2, get_room_v2
 from app.v2.game import GameEngineV2
 from app.v2.models import GameStateV2, PlayerStateV2
-from app.constants import Move
+from app.v1.constants import Move
 from app.storage import DATA_DIR
 
 
@@ -58,7 +58,7 @@ class TestConcurrentMoveSubmission(unittest.TestCase):
         client = app.test_client()
 
         # 创建房间
-        resp = client.post("/api/v2/rooms", json={
+        resp = client.post("/v2/api/rooms", json={
             "max_players": 2, "min_players": 2,
             "start_condition": "host", "allow_spectate": True, "public": False,
         }, headers={"X-Session-Token": token_a})
@@ -68,7 +68,7 @@ class TestConcurrentMoveSubmission(unittest.TestCase):
         pt_a = data["player_token"]
 
         # 加入
-        resp = client.post(f"/api/v2/rooms/{room_id}/join",
+        resp = client.post(f"/v2/api/rooms/{room_id}/join",
                            json={"as_spectator": False},
                            headers={"X-Session-Token": token_b})
         data = resp.get_json()
@@ -76,11 +76,11 @@ class TestConcurrentMoveSubmission(unittest.TestCase):
         pt_b = data["player_token"]
 
         # 准备 + 开始
-        client.post(f"/api/v2/rooms/{room_id}/ready",
+        client.post(f"/v2/api/rooms/{room_id}/ready",
                     json={"player_token": pt_a, "ready": True})
-        client.post(f"/api/v2/rooms/{room_id}/ready",
+        client.post(f"/v2/api/rooms/{room_id}/ready",
                     json={"player_token": pt_b, "ready": True})
-        client.post(f"/api/v2/rooms/{room_id}/start",
+        client.post(f"/v2/api/rooms/{room_id}/start",
                     json={"player_token": pt_a})
 
         # 用线程池同时提交
@@ -89,7 +89,7 @@ class TestConcurrentMoveSubmission(unittest.TestCase):
 
         def submit_a():
             try:
-                r = client.post(f"/api/v2/rooms/{room_id}/step",
+                r = client.post(f"/v2/api/rooms/{room_id}/step",
                                 json={"player_token": pt_a, "move_name": "QI"})
                 results.append(("a", r.get_json()))
             except Exception as e:
@@ -97,7 +97,7 @@ class TestConcurrentMoveSubmission(unittest.TestCase):
 
         def submit_b():
             try:
-                r = client.post(f"/api/v2/rooms/{room_id}/step",
+                r = client.post(f"/v2/api/rooms/{room_id}/step",
                                 json={"player_token": pt_b, "move_name": "QI"})
                 results.append(("b", r.get_json()))
             except Exception as e:
@@ -129,7 +129,7 @@ class TestConcurrentMoveSubmission(unittest.TestCase):
 
         client = app.test_client()
 
-        resp = client.post("/api/v2/rooms", json={
+        resp = client.post("/v2/api/rooms", json={
             "max_players": 2, "min_players": 2,
             "start_condition": "host", "allow_spectate": True, "public": False,
         }, headers={"X-Session-Token": token_a})
@@ -137,25 +137,25 @@ class TestConcurrentMoveSubmission(unittest.TestCase):
         room_id = data["room"]["room_id"]
         pt_a = data["player_token"]
 
-        resp = client.post(f"/api/v2/rooms/{room_id}/join",
+        resp = client.post(f"/v2/api/rooms/{room_id}/join",
                            json={"as_spectator": False},
                            headers={"X-Session-Token": token_b})
         pt_b = resp.get_json()["player_token"]
 
-        client.post(f"/api/v2/rooms/{room_id}/ready",
+        client.post(f"/v2/api/rooms/{room_id}/ready",
                     json={"player_token": pt_a, "ready": True})
-        client.post(f"/api/v2/rooms/{room_id}/ready",
+        client.post(f"/v2/api/rooms/{room_id}/ready",
                     json={"player_token": pt_b, "ready": True})
-        client.post(f"/api/v2/rooms/{room_id}/start",
+        client.post(f"/v2/api/rooms/{room_id}/start",
                     json={"player_token": pt_a})
 
         # 第一次提交
-        r1 = client.post(f"/api/v2/rooms/{room_id}/step",
+        r1 = client.post(f"/v2/api/rooms/{room_id}/step",
                          json={"player_token": pt_a, "move_name": "QI"})
         self.assertTrue(r1.get_json().get("ok"))
 
         # 同玩家第二次提交（重复）
-        r2 = client.post(f"/api/v2/rooms/{room_id}/step",
+        r2 = client.post(f"/v2/api/rooms/{room_id}/step",
                          json={"player_token": pt_a, "move_name": "PO"})
         data2 = r2.get_json()
         # 重复提交应被正确处理（不崩溃），可能被拒绝或静默忽略
@@ -178,7 +178,7 @@ class TestConcurrentMoveSubmission(unittest.TestCase):
 
         client = app.test_client()
 
-        resp = client.post("/api/v2/rooms", json={
+        resp = client.post("/v2/api/rooms", json={
             "max_players": 2, "min_players": 2,
             "start_condition": "host", "allow_spectate": True, "public": False,
         }, headers={"X-Session-Token": token_a})
@@ -186,25 +186,25 @@ class TestConcurrentMoveSubmission(unittest.TestCase):
         room_id = data["room"]["room_id"]
         pt_a = data["player_token"]
 
-        resp = client.post(f"/api/v2/rooms/{room_id}/join",
+        resp = client.post(f"/v2/api/rooms/{room_id}/join",
                            json={"as_spectator": False},
                            headers={"X-Session-Token": token_b})
         pt_b = resp.get_json()["player_token"]
 
-        client.post(f"/api/v2/rooms/{room_id}/ready",
+        client.post(f"/v2/api/rooms/{room_id}/ready",
                     json={"player_token": pt_a, "ready": True})
-        client.post(f"/api/v2/rooms/{room_id}/ready",
+        client.post(f"/v2/api/rooms/{room_id}/ready",
                     json={"player_token": pt_b, "ready": True})
-        client.post(f"/api/v2/rooms/{room_id}/start",
+        client.post(f"/v2/api/rooms/{room_id}/start",
                     json={"player_token": pt_a})
 
         # B 先提交
-        rb = client.post(f"/api/v2/rooms/{room_id}/step",
+        rb = client.post(f"/v2/api/rooms/{room_id}/step",
                          json={"player_token": pt_b, "move_name": "QI"})
         self.assertTrue(rb.get_json().get("ok"))
 
         # A 后提交（应该触发结算）
-        ra = client.post(f"/api/v2/rooms/{room_id}/step",
+        ra = client.post(f"/v2/api/rooms/{room_id}/step",
                          json={"player_token": pt_a, "move_name": "QI"})
         data_a = ra.get_json()
         self.assertTrue(data_a.get("ok"))
@@ -310,7 +310,7 @@ class TestMultipleClientsRace(unittest.TestCase):
         client = app.test_client()
 
         # A 创建房间
-        resp = client.post("/api/v2/rooms", json={
+        resp = client.post("/v2/api/rooms", json={
             "max_players": 3, "min_players": 2,
             "start_condition": "host", "allow_spectate": True, "public": False,
         }, headers={"X-Session-Token": token_a})
@@ -322,7 +322,7 @@ class TestMultipleClientsRace(unittest.TestCase):
 
         def join_b():
             try:
-                r = client.post(f"/api/v2/rooms/{room_id}/join",
+                r = client.post(f"/v2/api/rooms/{room_id}/join",
                                 json={"as_spectator": False},
                                 headers={"X-Session-Token": token_b})
                 results.append(("b", r.get_json()))
@@ -331,7 +331,7 @@ class TestMultipleClientsRace(unittest.TestCase):
 
         def join_c():
             try:
-                r = client.post(f"/api/v2/rooms/{room_id}/join",
+                r = client.post(f"/v2/api/rooms/{room_id}/join",
                                 json={"as_spectator": False},
                                 headers={"X-Session-Token": token_c})
                 results.append(("c", r.get_json()))
@@ -364,37 +364,37 @@ class TestMultipleClientsRace(unittest.TestCase):
 
         client = app.test_client()
 
-        resp = client.post("/api/v2/rooms", json={
+        resp = client.post("/v2/api/rooms", json={
             "max_players": 2, "min_players": 2,
             "start_condition": "host", "allow_spectate": True, "public": False,
         }, headers={"X-Session-Token": token_a})
         room_id = resp.get_json()["room"]["room_id"]
         pt_a = resp.get_json()["player_token"]
 
-        resp = client.post(f"/api/v2/rooms/{room_id}/join",
+        resp = client.post(f"/v2/api/rooms/{room_id}/join",
                            json={"as_spectator": False},
                            headers={"X-Session-Token": token_b})
         pt_b = resp.get_json()["player_token"]
 
-        client.post(f"/api/v2/rooms/{room_id}/ready",
+        client.post(f"/v2/api/rooms/{room_id}/ready",
                     json={"player_token": pt_a, "ready": True})
-        client.post(f"/api/v2/rooms/{room_id}/ready",
+        client.post(f"/v2/api/rooms/{room_id}/ready",
                     json={"player_token": pt_b, "ready": True})
-        client.post(f"/api/v2/rooms/{room_id}/start",
+        client.post(f"/v2/api/rooms/{room_id}/start",
                     json={"player_token": pt_a})
 
         errors = []
 
         def submit_move():
             try:
-                client.post(f"/api/v2/rooms/{room_id}/step",
+                client.post(f"/v2/api/rooms/{room_id}/step",
                             json={"player_token": pt_a, "move_name": "QI"})
             except Exception as e:
                 errors.append(("move", str(e)))
 
         def leave_room():
             try:
-                client.post(f"/api/v2/rooms/{room_id}/leave",
+                client.post(f"/v2/api/rooms/{room_id}/leave",
                             json={"player_token": pt_b})
             except Exception as e:
                 errors.append(("leave", str(e)))

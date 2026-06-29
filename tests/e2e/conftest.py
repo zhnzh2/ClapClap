@@ -96,7 +96,7 @@ def api_session(server):
     import requests
     sess = requests.Session()
     # 访客登录
-    resp = sess.post(f"{server}/api/auth/guest", json={})
+    resp = sess.post(f"{server}/v2/api/auth/guest", json={})
     data = resp.json()
     assert data.get("ok"), f"访客登录失败: {data}"
     token = data["session_token"]

@@ -3,16 +3,27 @@
  * 在任意页面调用 window.AccountModal.open() 打开。
  */
 (function () {
+    function _versionPrefix() {
+        return window.location.pathname.indexOf("/v2") === 0 ? "/v2" : "/v1";
+    }
+
+    function _loginUrl(expired) {
+        return _versionPrefix() + "/login" + (expired ? "?expired=1" : "");
+    }
+
+    function _apiUrl(path) {
+        return _versionPrefix() + "/api" + path;
+    }
 
     function open() {
         var user = window.SessionUtils ? window.SessionUtils.getSessionUser() : null;
         if (!user) {
-            window.location.href = "/login?expired=1";
+            window.location.href = _loginUrl(true);
             return;
         }
 
         // 获取最新用户信息
-        ApiUtils.apiGet("/api/auth/me").then(function (result) {
+        ApiUtils.apiGet(_apiUrl("/auth/me")).then(function (result) {
             if (result.ok && result.data.user) {
                 user = result.data.user;
             }
@@ -110,7 +121,7 @@
             }
 
             _setSaveMsg("正在保存……", "info");
-            var result = await ApiUtils.apiPost("/api/auth/update", payload);
+            var result = await ApiUtils.apiPost(_apiUrl("/auth/update"), payload);
 
             if (!result.ok) {
                 _setSaveMsg(result.error || "保存失败。", "error");
@@ -137,9 +148,9 @@
 
         // 退出登录
         document.getElementById("am-logout-btn").addEventListener("click", async function () {
-            await ApiUtils.apiPost("/api/auth/logout", {});
+            await ApiUtils.apiPost(_apiUrl("/auth/logout"), {});
             _clearAllUserData();
-            window.location.href = "/login";
+            window.location.href = _loginUrl(false);
         });
 
         // 注销账号 - 使用警告确认弹窗
@@ -163,7 +174,7 @@
     }
 
     async function _doDelete() {
-        var result = await ApiUtils.apiPost("/api/auth/delete", {});
+        var result = await ApiUtils.apiPost(_apiUrl("/auth/delete"), {});
         if (!result.ok) {
             if (typeof ModalUtils !== "undefined") {
                 ModalUtils.showInfoModal({
@@ -180,18 +191,25 @@
         var existing = document.getElementById("account-modal-mask");
         if (existing) { existing.remove(); }
         _clearAllUserData();
-        window.location.href = "/login";
+        window.location.href = _loginUrl(false);
     }
 
     // 清理该用户在本地的所有缓存数据
     function _clearAllUserData() {
         SessionUtils.clearSession();
+        if (window.StorageUtils && typeof window.StorageUtils.clearAllClapClapStorage === "function") {
+            window.StorageUtils.clearAllClapClapStorage();
+            return;
+        }
         // 清理所有 clapclap 相关的 localStorage 键
         var keysToRemove = [
             "clapclap_match_identity",
             "clapclap_match_state",
             "clapclap_server_boot_id",
-            "clapclap_ui_settings_v2"
+            "clapclap_v2_match_state",
+            "clapclap_ui_settings_v2",
+            "clapclap_v2_ui_settings",
+            "clapclap_v2_room_ui_settings"
         ];
         try {
             keysToRemove.forEach(function (k) { localStorage.removeItem(k); });
@@ -199,6 +217,12 @@
             var keys = Object.keys(localStorage);
             for (var i = 0; i < keys.length; i++) {
                 if (keys[i].indexOf("clapclap_room_") === 0) {
+                    localStorage.removeItem(keys[i]);
+                }
+                if (keys[i].indexOf("clapclap_v2_room_") === 0) {
+                    localStorage.removeItem(keys[i]);
+                }
+                if (keys[i].indexOf("clapclap_v2_room_ui_settings") === 0) {
                     localStorage.removeItem(keys[i]);
                 }
             }

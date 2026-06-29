@@ -1,9 +1,9 @@
 from threading import Lock
 
-from app.models import GameState
+from app.v1.models import GameState
 from app.v2.models import GameStateV2
-from app.room_manager import cleanup_expired_rooms
-from app.matchmaking import cleanup_expired_match_state
+from app.v1.room_manager import cleanup_expired_rooms
+from app.v1.matchmaking import cleanup_expired_match_state
 from app.users import cleanup_unverified_accounts
 
 CURRENT_STATE = GameState()

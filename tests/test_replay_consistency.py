@@ -21,7 +21,7 @@ from app.v2.models import (
     GameStateV2, PlayerStateV2, RoundLogV2,
     ConflictRecord, SpeedLayerEvent, TargetDeclaration, DecisionOption,
 )
-from app.constants import Move
+from app.v1.constants import Move
 from app.storage import DATA_DIR
 
 

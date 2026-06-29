@@ -6,7 +6,7 @@ import unittest
 
 from app import users
 from app.battle_recorder import delete_battle
-from app.room_manager import (
+from app.v1.room_manager import (
     ROOMS,
     ROOM_RUNTIME_LOCKS,
     create_room,
@@ -59,7 +59,7 @@ class TestRoomAndLocalApi(unittest.TestCase):
         alice_headers = self.auth_headers_for("Alice")
         bob_headers = self.auth_headers_for("Bob")
         created = self.client.post(
-            "/api/rooms",
+            "/v1/api/rooms",
             json={},
             headers=alice_headers,
         ).get_json()
@@ -68,7 +68,7 @@ class TestRoomAndLocalApi(unittest.TestCase):
         self.room_ids.append(room_id)
 
         joined = self.client.post(
-            f"/api/rooms/{room_id}/join",
+            f"/v1/api/rooms/{room_id}/join",
             json={},
             headers=bob_headers,
         ).get_json()
@@ -80,25 +80,25 @@ class TestRoomAndLocalApi(unittest.TestCase):
         with runtime.CURRENT_STATE_LOCK:
             runtime.CURRENT_STATE = runtime.CURRENT_STATE.__class__()
 
-        reset = self.client.post("/reset").get_json()
+        reset = self.client.post("/v1/api/local/reset").get_json()
         self.assertTrue(reset["ok"], reset)
         self.assertEqual(reset["state"]["round_num"], 0)
 
         for _ in range(3):
             result = self.client.post(
-                "/step",
+                "/v1/api/local/step",
                 json={"p1_move": "QI", "p2_move": "QI"},
             ).get_json()
             self.assertTrue(result["ok"], result)
 
-        state = self.client.get("/state").get_json()
+        state = self.client.get("/v1/api/local/state").get_json()
         self.assertEqual(state["round_num"], 3)
 
-        api_state = self.client.get("/api/local/state").get_json()
+        api_state = self.client.get("/v1/api/local/state").get_json()
         self.assertEqual(api_state["round_num"], 3)
 
         api_step = self.client.post(
-            "/api/local/step",
+            "/v1/api/local/step",
             json={"p1_move": "QI", "p2_move": "QI"},
         ).get_json()
         self.assertTrue(api_step["ok"], api_step)
@@ -107,7 +107,7 @@ class TestRoomAndLocalApi(unittest.TestCase):
         room_id, p1_token, p2_token = self.create_joined_room()
 
         first_submit = self.client.post(
-            f"/api/rooms/{room_id}/step",
+            f"/v1/api/rooms/{room_id}/step",
             json={"player_token": p1_token, "move_name": "QI"},
         ).get_json()
         self.assertTrue(first_submit["ok"], first_submit)
@@ -115,18 +115,18 @@ class TestRoomAndLocalApi(unittest.TestCase):
         self.assertEqual(first_submit["room"]["pending_p1_move"], "QI")
 
         cancel = self.client.post(
-            f"/api/rooms/{room_id}/cancel-step",
+            f"/v1/api/rooms/{room_id}/cancel-step",
             json={"player_token": p1_token},
         ).get_json()
         self.assertTrue(cancel["ok"], cancel)
         self.assertIsNone(cancel["room"]["pending_p1_move"])
 
         self.client.post(
-            f"/api/rooms/{room_id}/step",
+            f"/v1/api/rooms/{room_id}/step",
             json={"player_token": p1_token, "move_name": "QI"},
         )
         resolved = self.client.post(
-            f"/api/rooms/{room_id}/step",
+            f"/v1/api/rooms/{room_id}/step",
             json={"player_token": p2_token, "move_name": "QI"},
         ).get_json()
         self.assertTrue(resolved["ok"], resolved)
@@ -140,7 +140,7 @@ class TestRoomAndLocalApi(unittest.TestCase):
         room_id, p1_token, p2_token = self.create_joined_room()
 
         first = self.client.post(
-            f"/api/rooms/{room_id}/reset",
+            f"/v1/api/rooms/{room_id}/reset",
             json={"player_token": p1_token},
         ).get_json()
         self.assertTrue(first["ok"], first)
@@ -148,7 +148,7 @@ class TestRoomAndLocalApi(unittest.TestCase):
         self.assertEqual(first["room"]["reset_requested_by"], "p1")
 
         second = self.client.post(
-            f"/api/rooms/{room_id}/reset",
+            f"/v1/api/rooms/{room_id}/reset",
             json={"player_token": p2_token},
         ).get_json()
         self.assertTrue(second["ok"], second)
@@ -160,13 +160,13 @@ class TestRoomAndLocalApi(unittest.TestCase):
         room_id, p1_token, _ = self.create_joined_room()
 
         left = self.client.post(
-            f"/api/rooms/{room_id}/leave",
+            f"/v1/api/rooms/{room_id}/leave",
             json={"player_token": p1_token},
         ).get_json()
         self.assertTrue(left["ok"], left)
         self.room_ids.remove(room_id)
 
-        missing = self.client.get(f"/api/rooms/{room_id}").get_json()
+        missing = self.client.get(f"/v1/api/rooms/{room_id}").get_json()
         self.assertFalse(missing["ok"])
         self.assertEqual(missing["error_code"], "ROOM_NOT_FOUND")
 
@@ -219,13 +219,13 @@ class TestRoomAndLocalApi(unittest.TestCase):
 
         # P1 先提交动作
         self.client.post(
-            f"/api/rooms/{room_id}/step",
+            f"/v1/api/rooms/{room_id}/step",
             json={"player_token": p1_token, "move_name": "QI"},
         )
 
         # 模拟 P1 刷新页面：通过 GET 携带 player_token 重新获取房间
         reconnected = self.client.get(
-            f"/api/rooms/{room_id}?player_token={p1_token}",
+            f"/v1/api/rooms/{room_id}?player_token={p1_token}",
         ).get_json()
         self.assertTrue(reconnected["ok"], reconnected)
         self.assertEqual(reconnected["room"]["requester_seat"], "p1")
@@ -236,7 +236,7 @@ class TestRoomAndLocalApi(unittest.TestCase):
         room_id, _, _ = self.create_joined_room()
 
         bad_submit = self.client.post(
-            f"/api/rooms/{room_id}/step",
+            f"/v1/api/rooms/{room_id}/step",
             json={"player_token": "fake-token-123", "move_name": "QI"},
         ).get_json()
         self.assertFalse(bad_submit["ok"])
@@ -245,7 +245,7 @@ class TestRoomAndLocalApi(unittest.TestCase):
     def test_room_submit_when_not_full(self):
         """测试房间未满时提交动作被拒绝。"""
         created = self.client.post(
-            "/api/rooms",
+            "/v1/api/rooms",
             json={},
             headers=self.auth_headers_for("Solo"),
         ).get_json()
@@ -255,7 +255,7 @@ class TestRoomAndLocalApi(unittest.TestCase):
         self.room_ids.append(room_id)
 
         submit = self.client.post(
-            f"/api/rooms/{room_id}/step",
+            f"/v1/api/rooms/{room_id}/step",
             json={"player_token": p1_token, "move_name": "QI"},
         ).get_json()
         self.assertFalse(submit["ok"])
@@ -267,10 +267,10 @@ class TestRoomAndLocalApi(unittest.TestCase):
 
         # 先通过 GET 触发 mark_seen
         self.client.get(
-            f"/api/rooms/{room_id}?player_token={p1_token}",
+            f"/v1/api/rooms/{room_id}?player_token={p1_token}",
         )
 
-        state = self.client.get(f"/api/rooms/{room_id}").get_json()
+        state = self.client.get(f"/v1/api/rooms/{room_id}").get_json()
         self.assertTrue(state["ok"], state)
         online = state["room"].get("online_status", {})
         self.assertIn("p1_online", online)
@@ -286,11 +286,11 @@ class TestRoomAndLocalApi(unittest.TestCase):
         room.persist()
 
         self.client.post(
-            f"/api/rooms/{room_id}/step",
+            f"/v1/api/rooms/{room_id}/step",
             json={"player_token": p1_token, "move_name": "QI"},
         )
         self.client.post(
-            f"/api/rooms/{room_id}/step",
+            f"/v1/api/rooms/{room_id}/step",
             json={"player_token": p2_token, "move_name": "QI"},
         )
 

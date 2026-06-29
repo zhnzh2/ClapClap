@@ -442,8 +442,10 @@ def delete_user(uid: int) -> bool:
 
 def _cleanup_user_game_data(username: str) -> None:
     """清理指定用户名的所有房间和匹配数据。"""
-    import app.matchmaking as mm
-    from app.room_manager import ROOMS, delete_room_by_id
+    import app.v1.matchmaking as mm_v1
+    import app.v2.matchmaking as mm_v2
+    from app.v1.room_manager import ROOMS, delete_room_by_id
+    from app.v2.room_manager import ROOMS_V2, delete_room_v2
 
     # 清理相关房间
     rooms_to_delete: list[str] = []
@@ -453,31 +455,72 @@ def _cleanup_user_game_data(username: str) -> None:
 
     for room_id in rooms_to_delete:
         try:
-            mm.clear_match_state_by_room(room_id)
+            mm_v1.clear_match_state_by_room(room_id)
             delete_room_by_id(room_id)
         except Exception:
             pass
 
-    # 清理匹配队列中的等待者
-    match_changed = False
-    if mm.MATCH_WAITING is not None and mm.MATCH_WAITING.player_name == username:
-        mm.MATCH_WAITING = None
-        match_changed = True
+    rooms_v2_to_delete: list[str] = []
+    for room_id, room in ROOMS_V2.items():
+        player_names = [getattr(seat, "username", "") for seat in getattr(room, "seats", [])]
+        spectator_names = [getattr(spectator, "username", "") for spectator in getattr(room, "spectators", [])]
+        if username in player_names or username in spectator_names:
+            rooms_v2_to_delete.append(room_id)
 
-    # 清理 PLAYER_MATCH_STATE 中属于该用户的条目
-    for token, state in list(mm.PLAYER_MATCH_STATE.items()):
-        if state.get("player_name") == username:
-            mm.PLAYER_MATCH_STATE.pop(token, None)
-            match_changed = True
-
-    if match_changed:
+    for room_id in rooms_v2_to_delete:
         try:
-            mm.persist_match_state()
+            delete_room_v2(room_id)
         except Exception:
             pass
 
+    # 清理匹配队列中的等待者
+    match_v1_changed = False
+    if mm_v1.MATCH_WAITING is not None and mm_v1.MATCH_WAITING.player_name == username:
+        mm_v1.MATCH_WAITING = None
+        match_v1_changed = True
+
+    # 清理 PLAYER_MATCH_STATE 中属于该用户的条目
+    for token, state in list(mm_v1.PLAYER_MATCH_STATE.items()):
+        if state.get("player_name") == username:
+            mm_v1.PLAYER_MATCH_STATE.pop(token, None)
+            match_v1_changed = True
+
+    if match_v1_changed:
+        try:
+            mm_v1.persist_match_state()
+        except Exception:
+            pass
+
+    match_v2_changed = False
+    with mm_v2.MATCH_LOCK_V2:
+        before_count = len(mm_v2.MATCH_QUEUE_V2)
+        mm_v2.MATCH_QUEUE_V2 = [
+            waiting for waiting in mm_v2.MATCH_QUEUE_V2
+            if waiting.player_name != username
+        ]
+        if len(mm_v2.MATCH_QUEUE_V2) != before_count:
+            match_v2_changed = True
+
+        for token, state in list(mm_v2.PLAYER_MATCH_STATE_V2.items()):
+            if state.get("player_name") == username:
+                mm_v2.PLAYER_MATCH_STATE_V2.pop(token, None)
+                match_v2_changed = True
+
+        if match_v2_changed:
+            try:
+                mm_v2._persist_match_state_v2()
+            except Exception:
+                pass
+
     if rooms_to_delete:
-        print(f"[users] 删除用户 {username} 时清理了 {len(rooms_to_delete)} 个关联房间: {rooms_to_delete}")
+        print(f"[users] 删除用户 {username} 时清理了 {len(rooms_to_delete)} 个关联 v1 房间: {rooms_to_delete}")
+
+    if rooms_v2_to_delete:
+        try:
+            room_list = rooms_v2_to_delete
+            print(f"[users] 删除用户 {username} 时清理了 {len(room_list)} 个关联 v2 房间: {room_list}")
+        except Exception:
+            pass
 
 
 def logout_token(token: str) -> bool:

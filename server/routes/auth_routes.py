@@ -1,12 +1,24 @@
 from __future__ import annotations
 
-from flask import Blueprint, g, jsonify, request
+from flask import Blueprint, g, jsonify, redirect, render_template, request
 
 from app import users
 from app.battle_recorder import read_battle
 from server.auth_middleware import require_auth
 
 auth_bp = Blueprint("auth", __name__)
+
+
+@auth_bp.get("/login")
+def legacy_login_page():
+    return redirect("/v1/login")
+
+
+@auth_bp.get("/v1/login")
+@auth_bp.get("/v2/login")
+def login_page():
+    version = "v2" if request.path.startswith("/v2/") else "v1"
+    return render_template("login.html", version=version)
 
 
 def _get_participant_player_id(participants: dict, uid: int) -> str | None:
@@ -140,6 +152,8 @@ def _build_user_battle_stats(uid: int, battle_ids: list[str]) -> dict:
     return stats
 
 
+@auth_bp.post("/v1/api/auth/register")
+@auth_bp.post("/v2/api/auth/register")
 @auth_bp.post("/api/auth/register")
 def api_register():
     """注册：用户名、密码、确认密码、介绍信（可选）。"""
@@ -171,6 +185,8 @@ def api_register():
     return jsonify(result), 201
 
 
+@auth_bp.post("/v1/api/auth/login")
+@auth_bp.post("/v2/api/auth/login")
 @auth_bp.post("/api/auth/login")
 def api_login():
     """登录：用户名 + 密码。"""
@@ -191,6 +207,8 @@ def api_login():
     return jsonify(result), 200
 
 
+@auth_bp.post("/v1/api/auth/guest")
+@auth_bp.post("/v2/api/auth/guest")
 @auth_bp.post("/api/auth/guest")
 def api_guest():
     """访客登录：一键创建访客账号并自动登录。"""
@@ -209,6 +227,8 @@ def api_guest():
     return jsonify(result), 201
 
 
+@auth_bp.post("/v1/api/auth/logout")
+@auth_bp.post("/v2/api/auth/logout")
 @auth_bp.post("/api/auth/logout")
 def api_logout():
     """登出。"""
@@ -218,6 +238,8 @@ def api_logout():
     return jsonify({"ok": True, "message": "已登出。"}), 200
 
 
+@auth_bp.get("/v1/api/auth/me")
+@auth_bp.get("/v2/api/auth/me")
 @auth_bp.get("/api/auth/me")
 @require_auth
 def api_me():
@@ -228,6 +250,8 @@ def api_me():
     }), 200
 
 
+@auth_bp.post("/v1/api/auth/update")
+@auth_bp.post("/v2/api/auth/update")
 @auth_bp.post("/api/auth/update")
 @require_auth
 def api_update():
@@ -277,6 +301,8 @@ def api_update():
     return jsonify(result), 200
 
 
+@auth_bp.post("/v1/api/auth/delete")
+@auth_bp.post("/v2/api/auth/delete")
 @auth_bp.post("/api/auth/delete")
 @require_auth
 def api_delete():
@@ -293,6 +319,8 @@ def api_delete():
 
 # ── 管理员接口 ────────────────────────────────────────────────
 
+@auth_bp.get("/v1/api/admin/users")
+@auth_bp.get("/v2/api/admin/users")
 @auth_bp.get("/api/admin/users")
 @require_auth
 def api_admin_users():
@@ -304,6 +332,8 @@ def api_admin_users():
     return jsonify({"ok": True, "users": all_users}), 200
 
 
+@auth_bp.post("/v1/api/admin/verify/<int:uid>")
+@auth_bp.post("/v2/api/admin/verify/<int:uid>")
 @auth_bp.post("/api/admin/verify/<int:uid>")
 @require_auth
 def api_admin_verify(uid: int):
@@ -318,6 +348,8 @@ def api_admin_verify(uid: int):
     return jsonify({"ok": True, "message": f"用户 {uid} 已验证。"}), 200
 
 
+@auth_bp.post("/v1/api/admin/delete/<int:uid>")
+@auth_bp.post("/v2/api/admin/delete/<int:uid>")
 @auth_bp.post("/api/admin/delete/<int:uid>")
 @require_auth
 def api_admin_delete(uid: int):
@@ -337,6 +369,8 @@ def api_admin_delete(uid: int):
 
 # ── 用户公开信息接口 ────────────────────────────────────────────
 
+@auth_bp.get("/v1/api/user/<int:uid>")
+@auth_bp.get("/v2/api/user/<int:uid>")
 @auth_bp.get("/api/user/<int:uid>")
 @require_auth
 def api_get_user(uid: int):
@@ -347,6 +381,8 @@ def api_get_user(uid: int):
     return jsonify({"ok": True, "user": user}), 200
 
 
+@auth_bp.get("/v1/api/user/<int:uid>/battles")
+@auth_bp.get("/v2/api/user/<int:uid>/battles")
 @auth_bp.get("/api/user/<int:uid>/battles")
 @require_auth
 def api_user_battles(uid: int):
@@ -458,6 +494,8 @@ def api_user_battles(uid: int):
     }), 200
 
 
+@auth_bp.get("/v1/api/battles/<battle_id>")
+@auth_bp.get("/v2/api/battles/<battle_id>")
 @auth_bp.get("/api/battles/<battle_id>")
 @require_auth
 def api_battle_detail(battle_id: str):

@@ -2,6 +2,9 @@
  * 登录页面逻辑。
  */
 window.initLoginPage = function () {
+    var version = window.CLAPCLAP_VERSION === "v2" ? "v2" : "v1";
+    var homeUrl = "/" + version;
+    var apiPrefix = "/" + version + "/api";
 
     var loginUsername = document.getElementById("login-username");
     var loginPassword = document.getElementById("login-password");
@@ -44,7 +47,7 @@ window.initLoginPage = function () {
         loginBtn.disabled = true;
         setMessage(loginMessage, "正在登录……", "info");
 
-        var result = await ApiUtils.apiPost("/api/auth/login", {
+        var result = await ApiUtils.apiPost(apiPrefix + "/auth/login", {
             username: username,
             password: password
         });
@@ -57,7 +60,7 @@ window.initLoginPage = function () {
         }
 
         SessionUtils.saveSession(result.data.session_token, result.data.user);
-        window.location.href = "/";
+        window.location.href = homeUrl;
     }
 
     loginBtn.addEventListener("click", doLogin);
@@ -101,7 +104,7 @@ window.initLoginPage = function () {
         registerBtn.disabled = true;
         setMessage(registerMessage, "正在注册……", "info");
 
-        var result = await ApiUtils.apiPost("/api/auth/register", {
+        var result = await ApiUtils.apiPost(apiPrefix + "/auth/register", {
             username: username,
             password: password,
             confirm_password: confirmPw,
@@ -128,7 +131,7 @@ window.initLoginPage = function () {
         btn.disabled = true;
         setMessage(loginMessage, "正在创建访客账号……", "info");
 
-        var result = await ApiUtils.apiPost("/api/auth/guest", {});
+        var result = await ApiUtils.apiPost(apiPrefix + "/auth/guest", {});
 
         btn.disabled = false;
 
@@ -170,18 +173,18 @@ window.initLoginPage = function () {
     }
 
     successOkBtn.addEventListener("click", function () {
-        window.location.href = "/";
+        window.location.href = homeUrl;
     });
 
     successMask.addEventListener("click", function (e) {
         if (e.target === successMask) {
-            window.location.href = "/";
+            window.location.href = homeUrl;
         }
     });
 
     // 如果已经登录，直接跳转
     if (SessionUtils.isLoggedIn()) {
-        window.location.href = "/";
+        window.location.href = homeUrl;
         return;
     }
 

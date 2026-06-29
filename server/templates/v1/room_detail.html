@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ClapClap 房间对战</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/v1/v1_room_detail.css') }}" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/v1/v1_room_detail_overlay.css') }}" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/v1/v1_room_detail_modals.css') }}" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/auth.css') }}" />
+</head>
+<body>
+    <div class="container">
+        <div class="page-top-shell">
+            <div class="header-actions">
+                <a class="header-account-btn" href="/v1/rules">规则界面</a>
+                <button class="header-account-btn" id="header-admin-btn" style="display:none;">查看用户</button>
+                <button class="header-account-btn" id="header-account-btn">账号</button>
+                <button class="header-account-btn danger" id="header-logout-btn">退出登录</button>
+            </div>
+            <div class="page-title-block">
+                <h1>1.0 房间对战</h1>
+                <p>双人联机房间 · 邀请好友进入同一对局</p>
+            </div>
+        </div>
+
+        <div class="page-mode-toolbar">
+            <div class="page-mode-toolbar-label">模式操作</div>
+            <div class="top-actions page-mode-toolbar-group">
+                <button class="secondary" id="open-help-btn" type="button">帮助</button>
+                <button class="secondary" id="open-settings-btn" type="button">设置</button>
+                <button class="danger" id="back-home-btn" type="button">返回主页</button>
+                <button class="danger" id="leave-room-btn" type="button">退出房间</button>
+            </div>
+        </div>
+
+        <div class="card" id="overview-card">
+            <div class="section-block" id="room-info-section">
+                <div class="section-title">房间信息</div>
+                <div class="info-row-compact">
+                    <div class="info-box compact">
+                        <div class="label">房间号</div>
+                        <div class="value" id="room-id">加载中</div>
+                    </div>
+                    <div class="info-box compact">
+                        <div class="label">房间状态</div>
+                        <div class="value">
+                            <span class="status-badge" id="room-status">加载中</span>
+                        </div>
+                    </div>
+                    <div class="info-box compact" id="p1-name-box">
+                        <div class="label">1号位</div>
+                        <div class="value" id="p1-name">加载中</div>
+                    </div>
+                    <div class="info-box compact" id="p2-name-box">
+                        <div class="label">2号位</div>
+                        <div class="value" id="p2-name">加载中</div>
+                    </div>
+                    <div class="info-box compact">
+                        <div class="label">我的身份</div>
+                        <div class="value" id="my-seat-text">加载中</div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="spectator-banner" class="spectator-banner" style="display: none;">
+                你当前没有有效座位身份，已按观战模式进入：可以查看状态与历史，但不能提交动作或重置对局。
+            </div>
+
+            <div class="section-block" id="room-status-section">
+                <div class="section-title">房间状态</div>
+                <div id="turn-alert" class="turn-alert"></div>
+
+                <div class="status-panel">
+                    <div class="status-item">
+                        <div class="title">我的当前状态</div>
+                        <div class="content" id="self-phase-text">加载中</div>
+                    </div>
+                    <div class="status-item">
+                        <div class="title">对方状态</div>
+                        <div class="content" id="opponent-phase-text">加载中</div>
+                    </div>
+                    <div class="status-item">
+                        <div class="title">对方在线情况</div>
+                        <div class="content" id="opponent-online-text">加载中</div>
+                    </div>
+                    <div class="status-item">
+                        <div class="title">本回合状态</div>
+                        <div class="content" id="round-phase-text">加载中</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="section-block" id="invite-section">
+                <div class="section-title">邀请好友</div>
+                <div class="invite-panel">
+                    <div class="section-note">
+                        可以复制房间号或邀请链接。邀请链接会自动使用当前访问域名，正式上线后会自动兼容正式域名。
+                    </div>
+
+                    <div class="invite-actions">
+                        <button type="button" id="copy-room-id-btn">复制房间号</button>
+                        <button type="button" id="copy-room-link-btn">复制邀请链接</button>
+                    </div>
+
+                    <div class="invite-preview" id="invite-link-preview">加载中</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="round-result-section" id="round-result-section">
+            <div class="round-result-title" id="round-result-title">本回合结果</div>
+            <div class="round-result-body" id="round-result-body">加载中</div>
+            <div class="result-chip-row" id="round-result-chips"></div>
+        </div>
+
+    <div class="battle-main-layout">
+        <div class="battle-left-column">
+            <div class="card" id="action-section">
+                <h2>选择动作</h2>
+
+                <div class="pending-row">
+                    <div class="selection-box pending-round-box" id="current-round-box">
+                        <div class="label">当前回合数</div>
+                        <div class="value pending-highlight" id="current-round">1</div>
+                    </div>
+
+                    <div class="selection-box" id="pending-self-box">
+                        <div class="label" id="pending-self-label">我的待提交</div>
+                        <div class="value pending-highlight" id="pending-self">暂无</div>
+                    </div>
+
+                    <div class="selection-box" id="pending-opponent-box">
+                        <div class="label" id="pending-opponent-label">对方待提交</div>
+                        <div class="value pending-highlight" id="pending-opponent">暂无</div>
+                    </div>
+                </div>
+
+                <div class="selection-grid single-selection-grid">
+                    <div class="selection-box" id="p1-submit-box">
+                        <div id="p1-move-groups"></div>
+                        <div class="message" id="p1-submit-msg"></div>
+                        <div class="submit-confirm-hint">先选择动作，再按 Enter 确认；按 Backspace 可取消选择或撤回本回合提交。</div>
+                        <div class="mobile-action-row">
+                            <button type="button" class="primary confirm-selected-btn">确认提交</button>
+                            <button type="button" class="secondary cancel-selected-btn">撤回/取消</button>
+                        </div>
+                    </div>
+
+                    <div class="selection-box" id="p2-submit-box">
+                        <div id="p2-move-groups"></div>
+                        <div class="message" id="p2-submit-msg"></div>
+                        <div class="submit-confirm-hint">先选择动作，再按 Enter 确认；按 Backspace 可取消选择或撤回本回合提交。</div>
+                        <div class="mobile-action-row">
+                            <button type="button" class="primary confirm-selected-btn">确认提交</button>
+                            <button type="button" class="secondary cancel-selected-btn">撤回/取消</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="message" id="room-message"></div>
+            </div>
+        </div>
+
+        <div class="battle-right-column">
+            <div class="card">
+                <h2>当前对局状态</h2>
+                    <div id="player-state-mode-compact">
+                        <div class="status-table-wrapper">
+                            <div class="status-table-header compact">
+                                <div class="status-table-head-player">玩家</div>
+                                <div class="status-table-head-stat">资源</div>
+                            </div>
+
+                            <div class="status-table-line" id="p1-player-box">
+                                <div class="status-table-player-cell" id="left-compact-title">1号位</div>
+                                <div class="status-table-content-cell" id="p1-state-compact"></div>
+                            </div>
+
+                            <div class="status-table-line" id="p2-player-box">
+                                <div class="status-table-player-cell" id="right-compact-title">2号位</div>
+                                <div class="status-table-content-cell" id="p2-state-compact"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="player-state-mode-full" style="display: none;">
+                        <div class="status-table-wrapper">
+                            <div class="status-table-header full">
+                                <div class="status-table-head-player">玩家</div>
+                                <div class="status-table-head-stat">资源</div>
+                            </div>
+
+                            <div class="status-table-line" id="p1-row-full">
+                                <div class="status-table-player-cell" id="left-row-title">1号位</div>
+                                <div class="status-table-content-cell" id="p1-state-full"></div>
+                            </div>
+
+                            <div class="status-table-line" id="p2-row-full">
+                                <div class="status-table-player-cell" id="right-row-title">2号位</div>
+                                <div class="status-table-content-cell" id="p2-state-full"></div>
+                            </div>
+                        </div>
+                    </div>
+            </div>
+
+            <!-- 聊天区域 -->
+            <div class="card" id="chat-section">
+                <div class="chat-header-row">
+                    <h2 style="margin:0;">聊天</h2>
+                    <span style="font-size:12px;color:var(--muted);">最多 50 字</span>
+                </div>
+                <div id="chat-messages" class="chat-messages-list"></div>
+                <div class="chat-input-row">
+                    <input type="text" id="chat-input" placeholder="输入消息，按 Enter 发送" maxlength="50" />
+                    <button type="button" id="chat-send-btn">发送</button>
+                </div>
+                <div class="quick-chat-row">
+                    <button type="button" class="quick-chat-btn" data-msg="打得好！">打得好！</button>
+                    <button type="button" class="quick-chat-btn" data-msg="承让">承让</button>
+                    <button type="button" class="quick-chat-btn" data-msg="稍等">稍等</button>
+                    <button type="button" class="quick-chat-btn" data-msg="再来一局">再来一局</button>
+                    <button type="button" class="quick-chat-btn" data-msg="👍">👍</button>
+                    <button type="button" class="quick-chat-btn" data-msg="😄">😄</button>
+                </div>
+            </div>
+
+            <div class="card" id="history-section">
+                <h2>历史记录</h2>
+                <div id="history" class="history-table-wrapper"></div>
+            </div>
+        </div>
+    </div>
+    </div>
+
+    <script>
+        window.CLAPCLAP_ROOM_ID = "{{ room_id }}";
+    </script>
+    <script>
+        window.SERVER_BOOT_ID = "{{ server_boot_id }}";
+    </script>
+    <script src="{{ url_for('static', filename='js/socket.io.min.js') }}"></script>
+    <script>
+        if (typeof io !== "function") {
+            document.write('<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"><\/script>');
+        }
+    </script>
+    <script src="{{ url_for('static', filename='js/core/storage.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/core/session.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/core/message.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/core/api.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/core/logout_button.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/core/modal.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/core/boot.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/online/v1/v1_room_identity.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/online/v1/v1_resume_room.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/online/v1/v1_room_state.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/online/v1/v1_player_state_renderer.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/online/v1/v1_round_result_renderer.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/online/v1/v1_history_renderer.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/online/v1/v1_room_detail_settings.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/pages/v1/v1_room_detail_data.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/pages/account_modal.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/pages/admin_users_modal.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/pages/v1/v1_room_detail_page.js') }}"></script>
+    <script>
+        if (!window.SessionUtils || !window.SessionUtils.isLoggedIn()) {
+            window.location.href = "/v1/login";
+        } else {
+            var btn = document.getElementById("header-account-btn");
+            if (btn) {
+                var user = window.SessionUtils.getSessionUser();
+                if (user) {
+                    btn.textContent = user.username;
+                    btn.addEventListener("click", function () {
+                        window.location.href = "/v1/user/" + user.uid;
+                    });
+                }
+            }
+            if (typeof window.initRoomDetailPage === "function") { window.initRoomDetailPage(); }
+        }
+    </script>
+
+    <div class="settling-mask" id="settling-mask">
+        <div class="settling-card">
+            <div class="spinner"></div>
+            <div style="font-size: 18px; font-weight: bold; margin-bottom: 6px;">正在结算</div>
+            <div class="muted">双方动作已提交，正在同步本回合结果……</div>
+        </div>
+    </div>
+
+    <div class="modal-mask" id="game-finish-mask" style="z-index: 1001;">
+        <div class="modal-card" style="text-align: center;">
+            <div class="modal-title" id="game-finish-title">对局结束</div>
+            <div class="modal-body" id="game-finish-subtitle">
+                本局已经结束。
+            </div>
+            <div class="result-chip-row" id="game-finish-chip-row"></div>
+            <div class="modal-actions center">
+                <button type="button" id="finish-reset-btn">再来一局</button>
+                <button type="button" class="danger" id="finish-back-btn">退出房间</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-mask" id="settings-mask" style="z-index: 1002;">
+        <div class="modal-card">
+            <div class="modal-title">房间设置</div>
+
+            <div class="settings-group">
+                <div class="settings-group-title">界面显示</div>
+
+                <div class="settings-item">
+                    <label for="toggle-room-info">显示房间信息</label>
+                    <input type="checkbox" id="toggle-room-info" />
+                </div>
+
+                <div class="settings-item">
+                    <label for="toggle-room-status">显示房间状态</label>
+                    <input type="checkbox" id="toggle-room-status" />
+                </div>
+
+                <div class="settings-item">
+                    <label for="toggle-invite-section">显示邀请好友</label>
+                    <input type="checkbox" id="toggle-invite-section" />
+                </div>
+
+                <div class="settings-item">
+                    <label for="toggle-round-result">显示本回合结果</label>
+                    <input type="checkbox" id="toggle-round-result" />
+                </div>
+
+                <div class="settings-item">
+                    <label for="toggle-history-section">显示历史记录</label>
+                    <input type="checkbox" id="toggle-history-section" />
+                </div>
+
+                <div class="settings-item">
+                    <label for="toggle-move-subtitles">显示动作分组副标题</label>
+                    <input type="checkbox" id="toggle-move-subtitles" />
+                </div>
+            </div>
+
+            <div class="settings-group">
+                <div class="settings-group-title">当前状态显示方式</div>
+
+                <div class="settings-item">
+                    <label for="player-state-mode-select">状态显示模式</label>
+                    <select id="player-state-mode-select" class="settings-select">
+                        <option value="compact" selected>精简模式</option>
+                        <option value="full">完整模式</option>
+                    </select>
+                </div>
+
+                <div class="settings-item">
+                    <label for="reveal-advance-mode-select">回合展示</label>
+                    <select id="reveal-advance-mode-select" class="settings-select">
+                        <option value="auto" selected>自动模式</option>
+                        <option value="manual">手动模式</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="modal-actions">
+                <button type="button" class="secondary" id="close-settings-btn">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-mask" id="help-mask" style="z-index: 1003;">
+        <div class="modal-card large">
+            <div class="modal-title">房间帮助</div>
+
+            <div class="help-section">
+                <div class="help-section-title">按键操作</div>
+                <div class="keyboard-legend">
+                    <div class="kbd-row">
+                        <div class="kbd-group-label">锦囊</div>
+                        <div class="kbd-keys">
+                            <kbd>1</kbd><span class="kbd-label">你吃</span>
+                            <kbd>2</kbd><span class="kbd-label">双吃</span>
+                            <kbd>3</kbd><span class="kbd-label">闪</span>
+                            <kbd>4</kbd><span class="kbd-label">镐</span>
+                        </div>
+                    </div>
+                    <div class="kbd-row">
+                        <div class="kbd-group-label">资源/防御</div>
+                        <div class="kbd-keys">
+                            <kbd>Q</kbd><span class="kbd-label">气</span>
+                            <kbd>W</kbd><span class="kbd-label">盾</span>
+                            <kbd>E</kbd><span class="kbd-label">十字</span>
+                            <kbd>R</kbd><span class="kbd-label">八卦</span>
+                        </div>
+                    </div>
+                    <div class="kbd-row">
+                        <div class="kbd-group-label">气系攻击</div>
+                        <div class="kbd-keys">
+                            <kbd>A</kbd><span class="kbd-label">gi</span>
+                            <kbd>S</kbd><span class="kbd-label">破</span>
+                            <kbd>D</kbd><span class="kbd-label">冷锋</span>
+                            <kbd>F</kbd><span class="kbd-label">如来</span>
+                            <kbd>G</kbd><span class="kbd-label">黑洞</span>
+                        </div>
+                    </div>
+                    <div class="kbd-row">
+                        <div class="kbd-group-label">盾系攻击</div>
+                        <div class="kbd-keys">
+                            <kbd>Z</kbd><span class="kbd-label">Fire</span>
+                            <kbd>X</kbd><span class="kbd-label">闪电</span>
+                            <kbd>C</kbd><span class="kbd-label">烈焰</span>
+                            <kbd>V</kbd><span class="kbd-label">Shining</span>
+                        </div>
+                    </div>
+                </div>
+                <p style="margin-top:10px;">· Enter：确认已选择动作 &nbsp;· Backspace：取消/撤回 &nbsp;· Esc：关闭弹窗</p>
+            </div>
+
+            <div class="help-section">
+                <div class="help-section-title">大致规则</div>
+                <p>· 每回合双方各选择一个动作，双方都确认后统一结算。</p>
+                <p>· 资源动作主要用于获得气、盾等后续行动所需资源。</p>
+                <p>· 攻击动作会消耗已有资源并对对方造成伤害。</p>
+                <p>· 防御与锦囊动作会根据规则在不同对局中起到抵挡、转化或特殊效果。</p>
+                <p>· 任意一方生命值降到 0 或以下时，对局结束。</p>
+            </div>
+
+            <div class="modal-actions">
+                <button type="button" class="secondary" id="close-help-btn">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-mask" id="global-modal-mask" style="z-index: 1100;">
+        <div class="modal-card" id="global-modal-card">
+            <div class="modal-icon" id="global-modal-icon" style="display: none;"></div>
+            <div class="modal-title" id="global-modal-title"></div>
+            <div class="modal-body" id="global-modal-body"></div>
+            <div class="modal-actions" id="global-modal-actions"></div>
+        </div>
+    </div>
+</body>
+</html>
+

@@ -4,15 +4,15 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>ClapClap 2.0 本地模拟</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/v2_local.css') }}" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/v2/v2_local.css') }}" />
     <link rel="stylesheet" href="{{ url_for('static', filename='css/auth.css') }}" />
 </head>
 <body>
 <div class="container">
     <div class="page-top-shell">
-        <a class="page-version-chip" href="/local" title="切换到 1.0 双人版">1.0</a>
+        <a class="page-version-chip" href="/v1/local" title="切换到 1.0 双人版">1.0</a>
         <div class="header-actions">
-            <a class="header-account-btn" href="/rules/2.0">规则界面</a>
+            <a class="header-account-btn" href="/v2/rules">规则界面</a>
             <button class="header-account-btn" id="header-admin-btn" style="display:none;">查看用户</button>
             <button class="header-account-btn" id="header-account-btn">账号</button>
             <button class="header-account-btn danger" id="header-logout-btn">退出登录</button>
@@ -197,9 +197,9 @@
     <script src="{{ url_for('static', filename='js/core/modal.js') }}"></script>
     <script src="{{ url_for('static', filename='js/pages/account_modal.js') }}"></script>
     <script src="{{ url_for('static', filename='js/pages/admin_users_modal.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/pages/v2_local_data.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/pages/v2_local_ui.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/pages/v2_local.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/pages/v2/v2_local_data.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/pages/v2/v2_local_ui.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/pages/v2/v2_local.js') }}"></script>
     <script>
         var btn = document.getElementById("header-account-btn");
         if (btn) {
@@ -207,7 +207,7 @@
             if (user) {
                 btn.textContent = user.username;
                 btn.addEventListener("click", function () {
-                    window.location.href = "/user/" + user.uid;
+                    window.location.href = "/v2/user/" + user.uid;
                 });
             }
         }

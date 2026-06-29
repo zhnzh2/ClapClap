@@ -17,7 +17,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum
 
-from app.constants import (
+from app.v2.constants import (
     INITIAL_BATTERY,
     INITIAL_HP,
     INITIAL_PICKAXE,

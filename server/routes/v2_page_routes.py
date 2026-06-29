@@ -19,7 +19,7 @@ def v2_local():
     return render_template("v2/local.html")
 
 
-@v2_page_bp.get("/rules/2.0")
+@v2_page_bp.get("/v2/rules")
 def rules_2_0():
     return render_template("rule.html", version="2.0")
 
@@ -56,3 +56,9 @@ def v2_match():
 def v2_record_page(battle_id: str):
     """2.0 对局回放页面。"""
     return render_template("v2/record.html", battle_id=battle_id)
+
+
+@v2_page_bp.get("/v2/user/<int:uid>")
+def v2_user_page(uid: int):
+    """用户主页在 v2 路径下的入口。"""
+    return render_template("v2/user.html", uid=uid)

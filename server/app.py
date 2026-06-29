@@ -10,9 +10,9 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from app.matchmaking import load_match_state
+from app.v1.matchmaking import load_match_state
 from app.v2.matchmaking import load_match_state_v2
-from app.room_manager import load_rooms_from_storage
+from app.v1.room_manager import load_rooms_from_storage
 from app.v2.room_manager import load_rooms_v2_from_storage
 from app.storage import init_storage
 from app.users import ensure_admin_account

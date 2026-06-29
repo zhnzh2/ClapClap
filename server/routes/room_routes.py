@@ -14,7 +14,7 @@ from server.auth_middleware import require_auth, get_current_username
 room_bp = Blueprint("room", __name__)
 
 
-@room_bp.post("/api/rooms")
+@room_bp.post("/v1/api/rooms")
 @require_auth
 def api_create_room():
     player_name = get_current_username()
@@ -26,7 +26,7 @@ def api_create_room():
     return jsonify(result)
 
 
-@room_bp.post("/api/rooms/<room_id>/join")
+@room_bp.post("/v1/api/rooms/<room_id>/join")
 @require_auth
 def api_join_room(room_id: str):
     player_name = get_current_username()
@@ -37,14 +37,14 @@ def api_join_room(room_id: str):
         return jsonify({"ok": False, "error": str(exc)}), 400
 
 
-@room_bp.get("/api/rooms/<room_id>")
+@room_bp.get("/v1/api/rooms/<room_id>")
 def api_get_room(room_id: str):
     player_token = request.args.get("player_token", type=str)
     result, status_code = get_room_service(room_id, player_token)
     return jsonify(result), status_code
 
 
-@room_bp.post("/api/rooms/<room_id>/step")
+@room_bp.post("/v1/api/rooms/<room_id>/step")
 def api_room_step(room_id: str):
     data = request.get_json(silent=True)
     if data is None:
@@ -67,7 +67,7 @@ def api_room_step(room_id: str):
     return jsonify(result), status_code
 
 
-@room_bp.post("/api/rooms/<room_id>/reset")
+@room_bp.post("/v1/api/rooms/<room_id>/reset")
 def api_room_reset(room_id: str):
     data = request.get_json(silent=True)
     if data is None:
@@ -80,7 +80,7 @@ def api_room_reset(room_id: str):
     result, status_code = reset_room_service(room_id, player_token.strip())
     return jsonify(result), status_code
 
-@room_bp.post("/api/rooms/<room_id>/cancel-step")
+@room_bp.post("/v1/api/rooms/<room_id>/cancel-step")
 def api_room_cancel_step(room_id: str):
     data = request.get_json(silent=True)
     if data is None:
@@ -93,7 +93,7 @@ def api_room_cancel_step(room_id: str):
     result, status_code = cancel_room_move_service(room_id, player_token.strip())
     return jsonify(result), status_code
 
-@room_bp.post("/api/rooms/<room_id>/leave")
+@room_bp.post("/v1/api/rooms/<room_id>/leave")
 def api_leave_room(room_id: str):
     data = request.get_json(silent=True)
     if data is None:

@@ -5,6 +5,8 @@ import unittest
 from uuid import uuid4
 
 from app import battle_recorder, users
+from app.v2 import matchmaking as matchmaking_v2
+from app.v2.room_manager import ROOMS_V2, create_room_v2, get_room_v2
 from server.app import app
 
 
@@ -34,14 +36,14 @@ class TestUserFeatures(unittest.TestCase):
         headers = {"X-Session-Token": token}
 
         missing = self.client.post(
-            "/api/auth/update",
+            "/v1/api/auth/update",
             json={"password": "new-password", "confirm_password": "new-password"},
             headers=headers,
         )
         self.assertEqual(missing.status_code, 400)
 
         wrong = self.client.post(
-            "/api/auth/update",
+            "/v1/api/auth/update",
             json={
                 "current_password": "wrong-password",
                 "password": "new-password",
@@ -53,7 +55,7 @@ class TestUserFeatures(unittest.TestCase):
         self.assertTrue(users.verify_password(user["uid"], "old-password"))
 
         changed = self.client.post(
-            "/api/auth/update",
+            "/v1/api/auth/update",
             json={
                 "current_password": "old-password",
                 "password": "new-password",
@@ -67,7 +69,7 @@ class TestUserFeatures(unittest.TestCase):
     def test_invalid_password_does_not_partially_update_username(self):
         user, token = self._register_and_login("atomic-update")
         response = self.client.post(
-            "/api/auth/update",
+            "/v1/api/auth/update",
             json={
                 "username": "should-not-stick",
                 "current_password": "old-password",
@@ -98,6 +100,34 @@ class TestUserFeatures(unittest.TestCase):
         self.assertIsNotNone(battle_recorder.read_battle(first_id))
         self.assertIsNotNone(battle_recorder.read_battle(renamed_id))
 
+    def test_delete_user_cleans_v2_rooms_and_match_state(self):
+        user, _ = self._register_and_login("delete-v2-user")
+        room, _, _ = create_room_v2(user["username"], public=True)
+        player_token = "cleanup-v2-token-" + uuid4().hex[:8]
+
+        with matchmaking_v2.MATCH_LOCK_V2:
+            matchmaking_v2.MATCH_QUEUE_V2.append(matchmaking_v2.WaitingPlayerV2(
+                player_name=user["username"],
+                player_token=player_token,
+                preferred_players=4,
+            ))
+            matchmaking_v2.PLAYER_MATCH_STATE_V2[player_token] = {
+                "status": "queued",
+                "player_name": user["username"],
+                "preferred_players": 4,
+                "joined_at": datetime.now(timezone.utc).isoformat(),
+            }
+
+        self.assertIn(room.room_id, ROOMS_V2)
+        users.delete_user(user["uid"])
+
+        self.assertIsNone(get_room_v2(room.room_id))
+        self.assertNotIn(player_token, matchmaking_v2.PLAYER_MATCH_STATE_V2)
+        self.assertFalse(any(
+            waiting.player_name == user["username"]
+            for waiting in matchmaking_v2.MATCH_QUEUE_V2
+        ))
+
     def test_battle_list_is_paginated(self):
         user, token = self._register_and_login("history-user")
         opponent, _ = self._register_and_login("history-opponent")
@@ -110,7 +140,7 @@ class TestUserFeatures(unittest.TestCase):
             self.battle_ids.add(battle_recorder._timestamp_name(moment))
 
         response = self.client.get(
-            f"/api/user/{user['uid']}/battles?limit=2&offset=1",
+            f"/v1/api/user/{user['uid']}/battles?limit=2&offset=1",
             headers={"X-Session-Token": token},
         )
         self.assertEqual(response.status_code, 200)
@@ -246,7 +276,7 @@ class TestUserFeatures(unittest.TestCase):
         battle_recorder.end_battle(battle_id, "p1")
 
         response = self.client.get(
-            f"/api/user/{alice['uid']}/battles",
+            f"/v1/api/user/{alice['uid']}/battles",
             headers={"X-Session-Token": token},
         )
         self.assertEqual(response.status_code, 200)

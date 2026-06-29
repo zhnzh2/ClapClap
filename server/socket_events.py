@@ -1,8 +1,8 @@
 from flask_socketio import emit, join_room as socket_join_room
 
-from app.room_manager import get_room, get_room_runtime_lock
-from app.state_api import get_room_payload
-from app.matchmaking import get_match_status
+from app.v1.room_manager import get_room, get_room_runtime_lock
+from app.v1.state_api import get_room_payload
+from app.v1.matchmaking import get_match_status
 from app.battle_recorder import record_chat
 from server.extensions import socketio
 

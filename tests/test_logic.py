@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import unittest
 
-from app.constants import Move
-from app.game import GameEngine
-from app.matchmaking import PLAYER_MATCH_STATE, pop_player_match_result
-from app.models import GameState
+from app.v1.constants import Move
+from app.v1.game import GameEngine
+from app.v1.matchmaking import PLAYER_MATCH_STATE, pop_player_match_result
+from app.v1.models import GameState
 
 
 class TestClapClapLogic(unittest.TestCase):

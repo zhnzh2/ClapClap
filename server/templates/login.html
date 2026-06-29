@@ -100,6 +100,9 @@
     <script src="{{ url_for('static', filename='js/core/storage.js') }}"></script>
     <script src="{{ url_for('static', filename='js/core/session.js') }}"></script>
     <script src="{{ url_for('static', filename='js/core/api.js') }}"></script>
+    <script>
+        window.CLAPCLAP_VERSION = "{{ version|default('v1') }}";
+    </script>
     <script src="{{ url_for('static', filename='js/pages/login_page.js') }}"></script>
     <script>if (typeof window.initLoginPage === "function") { window.initLoginPage(); }</script>
 </body>

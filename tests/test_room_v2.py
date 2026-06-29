@@ -558,11 +558,11 @@ class TestRoomV2ProtocolPayload:
         from server.app import app
 
         rules = {rule.rule for rule in app.url_map.iter_rules()}
-        assert "/api/v2/rooms/<room_id>/decision" in rules
-        assert "/api/v2/rooms/<room_id>/decisions" in rules
+        assert "/v2/api/rooms/<room_id>/decision" in rules
+        assert "/v2/api/rooms/<room_id>/decisions" in rules
 
         client = app.test_client()
-        response = client.get("/api/v2/rooms/NOEXIST/decisions")
+        response = client.get("/v2/api/rooms/NOEXIST/decisions")
         assert response.status_code == 404
         assert response.get_json()["error_code"] == "ROOM_NOT_FOUND"
 
@@ -590,7 +590,7 @@ class TestRoomV2ProtocolPayload:
         ]
 
         client = app.test_client()
-        public_response = client.get(f"/api/v2/rooms/{room.room_id}/decisions")
+        public_response = client.get(f"/v2/api/rooms/{room.room_id}/decisions")
         public_data = public_response.get_json()
         assert public_response.status_code == 200
         assert public_data["decision_requests"] == []
@@ -598,7 +598,7 @@ class TestRoomV2ProtocolPayload:
         assert "options" not in public_data["decision_requests_summary"][0]
 
         own_response = client.get(
-            f"/api/v2/rooms/{room.room_id}/decisions",
+            f"/v2/api/rooms/{room.room_id}/decisions",
             query_string={"player_token": tok1},
         )
         own_data = own_response.get_json()
@@ -607,7 +607,7 @@ class TestRoomV2ProtocolPayload:
         assert own_data["decision_requests"][0]["options"][0]["option_id"] == "p2"
 
         invalid_response = client.get(
-            f"/api/v2/rooms/{room.room_id}/decisions",
+            f"/v2/api/rooms/{room.room_id}/decisions",
             query_string={"player_token": "bad-token"},
         )
         assert invalid_response.status_code == 403

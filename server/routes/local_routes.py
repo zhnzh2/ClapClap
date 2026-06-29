@@ -1,23 +1,21 @@
 from flask import Blueprint, jsonify, request
 
-from app.game import GameEngine
-from app.state_api import get_game_state_payload, parse_move_name
+from app.v1.game import GameEngine
+from app.v1.state_api import get_game_state_payload, parse_move_name
 from app.battle_recorder import create_battle, record_round, end_battle
 import server.runtime as runtime
 
 local_bp = Blueprint("local", __name__)
 
 
-@local_bp.get("/state")
-@local_bp.get("/api/local/state")
+@local_bp.get("/v1/api/local/state")
 def get_state():
     with runtime.CURRENT_STATE_LOCK:
         payload = get_game_state_payload(runtime.CURRENT_STATE, include_history=True)
     return jsonify(payload)
 
 
-@local_bp.post("/reset")
-@local_bp.post("/api/local/reset")
+@local_bp.post("/v1/api/local/reset")
 def reset_game():
     with runtime.CURRENT_STATE_LOCK:
         runtime.CURRENT_STATE = runtime.CURRENT_STATE.__class__()
@@ -32,8 +30,7 @@ def reset_game():
     )
 
 
-@local_bp.post("/step")
-@local_bp.post("/api/local/step")
+@local_bp.post("/v1/api/local/step")
 def step_game():
     data = request.get_json(silent=True)
     if data is None:
@@ -97,14 +94,3 @@ def step_game():
             "state": payload,
         }
     )
-
-
-@local_bp.get("/health")
-def health_check():
-    return jsonify(
-        {
-            "ok": True,
-            "message": "ClapClap server is running."
-        }
-    )
-

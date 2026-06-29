@@ -22,7 +22,7 @@ import requests
 def _guest_login(server: str) -> tuple[requests.Session, dict, str]:
     """访客登录，返回 (session, user, token)。"""
     sess = requests.Session()
-    resp = sess.post(f"{server}/api/auth/guest", json={})
+    resp = sess.post(f"{server}/v2/api/auth/guest", json={})
     data = resp.json()
     assert data.get("ok"), f"访客登录失败: {data}"
     token = data["session_token"]
@@ -32,7 +32,7 @@ def _guest_login(server: str) -> tuple[requests.Session, dict, str]:
 
 def _create_room(server: str, auth_sess: requests.Session, max_players: int = 4) -> tuple[str, str]:
     """创建 v2 房间，返回 (room_id, player_token)。"""
-    resp = auth_sess.post(f"{server}/api/v2/rooms", json={
+    resp = auth_sess.post(f"{server}/v2/api/rooms", json={
         "max_players": max_players,
         "min_players": 2,
         "start_condition": "host",
@@ -50,14 +50,14 @@ def _join_room(server: str, auth_sess: requests.Session, room_id: str,
     body = {"as_spectator": False}
     if seat_index is not None:
         body["seat_index"] = seat_index
-    resp = auth_sess.post(f"{server}/api/v2/rooms/{room_id}/join", json=body)
+    resp = auth_sess.post(f"{server}/v2/api/rooms/{room_id}/join", json=body)
     data = resp.json()
     assert data.get("ok"), f"加入房间失败: {data}"
     return data["player_token"]
 
 
 def _ready_up(server: str, room_id: str, player_token: str) -> None:
-    resp = requests.post(f"{server}/api/v2/rooms/{room_id}/ready", json={
+    resp = requests.post(f"{server}/v2/api/rooms/{room_id}/ready", json={
         "player_token": player_token, "ready": True,
     })
     data = resp.json()
@@ -65,7 +65,7 @@ def _ready_up(server: str, room_id: str, player_token: str) -> None:
 
 
 def _start_game(server: str, room_id: str, player_token: str) -> None:
-    resp = requests.post(f"{server}/api/v2/rooms/{room_id}/start", json={
+    resp = requests.post(f"{server}/v2/api/rooms/{room_id}/start", json={
         "player_token": player_token,
     })
     data = resp.json()
@@ -73,7 +73,7 @@ def _start_game(server: str, room_id: str, player_token: str) -> None:
 
 
 def _submit_move(server: str, room_id: str, player_token: str, move_name: str) -> dict:
-    resp = requests.post(f"{server}/api/v2/rooms/{room_id}/step", json={
+    resp = requests.post(f"{server}/v2/api/rooms/{room_id}/step", json={
         "player_token": player_token,
         "move_name": move_name,
     })
@@ -84,7 +84,7 @@ def _submit_move(server: str, room_id: str, player_token: str, move_name: str) -
 
 def _handle_decisions(server: str, room_id: str, player_token: str) -> dict:
     """如果结算需要决策，自动用默认值提交。"""
-    resp = requests.get(f"{server}/api/v2/rooms/{room_id}/decisions",
+    resp = requests.get(f"{server}/v2/api/rooms/{room_id}/decisions",
                         params={"player_token": player_token})
     data = resp.json()
     if not data.get("ok") or not data.get("decision_requests"):
@@ -106,7 +106,7 @@ def _handle_decisions(server: str, room_id: str, player_token: str) -> dict:
         else:
             decisions[pid] = valid[0].get("option_id", "") if valid else ""
 
-    resp = requests.post(f"{server}/api/v2/rooms/{room_id}/decision", json={
+    resp = requests.post(f"{server}/v2/api/rooms/{room_id}/decision", json={
         "player_token": player_token,
         "decisions": decisions,
     })
@@ -114,7 +114,7 @@ def _handle_decisions(server: str, room_id: str, player_token: str) -> dict:
 
 
 def _get_room_state(server: str, room_id: str) -> dict:
-    resp = requests.get(f"{server}/api/v2/rooms/{room_id}")
+    resp = requests.get(f"{server}/v2/api/rooms/{room_id}")
     return resp.json()
 
 
@@ -178,7 +178,7 @@ class TestV2RoomLifecycleE2E:
         assert "2.0 对局回放" in resp.text, "回放页应包含标题"
 
         # ── 验证回放 API 返回完整数据 ──
-        resp = sess_a.get(f"{server}/api/battles/{battle_id}")
+        resp = sess_a.get(f"{server}/v2/api/battles/{battle_id}")
         battle_data = resp.json()
         assert battle_data.get("ok"), f"回放 API 失败: {battle_data}"
         battle = battle_data["battle"]
@@ -255,7 +255,7 @@ class TestV2RoomLifecycleE2E:
         assert battle_id, "应对战结束有 battle_id"
 
         # 验证回放 API 数据结构
-        resp = sess_a.get(f"{server}/api/battles/{battle_id}")
+        resp = sess_a.get(f"{server}/v2/api/battles/{battle_id}")
         battle = resp.json()["battle"]
 
         rounds = battle.get("rounds", [])
@@ -282,7 +282,7 @@ class TestV2RoomLifecycleE2E:
         room_id, token_a = _create_room(server, sess_a, max_players=2)
         token_b = _join_room(server, sess_b, room_id)
         # 观战者加入
-        resp = sess_spect.post(f"{server}/api/v2/rooms/{room_id}/join",
+        resp = sess_spect.post(f"{server}/v2/api/rooms/{room_id}/join",
                                json={"as_spectator": True})
         data = resp.json()
         assert data.get("ok"), f"观战加入失败: {data}"

@@ -7,7 +7,7 @@ ClapClap 2.0 状态 API — 生成房间和对局状态载荷。
 
 from __future__ import annotations
 
-from app.constants import ATTACK_MOVES, DEFENSE_MOVES, Move, RESOURCE_MOVES, TRICK_MOVES
+from app.v2.constants import ATTACK_MOVES, DEFENSE_MOVES, Move, RESOURCE_MOVES, TRICK_MOVES
 from app.v2.constants import SPEED_LAYER_NAMES
 from app.v2.game import GameEngineV2
 from app.v2.models import (

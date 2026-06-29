@@ -8,7 +8,7 @@ ClapClap 2.0 本地模拟对战 API。
 
 from flask import Blueprint, jsonify, request
 
-from app.constants import Move
+from app.v2.constants import Move
 from app.v2.constants import (
     DECISION_TYPE_CONFLICT_RESOLVE,
     DECISION_TYPE_TARGET_SELECT,
@@ -121,7 +121,7 @@ def _auto_advance(engine: GameEngineV2, result) -> dict:
 # 获取状态
 # ═══════════════════════════════════════════════════════════════
 
-@v2_local_bp.get("/api/v2/local/state")
+@v2_local_bp.get("/v2/api/local/state")
 def get_state():
     """获取当前 v2 对局状态。"""
     with runtime.CURRENT_STATE_V2_LOCK:
@@ -138,7 +138,7 @@ def get_state():
 # 重置/开始新对局
 # ═══════════════════════════════════════════════════════════════
 
-@v2_local_bp.post("/api/v2/local/reset")
+@v2_local_bp.post("/v2/api/local/reset")
 def reset_game():
     """创建新对局。
 
@@ -174,7 +174,7 @@ def reset_game():
 # 提交动作 + 开始结算
 # ═══════════════════════════════════════════════════════════════
 
-@v2_local_bp.post("/api/v2/local/step")
+@v2_local_bp.post("/v2/api/local/step")
 def step_game():
     """提交所有玩家的动作，开始步进式结算。
 
@@ -262,7 +262,7 @@ def step_game():
 # 提交决策 + 继续结算
 # ═══════════════════════════════════════════════════════════════
 
-@v2_local_bp.post("/api/v2/local/decision")
+@v2_local_bp.post("/v2/api/local/decision")
 def submit_decision():
     """提交决策，继续结算。
 

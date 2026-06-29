@@ -3,6 +3,10 @@
  * 调用 window.AdminUsersModal.open() 打开。
  */
 (function () {
+    function _apiUrl(path) {
+        var versionPrefix = window.location.pathname.indexOf("/v2") === 0 ? "/v2" : "/v1";
+        return versionPrefix + "/api" + path;
+    }
 
     function open() {
         var user = window.SessionUtils ? window.SessionUtils.getSessionUser() : null;
@@ -10,7 +14,7 @@
             return;
         }
 
-        ApiUtils.apiGet("/api/admin/users").then(function (result) {
+        ApiUtils.apiGet(_apiUrl("/admin/users")).then(function (result) {
             if (!result.ok) {
                 if (typeof ModalUtils !== "undefined") {
                     ModalUtils.showInfoModal({
@@ -205,7 +209,7 @@
     }
 
     function _doVerify(uid, btn, mask) {
-        ApiUtils.apiPost("/api/admin/verify/" + uid, {}).then(function (result) {
+        ApiUtils.apiPost(_apiUrl("/admin/verify/" + uid), {}).then(function (result) {
             if (result.ok) {
                 btn.remove();
                 _updateVerifiedCell(mask, uid);
@@ -220,7 +224,7 @@
     }
 
     function _doDelete(uid, mask) {
-        ApiUtils.apiPost("/api/admin/delete/" + uid, {}).then(function (result) {
+        ApiUtils.apiPost(_apiUrl("/admin/delete/" + uid), {}).then(function (result) {
             if (result.ok) {
                 _removeTableRow(mask, uid);
             } else {
@@ -359,7 +363,7 @@
                 showIfAdmin(user);
             } else {
                 if (window.ApiUtils) {
-                    ApiUtils.apiGet("/api/auth/me").then(function (result) {
+                    ApiUtils.apiGet(_apiUrl("/auth/me")).then(function (result) {
                         if (result.ok && result.data.user) {
                             var token = SessionUtils.getSessionToken();
                             SessionUtils.saveSession(token, result.data.user);

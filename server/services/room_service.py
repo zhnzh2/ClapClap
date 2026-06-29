@@ -1,16 +1,16 @@
 from __future__ import annotations
 
-from app.game import GameEngine
+from app.v1.game import GameEngine
 from app.v2.game import GameEngineV2
-from app.room_manager import (
+from app.v1.room_manager import (
     create_room,
     get_room,
     join_room as room_join_room,
     get_room_runtime_lock,
     delete_room_by_id,
 )
-from app.state_api import get_room_payload, parse_move_name
-from app.matchmaking import clear_match_state_by_room
+from app.v1.state_api import get_room_payload, parse_move_name
+from app.v1.matchmaking import clear_match_state_by_room
 from app.battle_recorder import create_battle, record_round, end_battle
 from server.runtime import run_periodic_cleanup
 from server.socket_events import emit_room_state

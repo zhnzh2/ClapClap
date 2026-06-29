@@ -39,16 +39,32 @@ def test_v1_and_v2_page_routes_are_parallel_not_shadowed():
     rules = {rule.rule for rule in app.url_map.iter_rules()}
 
     assert "/" in rules
-    assert "/local" in rules
-    assert "/rooms" in rules
-    assert "/match" in rules
-    assert "/record/<battle_id>" in rules
+    assert "/v1/local" in rules
+    assert "/v1/rooms" in rules
+    assert "/v1/match" in rules
+    assert "/v1/record/<battle_id>" in rules
 
     assert "/v2" in rules
     assert "/v2/local" in rules
     assert "/v2/rooms" in rules
     assert "/v2/match" in rules
     assert "/v2/record/<battle_id>" in rules
+
+
+def test_root_redirects_to_v1_and_auth_redirects_stay_versioned():
+    client = app.test_client()
+
+    root_response = client.get("/", follow_redirects=False)
+    assert root_response.status_code == 302
+    assert root_response.headers["Location"] == "/v1"
+
+    legacy_login = client.get("/login", follow_redirects=False)
+    assert legacy_login.status_code == 302
+    assert legacy_login.headers["Location"] == "/v1/login"
+
+    v2_api_response = client.get("/v2/api/auth/me")
+    assert v2_api_response.status_code == 401
+    assert v2_api_response.get_json()["redirect"] == "/v2/login"
 
 
 def test_release_data_validator_accepts_legacy_v1_and_full_v2_records():

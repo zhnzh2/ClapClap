@@ -2,6 +2,10 @@ window.STORAGE_KEYS = {
     SERVER_BOOT_ID: "clapclap_server_boot_id",
     MATCH_IDENTITY: "clapclap_match_identity",
     MATCH_STATE: "clapclap_match_state",
+    V2_MATCH_STATE: "clapclap_v2_match_state",
+    V1_UI_SETTINGS: "clapclap_ui_settings_v2",
+    V2_UI_SETTINGS: "clapclap_v2_ui_settings",
+    V2_ROOM_UI_SETTINGS: "clapclap_v2_room_ui_settings",
 
     roomIdentity(roomId) {
         return `clapclap_room_${roomId}`;
@@ -62,8 +66,14 @@ function clearAllClapClapStorage() {
             key === STORAGE_KEYS.SERVER_BOOT_ID ||
             key === STORAGE_KEYS.MATCH_IDENTITY ||
             key === STORAGE_KEYS.MATCH_STATE ||
+            key === STORAGE_KEYS.V2_MATCH_STATE ||
+            key === STORAGE_KEYS.V1_UI_SETTINGS ||
+            key === STORAGE_KEYS.V2_UI_SETTINGS ||
+            key === STORAGE_KEYS.V2_ROOM_UI_SETTINGS ||
             key.startsWith("clapclap_room_") ||
-            key.startsWith("clapclap_room_ui_settings_")
+            key.startsWith("clapclap_room_ui_settings_") ||
+            key.startsWith("clapclap_v2_room_") ||
+            key.startsWith("clapclap_v2_room_ui_settings")
         ) {
             keysToDelete.push(key);
         }

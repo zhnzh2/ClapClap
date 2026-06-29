@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import unittest
 
-from app.constants import Move
+from app.v1.constants import Move
 from app.v2.constants import (
     DEATH_BOOM_PICKAXE,
     DEATH_BOOM_RESOURCE,

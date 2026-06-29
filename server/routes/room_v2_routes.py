@@ -2,7 +2,7 @@
 ClapClap 2.0 房间 API 路由。
 
 与 1.0 (server/routes/room_routes.py) 完全独立。
-路由前缀: /api/v2/rooms
+路由前缀: /v2/api/rooms
 """
 
 from flask import Blueprint, jsonify, request
@@ -30,7 +30,7 @@ room_v2_bp = Blueprint("room_v2", __name__)
 # 公开房间列表
 # ═══════════════════════════════════════════════════════
 
-@room_v2_bp.get("/api/v2/rooms")
+@room_v2_bp.get("/v2/api/rooms")
 def api_list_public_rooms_v2():
     """列出所有公开的 v2 房间。支持筛选参数。"""
     status_filter = request.args.get("status", type=str)
@@ -55,7 +55,7 @@ def api_list_public_rooms_v2():
 # 创建房间
 # ═══════════════════════════════════════════════════════
 
-@room_v2_bp.post("/api/v2/rooms")
+@room_v2_bp.post("/v2/api/rooms")
 @require_auth
 def api_create_room_v2():
     """创建 2.0 多人房间。"""
@@ -111,7 +111,7 @@ def api_create_room_v2():
 # 加入房间
 # ═══════════════════════════════════════════════════════════
 
-@room_v2_bp.post("/api/v2/rooms/<room_id>/join")
+@room_v2_bp.post("/v2/api/rooms/<room_id>/join")
 @require_auth
 def api_join_room_v2(room_id: str):
     """加入 2.0 房间（参战或观战）。"""
@@ -140,7 +140,7 @@ def api_join_room_v2(room_id: str):
 # 获取房间状态
 # ═══════════════════════════════════════════════════════════
 
-@room_v2_bp.get("/api/v2/rooms/<room_id>")
+@room_v2_bp.get("/v2/api/rooms/<room_id>")
 def api_get_room_v2(room_id: str):
     """获取 2.0 房间状态。"""
     player_token = request.args.get("player_token", type=str)
@@ -152,7 +152,7 @@ def api_get_room_v2(room_id: str):
 # 准备
 # ═══════════════════════════════════════════════════════════
 
-@room_v2_bp.post("/api/v2/rooms/<room_id>/ready")
+@room_v2_bp.post("/v2/api/rooms/<room_id>/ready")
 def api_set_ready(room_id: str):
     """切换准备状态。"""
     data = request.get_json(silent=True)
@@ -175,7 +175,7 @@ def api_set_ready(room_id: str):
 # 更换席位
 # ═══════════════════════════════════════════════════════════
 
-@room_v2_bp.post("/api/v2/rooms/<room_id>/change-seat")
+@room_v2_bp.post("/v2/api/rooms/<room_id>/change-seat")
 def api_change_seat(room_id: str):
     """更换席位号（仅限 lobby 阶段）。"""
     data = request.get_json(silent=True)
@@ -198,7 +198,7 @@ def api_change_seat(room_id: str):
 # 开始对局
 # ═══════════════════════════════════════════════════════════
 
-@room_v2_bp.post("/api/v2/rooms/<room_id>/start")
+@room_v2_bp.post("/v2/api/rooms/<room_id>/start")
 def api_start_game(room_id: str):
     """房主发起开始对局。"""
     data = request.get_json(silent=True)
@@ -217,7 +217,7 @@ def api_start_game(room_id: str):
 # 提交动作
 # ═══════════════════════════════════════════════════════════
 
-@room_v2_bp.post("/api/v2/rooms/<room_id>/step")
+@room_v2_bp.post("/v2/api/rooms/<room_id>/step")
 def api_submit_move_v2(room_id: str):
     """提交本回合动作。"""
     data = request.get_json(silent=True)
@@ -244,7 +244,7 @@ def api_submit_move_v2(room_id: str):
 # 退出房间
 # ═══════════════════════════════════════════════════════════
 
-@room_v2_bp.post("/api/v2/rooms/<room_id>/leave")
+@room_v2_bp.post("/v2/api/rooms/<room_id>/leave")
 def api_leave_room_v2(room_id: str):
     """退出 2.0 房间。"""
     data = request.get_json(silent=True)
@@ -263,7 +263,7 @@ def api_leave_room_v2(room_id: str):
 # 重赛投票
 # ═══════════════════════════════════════════════════════════
 
-@room_v2_bp.post("/api/v2/rooms/<room_id>/rematch")
+@room_v2_bp.post("/v2/api/rooms/<room_id>/rematch")
 def api_rematch_vote(room_id: str):
     """重赛投票。"""
     data = request.get_json(silent=True)
@@ -286,7 +286,7 @@ def api_rematch_vote(room_id: str):
 # Step 6：提交结算决策
 # ═══════════════════════════════════════════════════════════════
 
-@room_v2_bp.post("/api/v2/rooms/<room_id>/decision")
+@room_v2_bp.post("/v2/api/rooms/<room_id>/decision")
 def submit_decision_v2(room_id: str):
     """提交结算中的决策（目标选择、冲突协商等）。
 
@@ -327,7 +327,7 @@ def submit_decision_v2(room_id: str):
 # Step 6：获取当前决策请求（方便前端轮询）
 # ═══════════════════════════════════════════════════════════════
 
-@room_v2_bp.get("/api/v2/rooms/<room_id>/decisions")
+@room_v2_bp.get("/v2/api/rooms/<room_id>/decisions")
 def get_pending_decisions_v2(room_id: str):
     """获取当前待处理的决策请求列表。
 

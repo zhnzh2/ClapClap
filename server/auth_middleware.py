@@ -39,13 +39,14 @@ def require_auth(f):
 
     @wraps(f)
     def decorated(*args, **kwargs):
+        login_path = "/v2/login" if request.path.startswith("/v2/") else "/v1/login"
         token = _extract_session_token()
         if not token:
-            return jsonify({"ok": False, "error": "请先登录。", "redirect": "/login"}), 401
+            return jsonify({"ok": False, "error": "请先登录。", "redirect": login_path}), 401
 
         user = get_user_by_session_token(token)
         if user is None:
-            return jsonify({"ok": False, "error": "登录已过期，请重新登录。", "redirect": "/login"}), 401
+            return jsonify({"ok": False, "error": "登录已过期，请重新登录。", "redirect": login_path}), 401
 
         g.current_user = user
         return f(*args, **kwargs)

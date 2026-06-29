@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ClapClap 1.0</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/v1/v1_local.css') }}" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/auth.css') }}" />
+</head>
+<body>
+<div class="container">
+    <div class="page-top-shell">
+        <a class="page-version-chip" href="/v2" title="切换到 2.0 多人版">2.0</a>
+        <div class="header-actions">
+            <a class="header-account-btn" href="/v1/rules">规则界面</a>
+            <button class="header-account-btn" id="header-admin-btn" style="display:none;">查看用户</button>
+            <button class="header-account-btn" id="header-account-btn">账号</button>
+            <button class="header-account-btn danger" id="header-logout-btn">退出登录</button>
+        </div>
+        <div class="page-title-block">
+            <h1>1.0 本地模拟对战</h1>
+            <p>网页原型版 · 双人同步出招</p>
+        </div>
+    </div>
+
+    <div class="page-mode-toolbar">
+        <div class="page-mode-toolbar-label">模式操作</div>
+        <div class="top-actions page-mode-toolbar-group">
+            <button class="action-btn secondary" id="settings-open-btn">设置</button>
+            <button class="action-btn secondary" id="help-open-btn">帮助</button>
+            <button class="action-btn" id="refresh-btn">刷新状态</button>
+            <button class="action-btn danger" id="reset-btn">重新开始</button>
+            <a class="action-btn secondary" href="/v1">返回大厅</a>
+        </div>
+    </div>
+
+    <div class="two-col">
+        <div class="card">
+            <h2>P1 资源</h2>
+            <div class="player-panel p1-theme">
+                <div id="p1-state" class="resource-grid"></div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>P2 资源</h2>
+            <div class="player-panel p2-theme">
+                <div id="p2-state" class="resource-grid"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>本回合出招</h2>
+
+        <div class="selection-layout">
+            <div class="move-side p1-side">
+                <h3>
+                    <span>P1 选择区</span>
+                    <span class="active-turn-tip" id="p1-turn-tip"></span>
+                </h3>
+                <div id="p1-move-groups"></div>
+            </div>
+
+            <div class="move-side p2-side">
+                <h3>
+                    <span>P2 选择区</span>
+                    <span class="active-turn-tip" id="p2-turn-tip"></span>
+                </h3>
+                <div id="p2-move-groups"></div>
+            </div>
+        </div>
+
+        <div class="submit-row">
+            <button class="action-btn primary" id="step-btn">提交本回合</button>
+            <button class="action-btn" id="clear-selection-btn">清空本回合选择</button>
+        </div>
+
+        <div class="selection-info-row">
+            <div id="p1-selection-box" class="selection-box muted">P1 当前未选择动作。</div>
+            <div id="p2-selection-box" class="selection-box muted">P2 当前未选择动作。</div>
+        </div>
+
+        <div id="message" class="message-box muted">页面已加载。</div>
+    </div>
+
+    <div class="card status-card">
+        <div id="basic-info" class="status-line"></div>
+    </div>
+
+    <div class="bottom-layout">
+        <div class="card" id="latest-round-card">
+            <h2>最近一回合结果</h2>
+            <div id="latest-round" class="muted">当前还没有回合记录。</div>
+        </div>
+
+        <div class="card" id="history-card">
+            <h2>历史记录</h2>
+            <div id="history" class="history-list"></div>
+        </div>
+    </div>
+</div>
+
+<div id="help-modal-mask" class="modal-mask">
+    <div class="modal">
+        <div class="modal-close-row">
+            <button class="action-btn" id="help-close-btn">关闭</button>
+        </div>
+
+        <h2>帮助</h2>
+
+        <div class="modal-section">
+            <h3>基本操作</h3>
+            <div>1. 在左右两边分别为 P1 和 P2 选择动作。</div>
+            <div>2. 被选中的动作会高亮显示。</div>
+            <div>3. 点击“提交本回合”后，后端会统一结算。</div>
+            <div>4. 点击“重新开始”可以重置游戏。</div>
+        </div>
+
+        <div class="modal-section">
+            <h3>键盘快捷操作</h3>
+            <div>· 锦囊：1 / 2 / 3 / 4</div>
+            <div>· 资源与防御：Q / W / E / R</div>
+            <div>· 气系攻击：A / S / D / F / G</div>
+            <div>· 盾系攻击：Z / X / C / V</div>
+            <div>· 默认先给 P1 选，P1 选完自动轮到 P2。</div>
+            <div>· Enter：双方都选完后提交；若结束弹窗打开，则快速重新开始。</div>
+            <div>· Backspace：撤销最后一次选择；若有弹窗打开，则关闭所有弹窗。</div>
+        </div>
+
+        <div class="modal-section">
+            <h3>当前实现约定</h3>
+            <div>· 双方都非法动作：双败。</div>
+            <div>· 烈焰优先消耗火种，否则消耗 4 盾。</div>
+            <div>· Shining 优先消耗电池，否则消耗 6 盾。</div>
+            <div>· 黑洞、Shining、双吃当前版本不拆分。</div>
+            <div>· 闪会完全退出本回合结算。</div>
+            <div>· gi 抢镐只在对方本回合出镐时触发。</div>
+        </div>
+    </div>
+</div>
+
+<div id="settings-modal-mask" class="modal-mask">
+    <div class="modal">
+        <div class="modal-close-row">
+            <button class="action-btn" id="settings-close-btn">关闭</button>
+        </div>
+
+        <h2>设置</h2>
+
+        <div class="modal-section">
+            <div class="setting-item">
+                <div>
+                    <div><strong>紧凑模式</strong></div>
+                    <div class="muted">缩小间距，让更多内容显示在一个屏幕内。默认关闭。</div>
+                </div>
+                <input type="checkbox" id="setting-compact-mode" />
+            </div>
+
+            <div class="setting-item">
+                <div>
+                    <div><strong>显示动作悬停说明</strong></div>
+                    <div class="muted">鼠标放到动作按钮上时显示说明框。</div>
+                </div>
+                <input type="checkbox" id="setting-show-tooltips" />
+            </div>
+
+            <div class="setting-item">
+                <div>
+                    <div><strong>显示历史记录</strong></div>
+                    <div class="muted">关闭后将隐藏右侧历史记录区域。</div>
+                </div>
+                <input type="checkbox" id="setting-show-history" />
+            </div>
+
+            <div class="setting-item">
+                <div>
+                    <div><strong>显示最近一回合结果</strong></div>
+                    <div class="muted">关闭后将隐藏最近一回合结果区域。</div>
+                </div>
+                <input type="checkbox" id="setting-show-latest-round" />
+            </div>
+
+            <div class="setting-item">
+                <div>
+                    <div><strong>资源卡颜色区分</strong></div>
+                    <div class="muted">为不同资源显示不同主题色。默认关闭。</div>
+                </div>
+                <input type="checkbox" id="setting-colored-resources" />
+            </div>
+
+            <div class="setting-item">
+                <div>
+                    <div><strong>强调最近一回合结果</strong></div>
+                    <div class="muted">让最近一回合结果区域更醒目。默认关闭。</div>
+                </div>
+                <input type="checkbox" id="setting-emphasize-latest-round" />
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="end-modal-mask" class="modal-mask">
+    <div class="modal" style="max-width: 460px;">
+        <div class="modal-close-row">
+            <button class="action-btn" id="end-close-btn">关闭</button>
+        </div>
+
+        <div class="end-modal-content">
+            <div><strong>游戏结束</strong></div>
+            <div class="big-result" id="end-result-text">结果</div>
+            <div id="end-result-detail" class="muted"></div>
+            <div class="muted" style="margin-top: 6px;">按 Enter 可快速重新开始，按 Backspace 可关闭弹窗。</div>
+            <div style="margin-top: 14px;">
+                <button class="action-btn primary" id="end-reset-btn">重新开始一局</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+    <!-- 全局弹窗遮罩 -->
+    <div class="modal-mask" id="global-modal-mask" style="z-index: 1100;">
+        <div class="modal-card" id="global-modal-card">
+            <div class="modal-icon" id="global-modal-icon" style="display: none;"></div>
+            <div class="modal-title" id="global-modal-title"></div>
+            <div class="modal-body" id="global-modal-body"></div>
+            <div class="modal-actions" id="global-modal-actions"></div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/core/session.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/core/api.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/core/logout_button.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/core/modal.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/pages/account_modal.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/pages/admin_users_modal.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/pages/v1/v1_local_page_data.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/pages/v1/v1_local_page_ui.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/pages/v1/v1_local_page.js') }}"></script>
+    <script>
+        // session 检查已在 local_page.js 的 IIFE 中完成
+        var btn = document.getElementById("header-account-btn");
+        if (btn) {
+            var user = window.SessionUtils.getSessionUser();
+            if (user) {
+                btn.textContent = user.username;
+                btn.addEventListener("click", function () {
+                    window.location.href = "/v1/user/" + user.uid;
+                });
+            }
+        }
+        if (typeof ModalUtils !== "undefined" && ModalUtils.bindGlobalModalEvents) {
+            ModalUtils.bindGlobalModalEvents();
+        }
+    </script>
+</body>
+</html>

@@ -1,6 +1,6 @@
 from flask import Blueprint, jsonify, request
 
-from app.matchmaking import (
+from app.v1.matchmaking import (
     enqueue_or_match,
     get_match_status,
     pop_player_match_result,
@@ -13,7 +13,7 @@ from server.auth_middleware import require_auth, get_current_username
 match_bp = Blueprint("match", __name__)
 
 
-@match_bp.post("/api/match/join")
+@match_bp.post("/v1/api/match/join")
 @require_auth
 def api_match_join():
     player_name = get_current_username()
@@ -54,14 +54,14 @@ def api_match_join():
         return jsonify({"ok": False, "error": f"匹配接口内部报错：{exc}"}), 500
 
 
-@match_bp.get("/api/match/status")
+@match_bp.get("/v1/api/match/status")
 def api_match_status():
     run_periodic_cleanup()
     status = get_match_status()
     return jsonify({"ok": True, "status": status}), 200
 
 
-@match_bp.get("/api/match/me")
+@match_bp.get("/v1/api/match/me")
 def api_match_me():
     player_token = request.args.get("player_token", type=str)
     if player_token is None or not player_token.strip():
@@ -72,7 +72,7 @@ def api_match_me():
     return jsonify({"ok": True, "state": state}), 200
 
 
-@match_bp.post("/api/match/cancel")
+@match_bp.post("/v1/api/match/cancel")
 def api_match_cancel():
     data = request.get_json(silent=True)
     if data is None:
@@ -89,7 +89,7 @@ def api_match_cancel():
     return jsonify(result), 200
 
 
-@match_bp.get("/api/match/result")
+@match_bp.get("/v1/api/match/result")
 def api_match_result():
     player_token = request.args.get("player_token", type=str)
     if player_token is None or not player_token.strip():

@@ -19,7 +19,7 @@ ClapClap 2.0 多人版规则引擎。
 
 from __future__ import annotations
 
-from app.constants import (
+from app.v2.constants import (
     ATTACK_MOVES,
     ATTACK_POWER,
     CHI_TARGETS,

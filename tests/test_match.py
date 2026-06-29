@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import unittest
 
-from app import matchmaking
-from app.matchmaking import (
+from app.v1 import matchmaking
+from app.v1.matchmaking import (
     MATCH_LOCK,
     PLAYER_MATCH_STATE,
     cancel_match,
@@ -13,7 +13,7 @@ from app.matchmaking import (
     load_match_state,
     persist_match_state,
 )
-from app.room_manager import delete_room_by_id
+from app.v1.room_manager import delete_room_by_id
 from app.storage import delete_kv
 from server.app import app
 from server.extensions import socketio
@@ -128,7 +128,7 @@ class TestMatchmaking(unittest.TestCase):
 
     def test_e2e_match_to_room_resolve(self):
         """端到端：匹配成功 → 进入房间 → 双方提交动作 → 结算回合。"""
-        from app.room_manager import get_room
+        from app.v1.room_manager import get_room
 
         # 1. 排队配对
         enqueue_or_match("Alice", "e2e-a")
@@ -154,7 +154,7 @@ class TestMatchmaking(unittest.TestCase):
 
         # P1 (Alice) 提交
         p1_result = client.post(
-            f"/api/rooms/{room_id}/step",
+            f"/v1/api/rooms/{room_id}/step",
             json={
                 "player_token": alice_state["room_player_token"],
                 "move_name": "QI",
@@ -165,7 +165,7 @@ class TestMatchmaking(unittest.TestCase):
 
         # P2 (Bob) 提交，触发结算
         p2_result = client.post(
-            f"/api/rooms/{room_id}/step",
+            f"/v1/api/rooms/{room_id}/step",
             json={
                 "player_token": bob_state["room_player_token"],
                 "move_name": "QI",

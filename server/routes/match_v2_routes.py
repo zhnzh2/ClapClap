@@ -2,7 +2,7 @@
 ClapClap 2.0 匹配 API 路由。
 
 与 1.0 (server/routes/match_routes.py) 完全独立。
-路由前缀: /api/v2/match
+路由前缀: /v2/api/match
 """
 
 from flask import Blueprint, jsonify, request
@@ -20,7 +20,7 @@ from server.auth_middleware import require_auth, get_current_username
 match_v2_bp = Blueprint("match_v2", __name__)
 
 
-@match_v2_bp.post("/api/v2/match/join")
+@match_v2_bp.post("/v2/api/match/join")
 @require_auth
 def api_match_v2_join():
     """加入 v2 匹配队列。"""
@@ -65,7 +65,7 @@ def api_match_v2_join():
         return jsonify({"ok": False, "error": f"匹配接口内部报错：{exc}"}), 500
 
 
-@match_v2_bp.get("/api/v2/match/status")
+@match_v2_bp.get("/v2/api/match/status")
 def api_match_v2_status():
     """获取 v2 匹配队列全局状态。"""
     cleanup_expired_match_v2()
@@ -73,7 +73,7 @@ def api_match_v2_status():
     return jsonify({"ok": True, "status": status}), 200
 
 
-@match_v2_bp.get("/api/v2/match/me")
+@match_v2_bp.get("/v2/api/match/me")
 def api_match_v2_me():
     """获取当前玩家的 v2 匹配状态。"""
     player_token = request.args.get("player_token", type=str)
@@ -85,7 +85,7 @@ def api_match_v2_me():
     return jsonify({"ok": True, "state": state}), 200
 
 
-@match_v2_bp.post("/api/v2/match/cancel")
+@match_v2_bp.post("/v2/api/match/cancel")
 def api_match_v2_cancel():
     """取消 v2 匹配。"""
     data = request.get_json(silent=True) or {}

@@ -4,14 +4,14 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>ClapClap 2.0 房间对战</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/v2_room.css') }}" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/v2/v2_room.css') }}" />
     <link rel="stylesheet" href="{{ url_for('static', filename='css/auth.css') }}" />
 </head>
 <body>
 <div class="container">
     <div class="page-top-shell">
         <div class="header-actions">
-            <a class="header-account-btn" href="/rules/2.0">规则界面</a>
+            <a class="header-account-btn" href="/v2/rules">规则界面</a>
             <button class="header-account-btn" id="header-admin-btn" style="display:none;">管理</button>
             <button class="header-account-btn" id="header-account-btn">账号</button>
             <button class="header-account-btn danger" id="header-logout-btn">退出登录</button>
@@ -259,12 +259,12 @@ if (typeof io !== "function") {
 <script src="{{ url_for('static', filename='js/core/logout_button.js') }}"></script>
 <script src="{{ url_for('static', filename='js/core/modal.js') }}"></script>
 <script src="{{ url_for('static', filename='js/core/boot.js') }}"></script>
-<script src="{{ url_for('static', filename='js/online/v2_room_identity.js') }}"></script>
-<script src="{{ url_for('static', filename='js/online/v2_room_rendering.js') }}"></script>
-<script src="{{ url_for('static', filename='js/online/v2_room_decision.js') }}"></script>
+<script src="{{ url_for('static', filename='js/online/v2/v2_room_identity.js') }}"></script>
+<script src="{{ url_for('static', filename='js/online/v2/v2_room_rendering.js') }}"></script>
+<script src="{{ url_for('static', filename='js/online/v2/v2_room_decision.js') }}"></script>
 <script src="{{ url_for('static', filename='js/pages/account_modal.js') }}"></script>
 <script src="{{ url_for('static', filename='js/pages/admin_users_modal.js') }}"></script>
-<script src="{{ url_for('static', filename='js/pages/v2_room_page.js') }}"></script>
+<script src="{{ url_for('static', filename='js/pages/v2/v2_room_page.js') }}"></script>
 
 <script>
 if (typeof ModalUtils !== "undefined" && ModalUtils.bindGlobalModalEvents) {

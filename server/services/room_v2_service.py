@@ -7,7 +7,7 @@ ClapClap 2.0 房间服务 — 业务逻辑 + 引擎连接。
 
 from __future__ import annotations
 
-from app.constants import Move
+from app.v2.constants import Move
 from app.v2.constants import (
     STEP_ACTION_GAME_OVER,
     STEP_ACTION_REQUEST_DECISION,
