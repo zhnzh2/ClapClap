@@ -1,488 +1,384 @@
-# ClapClap 👏
+# ClapClap
 
-**拍拍** —— 同步出招手势对战网页游戏。从 1.0 双人对战到 2.0 多人速度层结算，规则深度不断提升。
+ClapClap 是一个原创手势对战网页游戏项目。目前项目已经整理为 v1 和 v2 两套并列规则版本：
 
-> 🎯 项目状态：**1.0 双人版稳定运行，2.0 多人版 Step1~9 已完成，当前进入 Step10：全量测试、迁移校验与分阶段上线准备。**
->
-> 已将 ClapClap 从一套原创规则，推进成为一个支持双版本引擎、可联机、可匹配、带用户系统、对战存档和实时聊天的完整网页游戏平台。
+- v1: 1.0 双人对战版，包含本地模拟、双人房间、自动匹配、历史回放。
+- v2: 2.0 多人对战版，支持最多 6 人、速度层结算、目标选择、冲突协商、观战、多人房间和自动匹配。
 
----
+线上入口设计为：
 
-## 🎮 游戏简介
+- `https://clapclap.club/v1`
+- `https://clapclap.club/v2`
+- 访问 `https://clapclap.club/` 时自动跳转到 `/v1`
 
-### 1.0 双人版（稳定）
+本地开发时对应：
 
-回合制双人对战。每回合双方同时选择一个动作，由规则引擎统一结算。18 种动作分为四大类：
+- `http://127.0.0.1:5000/v1`
+- `http://127.0.0.1:5000/v2`
 
-| 类别 | 动作 | 说明 |
-|------|------|------|
-| **资源** | 气、盾 | 获得基础资源 |
-| **攻击（气系）** | gi、破、冷锋、如来、黑洞 | 气系攻击，攻防数值递增 |
-| **攻击（盾系）** | Fire、闪电、烈焰、Shining | 盾系攻击，产生派生资源 |
-| **防御** | 十字防、八卦 | 高防御力抵挡攻击 |
-| **锦囊** | 你吃、双吃、闪、镐 | 特殊策略：克制、闪避、回血 |
+## 当前状态
 
-### 2.0 多人版（开发中）
+项目当前是一个 Flask + Socket.IO + 原生 JavaScript 的完整网页应用，包含账号系统、用户主页、对战存档、回放、房间聊天、管理员用户管理、数据校验和测试套件。
 
-从双人对战升级为 **最多 6 人同时竞技**。核心新增：
+v1 和 v2 已经按版本拆分：
 
-- **速度层结算（12 层）**——闪→三连→你吃/双吃→gi反黑洞→黑洞→如来/Shining→冷锋/烈焰→gi攻击/抢镐→破/闪电→Fire→gi无目标→气/盾/加镐
-- **目标选择与协商**——同速玩家秘密选择目标 → 统一公开 → 冲突识别 → 最多 3 轮协商
-- **三连机制**——gi/你吃/破 三人循环克制；gi/黑洞/任意攻击
-- **分段技能**——黑洞拆 3 段、Shining 拆 2 闪电、双吃拆 2 你吃
-- **已操作/未操作状态**——被攻击后变为已操作，后续速度层不可行动
-- **淘汰制胜负**——最后一名存活者获胜
+- 后端规则代码分别位于 `app/v1/` 和 `app/v2/`
+- 页面模板分别位于 `server/templates/v1/` 和 `server/templates/v2/`
+- 样式分别位于 `server/static/css/v1/` 和 `server/static/css/v2/`
+- 页面脚本分别位于 `server/static/js/pages/v1/` 和 `server/static/js/pages/v2/`
+- 联机脚本分别位于 `server/static/js/online/v1/` 和 `server/static/js/online/v2/`
+- v1 API 使用 `/v1/api/...`
+- v2 API 使用 `/v2/api/...`
+- 登录页使用 `/v1/login` 和 `/v2/login`
 
-> 📖 完整规则书：`rules/version 1.0/rule.tex`（双人）、`rules/version 2.0/rule2.0.tex`（多人）
-> 📐 数字版结算规范：`develop/rule-spec-2.0.md`
+少量共享能力保留在公共目录，例如用户系统、存储、对战记录、登录页、规则页、共享前端工具等。
 
----
+## 功能概览
 
-## ✨ 功能特性
+### v1: 1.0 双人版
 
-### 👤 账号系统
+v1 是双人规则版本，适合快速对战和规则练习。
 
-| 功能 | 说明 |
-|------|------|
-| **注册/登录** | 用户名 + 密码 + 介绍信 |
-| **访客登录** | 一键创建 `visitor_XXXXX` 账号，默认密码 ClapClap |
-| **UID 分配** | 自动分配最小未使用的正整数 UID（admin 为 0） |
-| **用户主页** | 查看公开资料与分页历史战绩，进入完整对局回放 |
-| **账号管理** | 修改用户名/介绍信；验证当前密码后修改密码；支持注销账号 |
-| **管理员** | 查看所有用户表格，验证/注销用户 |
-| **自动清理** | 未验证账号超过 30 天自动注销 |
-| **Session 认证** | 所有 API 自动携带 session token，未登录强制跳转 |
+主要功能：
 
-### 🎮 游戏模式
+- 本地双人模拟
+- 在线双人房间
+- 自动匹配
+- 房间恢复
+- 实时状态同步
+- 回合历史和对局回放
+- 房间聊天
 
-| 模式 | 说明 | 规则 | 状态 |
-|------|------|------|------|
-| **🏠 本地双人（1.0）** | 同屏操作，适合体验规则和本地测试 | 1.0 双人 | ✅ 稳定 |
-| **🏠 房间对战（1.0）** | 创建/加入双人房间，好友联机 | 1.0 双人 | ✅ 稳定 |
-| **🔍 自动匹配（1.0）** | 匹配队列自动配对在线玩家 | 1.0 双人 | ✅ 稳定 |
-| **🎮 本地模拟（2.0）** | 一人操作所有玩家，裁判模式体验多人规则 | 2.0 多人 | ✅ 完成 |
-| **🌐 多人房间（2.0）** | 创建/加入多人房间，在线速度层对战 | 2.0 多人 | ✅ 完成 |
-| **👀 观战增强（2.0）** | 观战者加入、退出、视图增强、死亡后观战体验 | 2.0 多人 | ✅ 完成 |
-| **🔍 自动匹配（2.0）** | 按规则版本和目标人数组队进入多人房间 | 2.0 多人 | ✅ 完成 |
-| **💬 实时聊天** | 房间内参战/观战均可打字沟通，最多 50 字 | - | ✅ 完成 |
-| **🤖 AI 对战** | 入口已预留，计划接入启发式 bot | 1.0/2.0 | 🔜 待开发 |
+主要入口：
 
-### 📊 数据与记录
+| URL | 说明 |
+| --- | --- |
+| `/v1` | v1 大厅 |
+| `/v1/local` | v1 本地模拟 |
+| `/v1/rooms` | v1 房间列表 |
+| `/v1/room/<room_id>` | v1 房间对战 |
+| `/v1/match` | v1 自动匹配 |
+| `/v1/rules` | v1 规则 |
+| `/v1/user/<uid>` | v1 用户主页 |
+| `/v1/record/<battle_id>` | v1 对局回放 |
 
-| 功能 | 说明 |
-|------|------|
-| **对战记录** | 每局对战独立 JSON 存档，精确到毫秒命名 |
-| **回合明细** | 每回合双方/多人动作完整记录（含速度层事件） |
-| **Web 回放** | 分页展示历史战绩，可查看动作、伤害与资源快照 |
-| **聊天存档** | 聊天记录与时间戳同步写入对局文件 |
-| **用户索引** | 每个用户文件夹下记录参与过的所有对局 |
-| **注销标记** | 用户注销后标记关联对局，全员注销移入 rub/ |
-| **数据导出** | API 一键下载 SQLite 数据库 |
-| **自动备份** | 定时推送到 GitHub 私有仓库 |
+### v2: 2.0 多人版
 
-### 🔧 技术特性
+v2 是多人规则版本，核心是多玩家同步出招和速度层结算。
 
-- **⚡ 实时同步** — Socket.IO 房间状态实时推送，WebSocket + HTTP 轮询双通道兜底
-- **🔒 私密信息保护** — 未亮招动作仅自己可见，决策请求仅通过私有 Socket 频道下发
-- **🧩 双引擎架构** — 1.0 和 2.0 引擎独立运行，根据房间 `rule_version` 分发
-- **💾 持久化存储** — SQLite 存储房间和匹配状态，文件系统存储用户数据
-- **📁 对战存档** — JSON 文件存储每局完整记录（含速度层事件序列）
-- **🎨 响应式 UI** — 支持桌面和移动端，紧凑模式适配 150% 缩放，键盘快捷键
-- **🔐 身份系统** — session token + player_token 双重认证
-- **🗑️ 账号注销** — 不可逆删除，自动清理关联房间/匹配/对局标记
-- **📋 规则版本体系** — 房间和对局记录携带 `rule_version` 字段，旧数据自动兼容
+主要功能：
 
----
+- 2 到 6 人多人对战
+- 本地多人模拟
+- 多人房间创建、加入、观战
+- 自动匹配
+- 速度层结算
+- 目标选择
+- 冲突协商
+- 回合总结
+- 多人战绩和回放
 
-## 🛠 技术栈
+主要入口：
 
-| 层 | 技术 | 用途 |
-|----|------|------|
-| **后端框架** | Python / Flask | Web 应用与 RESTful API |
-| **实时通信** | Flask-SocketIO | 房间状态 + 多人决策 + 聊天实时推送 |
-| **前端** | 原生 JavaScript（无框架） | 页面交互与动态渲染 |
-| **模板** | Jinja2 | 服务端页面渲染 |
-| **存储 - 游戏** | SQLite | 房间与匹配状态持久化 |
-| **存储 - 用户** | 文件系统（CSV + 文件夹） | 账号、session、对局记录 |
-| **密码** | SHA-256（UID 加盐） | 密码哈希 |
-| **部署** | gunicorn / Railway + Cloudflare | 生产运行与域名访问 |
-| **备份** | Git + GitHub API | 定时自动备份数据库 |
+| URL | 说明 |
+| --- | --- |
+| `/v2` | v2 大厅 |
+| `/v2/local` | v2 本地多人模拟 |
+| `/v2/rooms` | v2 多人房间列表 |
+| `/v2/room/<room_id>` | v2 多人房间对战 |
+| `/v2/match` | v2 自动匹配 |
+| `/v2/rules` | v2 规则 |
+| `/v2/user/<uid>` | v2 用户主页 |
+| `/v2/record/<battle_id>` | v2 对局回放 |
 
-### 项目架构
+## 技术栈
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                 前端层 (Jinja2 + 原生 JS)                    │
-│  模板页面 → Socket.IO 客户端 → localStorage 缓存           │
-│  core/: ApiUtils / MessageUtils / ModalUtils / BootUtils   │
-│        / SessionUtils / StorageUtils                        │
-│  online/: room_identity / room_rendering / decision         │
-│  pages/: 各页面控制器                                       │
-│  v2 独立: v2_room_*.js / v2_rooms_*.js / v2_local*.js     │
-└──────────────────────────┬──────────────────────────────────┘
-                           │ HTTP + WebSocket
-┌──────────────────────────▼──────────────────────────────────┐
-│               服务层 (Flask + SocketIO)                      │
-│  HTTP Routes (pages/local/room/match/auth/status/export)   │
-│  v2 Routes  (v2_page / v2_local / v2_room / v2_decision)  │
-│  Socket Events v1 + v2 (join/submit/decision/chat)         │
-│  Auth Middleware (require_auth decorator)                  │
-│  Services (room_service.py / room_v2_service.py)           │
-└──────────────────────────┬──────────────────────────────────┘
-                           │
-┌──────────────────────────▼──────────────────────────────────┐
-│              核心引擎层 (app/ + app/v2/)                     │
-│  1.0: GameEngine → 回合结算                                 │
-│  2.0: GameEngineV2 → 速度层结算 + 目标选择 + 冲突协商       │
-│  RoomManager / RoomManagerV2 → 房间生命周期                  │
-│  Matchmaking → 匹配队列                                     │
-│  Storage → SQLite 持久化                                    │
-│  Users → 用户管理（CSV + 文件系统）                          │
-│  BattleRecorder → 对战记录                                  │
-└─────────────────────────────────────────────────────────────┘
-```
+| 层 | 技术 | 说明 |
+| --- | --- | --- |
+| 后端 | Python, Flask | 页面路由和 REST API |
+| 实时通信 | Flask-SocketIO | 房间状态、聊天、v2 决策事件 |
+| 前端 | 原生 JavaScript | 页面交互和动态渲染 |
+| 模板 | Jinja2 | 服务端渲染 HTML |
+| 存储 | SQLite + 文件系统 | 房间、匹配、用户、对战记录 |
+| 测试 | pytest, node --check | 后端逻辑和前端语法检查 |
+| 部署 | gunicorn / Railway / Cloudflare | 生产运行和域名访问 |
 
----
+## 项目结构
 
-## 📁 项目结构
-
-```
+```text
 ClapClap/
-├── app/                         # 核心引擎层（1.0）
-│   ├── constants.py             # 共享动作枚举、数值常量
-│   ├── game.py                  # 1.0 规则引擎（双人对战）
-│   ├── models.py                # 1.0 数据模型
-│   ├── matchmaking.py           # 1.0 匹配队列
-│   ├── room_manager.py          # 1.0 房间管理
-│   ├── state_api.py             # 1.0 状态序列化
-│   ├── storage.py               # SQLite 持久化
-│   ├── users.py                 # 用户存储与鉴权
-│   └── battle_recorder.py       # 对战记录（JSON 存档）
+├── app/
+│   ├── v1/                      # v1 规则、模型、房间、匹配、本地状态
+│   │   ├── constants.py
+│   │   ├── game.py
+│   │   ├── matchmaking.py
+│   │   ├── models.py
+│   │   ├── room_manager.py
+│   │   └── state_api.py
+│   ├── v2/                      # v2 多人规则、模型、房间、匹配、状态序列化
+│   │   ├── constants.py
+│   │   ├── game.py
+│   │   ├── matchmaking.py
+│   │   ├── models.py
+│   │   ├── room.py
+│   │   ├── room_manager.py
+│   │   └── state_api.py
+│   ├── battle_recorder.py       # 对战记录和回放数据
+│   ├── storage.py               # SQLite 持久化工具
+│   └── users.py                 # 用户、session、管理员、注销清理
 │
-├── app/v2/                      # 核心引擎层（2.0）——全新独立实现
-│   ├── constants.py             # 2.0 常量（速度层/阶段/人数限制）
-│   ├── game.py                  # 2.0 规则引擎（步进式多人结算）
-│   ├── models.py                # 2.0 数据模型（含 DecisionRequest/SettlementStepResult）
-│   ├── room.py                  # 2.0 房间模型（SeatV2/SpectatorV2）
-│   ├── room_manager.py          # 2.0 房间管理器
-│   └── state_api.py             # 2.0 状态序列化（含决策请求/回合总结载荷）
-│
-├── server/                      # Flask 服务层
-│   ├── app.py                   # 应用入口（双引擎注册）
-│   ├── socket_events.py         # 1.0 WebSocket 事件
-│   ├── socket_events_v2.py      # 2.0 WebSocket 事件（决策私发/结算进度/回合总结）
-│   ├── auth_middleware.py        # require_auth 装饰器
+├── server/
+│   ├── app.py                   # Flask 应用入口
+│   ├── auth_middleware.py       # 登录鉴权
 │   ├── runtime.py               # 周期性清理
-│   ├── backup.py                # GitHub 自动备份
-│   ├── routes/                  # HTTP 路由
-│   │   ├── page_routes.py       #   页面路由（/ /local /rooms /match /room/<id> /user/<id>）
-│   │   ├── v2_page_routes.py    #   2.0 页面路由（/v2 /v2/local /v2/rooms /v2/room/<id>）
-│   │   ├── v2_local_routes.py   #   2.0 本地模拟 API
-│   │   ├── local_routes.py      #   1.0 本地模式 API
-│   │   ├── room_routes.py       #   1.0 房间 API
-│   │   ├── room_v2_routes.py    #   2.0 房间 API（创建/加入/决策/公开列表）
-│   │   ├── match_routes.py      #   匹配 API
-│   │   ├── status_routes.py     #   状态检查 API
-│   │   ├── export_routes.py     #   数据库导出 API
-│   │   └── auth_routes.py       #   认证 + 管理员 API
-│   ├── services/                # 业务逻辑层
-│   │   ├── room_service.py      #   1.0 房间服务
-│   │   └── room_v2_service.py   #   2.0 房间服务（引擎连接/决策提交/对局记录）
-│   ├── templates/               # Jinja2 模板
-│   │   ├── login.html           #   登录/注册页
-│   │   ├── home.html            #   1.0 主页（模式大厅）
-│   │   ├── local.html           #   1.0 本地双人模式
-│   │   ├── rooms.html           #   1.0 房间列表
-│   │   ├── room_detail.html     #   1.0 房间对战详情
-│   │   ├── match.html           #   匹配模式
-│   │   ├── ai.html              #   AI 模式（预留）
-│   │   ├── user.html            #   用户主页
-│   │   ├── record.html          #   对局回放
-│   │   └── v2/                  #   2.0 模板
-│   │       ├── home.html        #     2.0 大厅（本地模拟 + 多人房间入口）
-│   │       ├── local.html       #     2.0 本地模拟对战
-│   │       ├── rooms.html       #     2.0 房间列表（创建/加入卡片 + 公开房间表格）
-│   │       └── room.html        #     2.0 房间对战（玩家面板 + 动作选择 + 决策弹窗）
-│   └── static/                  # 前端资源
+│   ├── socket_events.py         # v1 Socket.IO 事件
+│   ├── socket_events_v2.py      # v2 Socket.IO 事件
+│   ├── routes/                  # 页面和 API 路由
+│   ├── services/                # 房间服务层
+│   ├── templates/
+│   │   ├── v1/                  # v1 页面模板
+│   │   ├── v2/                  # v2 页面模板
+│   │   ├── login.html           # 共享登录页
+│   │   └── rule.html            # 共享规则页壳
+│   └── static/
 │       ├── css/
-│       │   ├── auth.css         #   登录/账号/弹窗基础样式
-│       │   ├── local.css / match.css / rooms.css / room_detail*.css  # 1.0 样式
-│       │   ├── v2_local.css     #   2.0 本地模拟样式
-│       │   ├── v2_rooms.css     #   2.0 房间列表样式
-│       │   └── v2_room.css      #   2.0 房间对战样式（含 12 层速度条/决策弹窗/聊天）
+│       │   ├── v1/              # v1 样式
+│       │   ├── v2/              # v2 样式
+│       │   └── auth.css         # 共享登录/弹窗样式
 │       └── js/
-│           ├── socket.io.min.js #   Socket.IO 客户端
-│           ├── core/            #   共享模块（1.0/2.0 共用）
-│           │   ├── api.js       #     API 请求封装（自动携带 X-Session-Token）
-│           │   ├── boot.js      #     服务器重启检测与缓存清理
-│           │   ├── message.js   #     消息提示组件
-│           │   ├── modal.js     #     全局弹窗系统（确认/信息/成功）
-│           │   ├── session.js   #     前端 session 管理
-│           │   └── storage.js   #     localStorage 工具
-│           ├── online/          #   联机逻辑
-│           │   ├── room_state.js / room_identity.js / resume_room.js  # 1.0
-│           │   ├── match_state.js / history_renderer.js               # 1.0
-│           │   ├── v2_room_identity.js    #     2.0 房间身份存储
-│           │   ├── v2_room_rendering.js   #     2.0 UI 渲染（玩家卡片/速度层/结算事件）
-│           │   └── v2_room_decision.js    #     2.0 决策弹窗（目标选择/三连/协商）
-│           └── pages/           #   页面入口
-│               ├── login_page.js / home_page.js / user_page.js   # 1.0/通用
-│               ├── local_page*.js / rooms_page.js / match_page.js # 1.0
-│               ├── room_detail_page.js / room_detail_data.js     # 1.0
-│               ├── record_page.js / account_modal.js             # 1.0/通用
-│               ├── v2_local*.js              #   2.0 本地模拟
-│               ├── v2_rooms_page.js          #   2.0 房间列表逻辑
-│               └── v2_room_page.js           #   2.0 房间对战主控制器
+│           ├── core/            # API、session、storage、modal 等共享工具
+│           ├── pages/
+│           │   ├── v1/          # v1 页面脚本
+│           │   └── v2/          # v2 页面脚本
+│           └── online/
+│               ├── v1/          # v1 联机脚本
+│               └── v2/          # v2 联机脚本
 │
-├── data/                         # 数据目录（生产环境挂载 Volume）
-│   ├── clapclap.db               # SQLite 数据库
-│   ├── users/                    # 用户数据
-│   │   ├── users.csv             #   用户索引
-│   │   └── User_X/               #   各用户文件夹
-│   └── battles/                  # 对战记录
-│       └── rub/                  #   全员注销的对局
-│
-├── tests/                       # 单元测试
-│   ├── test_logic.py            # 1.0 规则引擎测试
-│   ├── test_match.py / test_room.py / test_local.py / test_status.py
-│   ├── test_user_features.py
-│   ├── test_game_v2.py          # 2.0 规则引擎测试（含速度层/三连/协商）
-│   ├── test_models_v2.py        # 2.0 数据模型测试
-│   └── test_room_v2.py          # 2.0 房间协议测试（含隐私/路由）
-│
-├── develop/                     # 设计文档
-│   ├── rule-spec-2.0.md         # 2.0 数字版结算规范（定稿）
-│   ├── phase2-design.md         # 阶段 2 设计文档（版本体系）
-│   ├── rule-cases.html          # 规则判例表
-│   ├── rule-flowchart.html      # 结算阶段流程图
-│   └── rule-review.html         # 规则审查记录
-│
-├── rules/                       # LaTeX 规则文档
-│   ├── version 1.0/             # 1.0 双人版规则书
-│   └── version 2.0/             # 2.0 多人版规则书
-│
-├── requirements.txt             # Python 依赖
-├── README.md                    # 本文件
-├── task.txt                     # 2.0 多人化升级任务书（10 阶段）
-├── history.md                   # 开发对话历史
-└── CLAUDE.md                    # AI 助手项目规范
+├── tests/                       # pytest 测试
+├── scripts/                     # 检查、迁移、数据校验脚本
+├── data/                        # 本地数据目录
+├── rules/                       # 规则文档
+├── develop/                     # 设计和开发文档
+├── requirements.txt
+├── pytest.ini
+└── README.md
 ```
 
----
+## 快速开始
 
-## 🚀 快速开始
+### 1. 安装依赖
 
-### 环境要求
+```powershell
+python -m venv venv
+.\venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+```
 
-- Python 3.10+
-
-### 安装运行
+macOS / Linux 可使用：
 
 ```bash
-# 克隆仓库
-git clone https://github.com/zhnzh2/ClapClap.git
-cd ClapClap
-
-# 创建虚拟环境
 python -m venv venv
-venv\Scripts\activate     # Windows
-# source venv/bin/activate  # macOS/Linux
-
-# 安装依赖
+source venv/bin/activate
 pip install -r requirements.txt
+```
 
-# 启动服务（开发模式）
+### 2. 启动服务
+
+```powershell
 python server/app.py
 ```
 
-打开浏览器访问 `http://127.0.0.1:5000`（1.0 大厅）或 `http://127.0.0.1:5000/v2`（2.0 大厅）。
+启动后访问：
 
-首次启动会自动创建 admin 账号：用户名 `zhnzh`，密码 `207101`。
+- `http://127.0.0.1:5000/`
+- `http://127.0.0.1:5000/v1`
+- `http://127.0.0.1:5000/v2`
 
-### 主要页面入口
+首次启动会初始化本地数据目录，并确保管理员账号存在。
 
-| URL | 说明 |
-|-----|------|
-| `/` | 1.0 大厅（双人本地/房间/匹配/AI） |
-| `/local` | 1.0 本地双人模拟 |
-| `/rooms` | 1.0 双人房间 |
-| `/room/<id>` | 1.0 双人房间对战 |
-| `/match` | 1.0 自动匹配 |
-| **`/v2`** | **2.0 大厅（本地模拟 + 多人房间入口）** |
-| **`/v2/local`** | **2.0 本地多人模拟（裁判模式）** |
-| **`/v2/rooms`** | **2.0 多人房间（创建/加入/公开列表）** |
-| **`/v2/room/<id>`** | **2.0 多人房间对战（速度层结算）** |
+### 3. 默认管理员账号
 
-### 运行测试
+当前项目会确保存在管理员账号：
 
-```bash
-# 全部 1.0 测试
-python -m pytest tests/test_logic.py tests/test_match.py tests/test_room.py tests/test_local.py tests/test_status.py tests/test_user_features.py -x -q
+| 用户名 | 密码 |
+| --- | --- |
+| `zhnzh` | `207101` |
 
-# 全部 2.0 测试
-python -m pytest tests/test_game_v2.py tests/test_models_v2.py tests/test_room_v2.py -x -q
+如用于正式部署，建议上线前修改默认密码或替换初始化逻辑。
 
-# 一键检查
+## 测试和检查
+
+运行全部测试：
+
+```powershell
+python -m pytest
+```
+
+运行完整检查脚本：
+
+```powershell
 .\scripts\check.ps1
 ```
 
----
+`scripts/check.ps1` 会依次执行：
 
-## 🌐 在线部署
+- pytest 全量测试
+- `scripts/validate_data.py --strict --summary`
+- Python 编译检查
+- JavaScript 语法检查
+- 模板内联 JavaScript 语法检查
 
-项目已适配 Railway + Cloudflare 生产部署。
+也可以单独运行：
 
-**在线地址：** `https://clapclap.club`
-
-```bash
-git push origin main   # 推送自动触发 Railway 部署
+```powershell
+python -m compileall app server scripts
+node --check server/static/js/pages/v1/v1_home_page.js
+python scripts/validate_data.py --strict --summary
 ```
 
-### 生产环境变量
+## 数据目录
 
-| 变量名 | 说明 |
-|--------|------|
-| `DATA_DIR` | 持久卷挂载路径（如 `/app/data`） |
-| `EXPORT_TOKEN` | 数据库导出接口密码 |
-| `BACKUP_GITHUB_TOKEN` | GitHub PAT（repo 权限），用于自动备份 |
-| `BACKUP_GITHUB_REPO` | 备份目标仓库（如 `user/clapclap-backup.git`） |
-| `BACKUP_INTERVAL_MINUTES` | 备份间隔（分钟），默认 30 |
+默认数据放在 `data/` 下。
 
----
+典型内容：
 
-## 🗺️ 开发路线图
+```text
+data/
+├── clapclap.db                  # SQLite 数据库
+├── users/                       # 用户和 session 数据
+├── battles/                     # 对战记录 JSON
+└── ...
+```
 
-### 2.0 多人化升级（10 阶段）
+主要数据类型：
 
-| 阶段 | 内容 | 状态 |
-|------|------|------|
-| **Step 1** | 冻结 2.0 数字版结算规范 | ✅ 完成 |
-| **Step 2** | 建立规则版本体系（1.0/2.0 并存） | ✅ 完成 |
-| **Step 3** | 重构多人数据模型（PlayerStateV2/GameStateV2/RoomV2） | ✅ 完成 |
-| **Step 4** | 独立实现 2.0 规则引擎（12 层速度结算） | ✅ 完成 |
-| **Step 5** | 多人房间改造（参战/观战/房主/重赛） | ✅ 完成 |
-| **Step 6** | 多人在线回合协议（目标选择/冲突协商/决策暂停恢复） | ✅ 完成 |
-| **Step 7** | 前端页面改造（多人面板/决策 UI/速度层进度/聊天） | ✅ 完成 |
-| **Step 8** | 匹配、本地模式与观战改造 | ✅ 完成 |
-| **Step 9** | 记录、回放与战绩升级 | ✅ 完成 |
-| **Step 10** | 全量测试、迁移与分阶段上线 | 🚧 进行中 |
+- 用户数据由 `app/users.py` 管理
+- 房间和匹配状态由 SQLite 持久化
+- 对战记录由 `app/battle_recorder.py` 写入 JSON
+- 用户注销会清理相关房间和匹配状态，并标记历史对局
 
-### 当前 2.0 实现快照
+生产环境建议通过 `DATA_DIR` 指向持久卷。
 
-- [x] 规则规格：`develop/rule-spec-2.0.md`、判例表和流程图已形成数字版规则基础
-- [x] 独立 v2 模型：`PlayerStateV2` / `GameStateV2` / `RoomV2` 与 1.0 并列
-- [x] 独立 v2 引擎：支持速度层、三连、目标选择、冲突协商、暂停/恢复
-- [x] v2 多人房间：创建、加入、准备、开始、退出、重赛投票、公开房间列表
-- [x] v2 在线协议：出招、亮招、决策私发、结算进度、回合总结
-- [x] v2 前端：多人玩家面板、动作区、决策弹窗、速度层条、结算日志、聊天、历史折叠设置
-- [x] v2 本地/匹配/观战：裁判模式、公开房间、观战身份、多人数匹配队列
-- [x] v2 存档/回放/战绩：多人 JSON 表头、速度层时间线、资源变化、用户主页 1.0/2.0 分离统计
-- [x] 隐私边界：未公开动作只给自己，决策选项只发给对应玩家，公开 payload 不暴露 player_token
-- [x] 回归测试：当前核心测试覆盖 1.0 与 2.0，最近验证为 `187 passed`
+## 主要环境变量
 
-### Step 10 工作清单
+| 变量 | 说明 |
+| --- | --- |
+| `DATA_DIR` | 数据目录。生产环境通常指向持久卷 |
+| `EXPORT_TOKEN` | 数据库导出接口令牌 |
+| `BACKUP_GITHUB_TOKEN` | 自动备份使用的 GitHub token |
+| `BACKUP_GITHUB_REPO` | 自动备份目标仓库 |
+| `BACKUP_INTERVAL_MINUTES` | 自动备份间隔，单位分钟 |
 
-Step10 的重点不是继续堆功能，而是上线前的可靠性护栏：让测试、数据校验、灰度发布和回滚路径都能重复执行。
+如果未配置备份相关变量，备份功能会自动禁用。
 
-建议按这个顺序推进：
+## API 约定
 
-1. **全量检查入口**
-   - [x] `pytest.ini` 跳过 `tests/tmp*` 权限临时目录，支持直接运行 `python -m pytest`
-   - [x] `scripts/check.ps1` 改为 pytest 全集 + 数据校验 + Python 编译 + JavaScript 语法检查
-   - [x] `/api/modes/status` 暴露 1.0 与 2.0 模式状态，便于发布前检查
+页面和业务 API 现在按版本分离：
 
-2. **数据迁移与兼容校验**
-   - [x] 新增 `scripts/validate_data.py`，只读检查 `data/` 下房间、对局和用户索引
-   - [x] 旧 1.0 记录继续兼容，缺少 `rule_version` 时按 1.0 读取
-   - [x] 2.0 记录缺少建议字段时给 warning，未知 `rule_version` 才作为 error
-   - [ ] 若未来要批量修复旧记录，再单独编写带备份的显式迁移脚本
+```text
+/v1/api/local/...
+/v1/api/rooms/...
+/v1/api/match/...
 
-3. **发布测试**
-   - [x] 新增 release readiness 测试，覆盖 v1/v2 入口并列、2.0 状态暴露、数据校验器
-   - [x] 保留 1.0 规则、房间、匹配、本地、用户功能回归测试
-   - [x] 保留 2.0 规则引擎、模型、房间协议、匹配、存档回放测试
-   - [ ] 补真正的多浏览器端到端自动化，用于模拟多人同时加入、出招、决策、观战和回放
+/v2/api/local/...
+/v2/api/rooms/...
+/v2/api/match/...
+```
 
-4. **灰度上线**
-   - [x] 形成 `develop/step10-release-plan.md`，记录迁移策略、灰度批次和回滚方案
-   - [ ] 第一批内部灰度：保留 1.0 正式入口，2.0 通过 `/v2` 开放测试
-   - [ ] 第二批公开 2.0 房间和观战
-   - [ ] 第三批公开 2.0 自动匹配
-   - [ ] 第四批补压测、防刷、限流和更细的多人战绩维度
+共享账号 API 也提供版本化入口：
 
-### 1.0 已完成 ✅
+```text
+/v1/api/auth/...
+/v1/api/user/...
+/v1/api/admin/...
+/v1/api/battles/...
 
-- [x] 规则引擎核心（GameEngine）
-- [x] SQLite 持久化（房间 + 匹配）
-- [x] 本地双人模式（完整 UI）
-- [x] 房间创建/加入/退出/恢复
-- [x] 双方提交动作 → 统一结算
-- [x] 双确认 reset
-- [x] 匹配队列 → 自动配对 → 建房跳转
-- [x] Socket.IO 实时同步 + 轮询兜底
-- [x] Railway 部署 + Cloudflare 域名
-- [x] 用户注册/登录系统（含访客登录）
-- [x] Session 认证中间件（所有 API 受保护）
-- [x] 账号管理（修改用户名/密码/介绍信/注销）
-- [x] 管理员系统（查看/验证/注销用户）
-- [x] 账号验证机制（30 天未验证自动注销）
-- [x] 数据导出接口
-- [x] GitHub 自动备份
-- [x] 对战记录系统（JSON 存档，毫秒命名）
-- [x] 用户主页与对局回放
-- [x] 房间实时聊天
-- [x] 用户注销后对局标记
-- [x] Volume 持久卷挂载
+/v2/api/auth/...
+/v2/api/user/...
+/v2/api/admin/...
+/v2/api/battles/...
+```
 
-### 后续计划 📋
+旧的 `/api/...` 仍保留为兼容别名，但前端应优先使用 `/v1/api/...` 或 `/v2/api/...`。
 
-- 2.0 Step10（多浏览器自动化、灰度上线、迁移脚本和压测）
-- AI 模式接入（启发式 bot → 强化学习）
-- 聚合战绩统计面板（胜率/常用动作/淘汰关系）
-- 手机端适配完善
-- 房间密码完整流程
+认证使用 `X-Session-Token` 请求头。前端由 `server/static/js/core/api.js` 自动携带。
 
-详细路线图见 [`task.txt`](task.txt)。
+## 前端缓存约定
 
----
+前端使用 localStorage 保存登录态、房间身份、匹配状态和 UI 设置。
 
-## 📝 开发约定
+常见 key：
 
-### 架构原则
+- `clapclap_session`
+- `clapclap_server_boot_id`
+- `clapclap_match_state`
+- `clapclap_v2_match_state`
+- `clapclap_room_<room_id>`
+- `clapclap_v2_room_<room_id>`
+- `clapclap_ui_settings_v2`
+- `clapclap_v2_ui_settings`
+- `clapclap_v2_room_ui_settings`
 
-- **游戏状态以后端为准**，前端只负责展示和提交操作
-- **规则引擎优先稳定**——1.0 `app/game.py` 不变，2.0 `app/v2/game.py` 独立演进
-- **规则版本通过 `rule_version` 字段分发**，未知版本明确报错
-- 核心规则正确性 > 界面效果 > 代码优雅
-- 默认以最小修改、保持现有结构为原则
+共享清理逻辑位于 `server/static/js/core/storage.js`。
 
-### 代码规范
+## 开发约定
 
-- 所有 Python 导入使用绝对路径（`from app.xxx`、`from server.xxx`）
-- API 路由统一使用 `/api/` 或 `/api/v2/` 前缀
-- 前端共享逻辑通过 `core/` 模块（1.0/2.0 共用）
-- 2.0 前端独立文件（`v2_*.js`），不与 1.0 混用
-- 用户密码使用 SHA-256 + UID 盐值哈希
-- Session token 通过 `X-Session-Token` 请求头传递
-- 1.0 和 2.0 房间通过 `rule_version` 字段区分，同一个 SQLite 表
+- 新增 v1 专属代码放入 `app/v1/`、`server/templates/v1/`、`server/static/.../v1/`
+- 新增 v2 专属代码放入 `app/v2/`、`server/templates/v2/`、`server/static/.../v2/`
+- 如果文件必须共享，放在公共目录，并避免写死 `/v1` 或 `/v2`
+- 同一目录中同时存在版本文件时，使用 `v1_...` 和 `v2_...` 命名
+- 页面跳转和 API 调用优先保持当前版本前缀
+- 根路径 `/` 只负责跳转到 `/v1`
+- 不要新增旧式 `/local`、`/rooms`、`/match` 等无版本页面入口
+- v1 和 v2 规则引擎互不导入，公共能力才放在 `app/` 根目录
 
-### 调试要点
+## 常用命令
 
-- 前端问题：打开浏览器开发者工具查看 Console 和 Network
-- 后端问题：查看 Flask 终端输出的 traceback
-- 联机问题：检查 player_token、房间 ID、Socket.IO 连接状态
-- 2.0 决策问题：检查 `settlement_progress_v2` 和 `decision_request_v2` Socket 事件
-- 账号问题：检查 `data/users/` 下的用户文件夹和 CSV
-- 对战记录：查看 `data/battles/` 下的 JSON 文件
-- 缓存问题：刷新页面、清空 localStorage、使用无痕窗口测试
+```powershell
+# 启动开发服务
+python server/app.py
 
----
+# 全量测试
+python -m pytest
 
-## 📄 许可
+# 只跑 v2 规则测试
+python -m pytest tests/test_game_v2.py tests/test_room_v2.py
+
+# 数据校验
+python scripts/validate_data.py --strict --summary
+
+# 全量检查
+.\scripts\check.ps1
+```
+
+## 部署说明
+
+项目可部署到 Railway / gunicorn。
+
+典型启动命令：
+
+```bash
+gunicorn server.app:app
+```
+
+如果需要 Socket.IO 的长连接能力，生产环境应确保部署平台支持 WebSocket。当前前端也保留 HTTP 轮询兜底。
+
+线上域名建议配置：
+
+```text
+clapclap.club/    -> /v1
+clapclap.club/v1  -> v1 大厅
+clapclap.club/v2  -> v2 大厅
+```
+
+## 相关文档
+
+- `rules/`: 规则书源文件
+- `develop/`: 规则设计、流程图、发布计划等开发文档
+- `task.txt`: 当前任务和阶段记录
+- `tests/`: 行为测试和回归测试
+- `scripts/validate_data.py`: 数据兼容性校验
+
+## License
 
 MIT License
-
----
-
-> **ClapClap** —— 从一套原创手势规则，到双引擎多人网页游戏平台。
-> 项目维护：[zhnzh2](https://github.com/zhnzh2)
