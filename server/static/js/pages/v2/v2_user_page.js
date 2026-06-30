@@ -896,4 +896,10 @@
             .replace(/'/g, "&#39;");
     }
 
+    function difficultyText(diff) {
+        if (diff === "easy") return "简单";
+        if (diff === "hard") return "困难";
+        return "普通";
+    }
+
 })();

@@ -93,7 +93,6 @@ from app.v2.models import (
     GameStateV2,
     PlayerStateV2,
     RoundLogV2,
-    RoundSummary,
     SettlementStepResult,
     SpeedLayerEvent,
     TargetDeclaration,
@@ -1317,34 +1316,6 @@ class GameEngineV2:
     # 阶段 D：三连检测与结算（速度层 2）
     # ═══════════════════════════════════════════════════════════
 
-    def _phase_three_chain(self) -> None:
-        """检测并结算三连。
-
-        检测范围：存活 + 未操作 + 非闪玩家。
-        只看手势类型和克制链，不考虑 gi 互斥、防御力等。
-        """
-        # 筛选候选玩家
-        candidates = [
-            p for p in self.state.alive_players()
-            if p.is_unresolved() and not p.is_flashed
-        ]
-        if len(candidates) < 3:
-            return
-
-        result = self._detect_three_chain(candidates)
-        self.state.three_chain_result = result
-
-        if not result.found:
-            return
-
-        # 两组独立三连 → 本回合直接结束
-        if result.two_groups:
-            self._resolve_two_three_chains(result)
-            return
-
-        # 普通三连结算
-        self._resolve_three_chain(result)
-
     def _detect_three_chain(self, candidates: list[PlayerStateV2]) -> ThreeChainResult:
         """在候选玩家中检测三连。
 
@@ -1574,37 +1545,6 @@ class GameEngineV2:
     # 阶段 E：速度层循环（层 3~12）
     # ═══════════════════════════════════════════════════════════
 
-    def _phase_speed_layers(self) -> None:
-        """遍历速度层 3~12，逐层结算。
-
-        每层：
-          1. 筛选本层活跃玩家
-          2. 计算合法目标
-          3. 收集目标意向（当前使用确定性默认值）
-          4. 检测冲突
-          5. 结算
-        """
-        layers = [
-            SPEED_LAYER_CHI_SHUANGCHI,
-            SPEED_LAYER_GI_VS_HEIDONG,
-            SPEED_LAYER_HEIDONG,
-            SPEED_LAYER_RULAI_SHINING,
-            SPEED_LAYER_LENGFENG_LIEYAN,
-            SPEED_LAYER_GI_ATTACK_STEAL,
-            SPEED_LAYER_PO_SHANDIAN,
-            SPEED_LAYER_FIRE,
-            SPEED_LAYER_GI_NO_TARGET,
-            SPEED_LAYER_RESOURCES,
-        ]
-
-        for layer in layers:
-            self.state.current_speed_layer = layer
-            self._resolve_speed_layer(layer)
-
-            # 每层结束后检查是否有爆镐等即时死亡
-            if self.state.is_game_over():
-                return
-
     # ═══════════════════════════════════════════════════════════
     # 协商 / 冲突检测系统
     # ═══════════════════════════════════════════════════════════
@@ -1631,58 +1571,6 @@ class GameEngineV2:
         SPEED_LAYER_GI_NO_TARGET,
         SPEED_LAYER_RESOURCES,
     }
-
-    def _resolve_speed_layer(self, layer: int) -> None:
-        """结算单个速度层。"""
-        # 筛选本层活跃玩家
-        active = self._get_active_players_for_layer(layer)
-
-        # 对于非"始终运行"的层，没有活跃玩家则跳过
-        if not active and layer not in self._ALWAYS_RUN_LAYERS:
-            return
-
-        self.state.speed_layer_players = [p.player_id for p in active]
-
-        # 重置本层运行时字段
-        for p in active:
-            p.reset_layer_runtime()
-
-        # 按层分发到具体处理方法
-        layer_handlers = {
-            SPEED_LAYER_CHI_SHUANGCHI: self._resolve_layer_3_chi_shuangchi,
-            SPEED_LAYER_GI_VS_HEIDONG: self._resolve_layer_4_gi_vs_heidong,
-            SPEED_LAYER_HEIDONG: self._resolve_layer_5_heidong,
-            SPEED_LAYER_RULAI_SHINING: self._resolve_layer_6_rulai_shining,
-            SPEED_LAYER_LENGFENG_LIEYAN: self._resolve_layer_7_lengfeng_lieyan,
-            SPEED_LAYER_GI_ATTACK_STEAL: self._resolve_layer_8_gi_attack_steal,
-            SPEED_LAYER_PO_SHANDIAN: self._resolve_layer_9_po_shandian,
-            SPEED_LAYER_FIRE: self._resolve_layer_10_fire,
-            SPEED_LAYER_GI_NO_TARGET: self._resolve_layer_11_gi_no_target,
-            SPEED_LAYER_RESOURCES: self._resolve_layer_12_resources,
-        }
-
-        # ── 对于涉及目标选择的层：构建声明 + 检测冲突 + 应用默认决策 ──
-        # 后续接入交互协议时，此处会暂停等待玩家提交/确认目标意向。
-        _TARGET_SELECTION_LAYERS = {
-            SPEED_LAYER_CHI_SHUANGCHI,
-            SPEED_LAYER_GI_VS_HEIDONG,
-            SPEED_LAYER_HEIDONG,
-            SPEED_LAYER_RULAI_SHINING,
-            SPEED_LAYER_LENGFENG_LIEYAN,
-            SPEED_LAYER_GI_ATTACK_STEAL,
-            SPEED_LAYER_PO_SHANDIAN,
-            SPEED_LAYER_FIRE,
-        }
-        declarations: dict[str, TargetDeclaration] = {}
-        if active and layer in _TARGET_SELECTION_LAYERS:
-            declarations = self._build_layer_declarations(layer, active)
-            conflicts = self._detect_layer_conflicts(layer, declarations)
-            if conflicts:
-                self._auto_resolve_conflicts(layer, conflicts, declarations)
-
-        handler = layer_handlers.get(layer)
-        if handler:
-            handler(active, declarations)
 
     def _get_active_players_for_layer(self, layer: int) -> list[PlayerStateV2]:
         """获取本速度层的活跃玩家列表。

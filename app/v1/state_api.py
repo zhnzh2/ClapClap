@@ -48,14 +48,6 @@ def get_game_state_payload(state: GameState, include_history: bool = True) -> di
     payload["move_catalog"] = get_move_catalog()
     return payload
 
-def create_new_game_payload() -> dict:
-    state = GameState()
-    return get_game_state_payload(state, include_history=True)
-
-def apply_round_and_get_payload(state: GameState, p1_move: Move, p2_move: Move) -> dict:
-    GameEngine.resolve_round(state, p1_move, p2_move)
-    return get_game_state_payload(state, include_history=True)
-
 def parse_move_name(name: str) -> Move:
     try:
         return Move[name]

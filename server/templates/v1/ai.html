@@ -43,14 +43,33 @@
             border-radius: 10px;
             border: 1px solid var(--border);
         }
-        .ai-mode-summary {
-            align-items: flex-start;
-            background: linear-gradient(135deg, #ffffff, #f8fbff);
+        .ai-status-card {
+            display: grid;
+            gap: 8px;
         }
-        .ai-mode-copy {
+        .ai-mode-note {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            width: fit-content;
+            max-width: 100%;
+            padding: 7px 10px;
+            border: 1px solid #dbeafe;
+            border-radius: 10px;
+            background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
             color: var(--muted);
-            font-size: 13px;
-            line-height: 1.5;
+            font-size: 12px;
+            line-height: 1.45;
+        }
+        .ai-mode-note::before {
+            content: "AI";
+            flex: 0 0 auto;
+            padding: 2px 6px;
+            border-radius: 999px;
+            background: #eff6ff;
+            color: #1d4ed8;
+            font-size: 11px;
+            font-weight: 800;
         }
         .ai-policy-pill {
             background: #ecfdf5;
@@ -88,16 +107,11 @@
     <div class="page-mode-toolbar">
         <div class="page-mode-toolbar-label">模式操作</div>
         <div class="top-actions page-mode-toolbar-group">
+            <button class="action-btn secondary" id="ai-settings-btn">设置</button>
+            <button class="action-btn secondary" id="ai-help-btn">帮助</button>
             <button class="action-btn secondary" id="ai-refresh-btn">刷新状态</button>
             <button class="action-btn danger" id="ai-reset-btn">重新开始</button>
             <a class="action-btn secondary" href="/v1">返回大厅</a>
-        </div>
-    </div>
-
-    <div class="page-mode-toolbar ai-mode-summary">
-        <div class="page-mode-toolbar-label">AI 说明</div>
-        <div class="ai-mode-copy">
-            当前版本固定真人 P1、AI P2。普通/简单使用稳定启发式策略；困难模式会优先尝试部署模型，模型不可用时自动降级，并在状态栏显示真实策略。
         </div>
     </div>
 
@@ -121,7 +135,7 @@
     <div class="card">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
             <h2 style="margin:0;">你的动作</h2>
-            <div class="ai-diff-bar">
+            <div class="ai-diff-bar" id="ai-settings-anchor">
                 <span class="label">AI 难度：</span>
                 <button class="ai-diff-btn" data-diff="easy">简单</button>
                 <button class="ai-diff-btn" data-diff="normal">普通</button>
@@ -149,8 +163,9 @@
     <div id="ai-message" class="message-box muted" style="padding:8px 14px;">页面已加载。</div>
 
     <!-- 状态行 -->
-    <div class="card status-card">
+    <div class="card status-card ai-status-card">
         <div id="ai-basic-info" class="status-line"></div>
+        <div class="ai-mode-note">困难模式会优先尝试部署模型；模型不可用时自动降级，真实策略会显示在状态栏。</div>
     </div>
 
     <!-- 底部：最近回合 + 历史 -->
@@ -198,7 +213,6 @@
 <script src="{{ url_for('static', filename='js/core/api.js') }}"></script>
 <script src="{{ url_for('static', filename='js/core/logout_button.js') }}"></script>
 <script src="{{ url_for('static', filename='js/core/modal.js') }}"></script>
-<script src="{{ url_for('static', filename='js/pages/account_modal.js') }}"></script>
 <script src="{{ url_for('static', filename='js/pages/admin_users_modal.js') }}"></script>
 <script src="{{ url_for('static', filename='js/pages/ai_page.js') }}"></script>
 <script>

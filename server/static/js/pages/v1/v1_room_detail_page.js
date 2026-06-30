@@ -231,37 +231,6 @@ window.initRoomDetailPage = function () {
             return mySeat !== "p1" && mySeat !== "p2";
         }
 
-        function clearFrontendCacheForNewBoot() {
-            const savedBootId = localStorage.getItem("clapclap_server_boot_id");
-
-            if (savedBootId === SERVER_BOOT_ID) {
-                return false;
-            }
-
-            if (window.StorageUtils && typeof StorageUtils.clearAllClapClapStorage === "function") {
-                StorageUtils.clearAllClapClapStorage();
-            } else {
-                localStorage.removeItem("clapclap_match_identity");
-                localStorage.removeItem("clapclap_match_state");
-                localStorage.removeItem("clapclap_v2_match_state");
-                localStorage.removeItem("clapclap_ui_settings_v2");
-                localStorage.removeItem("clapclap_v2_ui_settings");
-                localStorage.removeItem("clapclap_v2_room_ui_settings");
-                Object.keys(localStorage).forEach((key) => {
-                    if (
-                        key.startsWith("clapclap_room_") ||
-                        key.startsWith("clapclap_v2_room_") ||
-                        key.startsWith("clapclap_v2_room_ui_settings")
-                    ) {
-                        localStorage.removeItem(key);
-                    }
-                });
-            }
-            sessionStorage.clear();
-            localStorage.setItem("clapclap_server_boot_id", SERVER_BOOT_ID);
-            return true;
-        }
-
         function normalizeMoveName(moveName) {
             return String(moveName || "").trim().toLowerCase();
         }

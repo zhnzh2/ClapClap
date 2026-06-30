@@ -108,12 +108,12 @@ async function startGame() {
 
 function confirmReset() {
     if (v2LatestState && !v2LatestState.is_game_over && v2LatestState.round_num > 0) {
-        ModalUtils.confirm({
+        ModalUtils.showConfirmModal({
             title: "确认重新开始",
             body: "当前对局尚未结束，确定要放弃并重新开始吗？",
             onConfirm: resetToSetup,
-            confirmLabel: "重新开始",
-            cancelLabel: "取消",
+            confirmText: "重新开始",
+            cancelText: "取消",
         });
     } else {
         resetToSetup();

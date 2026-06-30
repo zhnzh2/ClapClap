@@ -177,6 +177,7 @@
         showModal,
         closeModal,
         showConfirmModal,
+        confirm: showConfirmModal,
         showInfoModal,
         showSuccessModal,
         bindGlobalModalEvents

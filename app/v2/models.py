@@ -639,33 +639,6 @@ class SettlementStepResult:
         }
 
 
-@dataclass
-class RoundSummary:
-    """回合总结数据。"""
-    round_num: int = 0
-    pre_snapshots: dict = field(default_factory=dict)     # {player_id: resource_dict}
-    post_snapshots: dict = field(default_factory=dict)    # {player_id: resource_dict}
-    deaths: list = field(default_factory=list)            # 本回合死亡列表
-    alive_count: int = 0
-    winner: str | None = None
-    game_ended: bool = False
-    rank_updates: dict = field(default_factory=dict)      # {player_id: rank}
-    events_summary: dict = field(default_factory=dict)    # 事件摘要（按速度层归类）
-
-    def to_dict(self) -> dict:
-        return {
-            "round_num": self.round_num,
-            "pre_snapshots": self.pre_snapshots,
-            "post_snapshots": self.post_snapshots,
-            "deaths": self.deaths,
-            "alive_count": self.alive_count,
-            "winner": self.winner,
-            "game_ended": self.game_ended,
-            "rank_updates": self.rank_updates,
-            "events_summary": self.events_summary,
-        }
-
-
 # ═══════════════════════════════════════════════════════════════
 # 对局总状态
 # ═══════════════════════════════════════════════════════════════
@@ -729,12 +702,6 @@ class GameStateV2:
 
     def alive_players(self) -> list[PlayerStateV2]:
         return [p for p in self.players if p.is_alive()]
-
-    def unresolved_players(self) -> list[PlayerStateV2]:
-        return [p for p in self.players if p.is_alive() and p.is_unresolved() and not p.is_flashed]
-
-    def resolved_players(self) -> list[PlayerStateV2]:
-        return [p for p in self.players if p.is_resolved()]
 
     def dead_players(self) -> list[PlayerStateV2]:
         return [p for p in self.players if p.is_dead()]

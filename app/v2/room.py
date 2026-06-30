@@ -339,14 +339,6 @@ class RoomV2:
 
         return new_host_token, leave_type
 
-    def remove_spectator(self, spectator_token: str) -> None:
-        """移除观战者。"""
-        spec = self.get_spectator_by_token(spectator_token)
-        if spec is None:
-            raise ValueError("观战者不存在。")
-        self.spectators.remove(spec)
-        self.updated_at = datetime.now(timezone.utc)
-
     # ═══════════════════════════════════════════════════════
     # 查找
     # ═══════════════════════════════════════════════════════

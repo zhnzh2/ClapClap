@@ -712,9 +712,3 @@ def get_user_battle_ids(uid: int) -> list[str]:
     ids.reverse()
     return ids
 
-
-def get_user_battle_page(uid: int, limit: int, offset: int = 0) -> tuple[list[str], int]:
-    """Return one newest-first page of battle IDs and the unpaged total."""
-    ids = get_user_battle_ids(uid)
-    total = len(ids)
-    return ids[offset:offset + limit], total

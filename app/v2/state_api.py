@@ -8,13 +8,10 @@ ClapClap 2.0 状态 API — 生成房间和对局状态载荷。
 from __future__ import annotations
 
 from app.v2.constants import ATTACK_MOVES, DEFENSE_MOVES, Move, RESOURCE_MOVES, TRICK_MOVES
-from app.v2.constants import SPEED_LAYER_NAMES
 from app.v2.game import GameEngineV2
 from app.v2.models import (
-    DecisionRequest,
     GameStateV2,
     PlayerStateV2,
-    SettlementStepResult,
 )
 from app.v2.room import RoomV2
 
@@ -251,69 +248,6 @@ def get_room_v2_payload(
     }
 
     return payload
-
-
-# ═══════════════════════════════════════════════════════════════
-# Step 6：决策与结算进度载荷
-# ═══════════════════════════════════════════════════════════════
-
-def get_decision_request_payload(request: DecisionRequest) -> dict:
-    """获取单个决策请求的前端载荷。"""
-    return request.to_dict()
-
-
-def get_decision_requests_payload(state: GameStateV2) -> dict:
-    """获取当前所有待处理决策请求的前端载荷。
-
-    返回包含决策列表及元信息的字典。
-    """
-    requests = []
-    for r in state.current_decision_requests:
-        if hasattr(r, 'to_dict'):
-            requests.append(r.to_dict())
-        elif isinstance(r, dict):
-            requests.append(r)
-
-    return {
-        "phase": state.phase,
-        "sub_phase": state.sub_phase,
-        "current_speed_layer": state.current_speed_layer,
-        "speed_layer_name": SPEED_LAYER_NAMES.get(state.current_speed_layer, ""),
-        "negotiation_round": state.negotiation_round,
-        "decision_requests": requests,
-    }
-
-
-def get_settlement_progress_payload(result: SettlementStepResult) -> dict:
-    """获取结算进度步骤的前端载荷。"""
-    return result.to_dict()
-
-
-def get_layer_events_payload(
-    state: GameStateV2,
-    layer: int | None = None,
-) -> list[dict]:
-    """获取速度层结算事件的前端载荷。
-
-    Args:
-        state: 对局状态
-        layer: 速度层号。如果为 None，返回最新回合的所有事件。
-
-    Returns:
-        list of event dicts
-    """
-    if not state.history:
-        return []
-
-    log = state.history[-1]
-
-    if layer is not None:
-        return [
-            e.to_dict() for e in log.speed_layer_events
-            if e.speed_layer == layer
-        ]
-
-    return [e.to_dict() for e in log.speed_layer_events]
 
 
 def get_round_summary_payload(state: GameStateV2) -> dict | None:

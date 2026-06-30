@@ -116,9 +116,7 @@
 
         @media (max-width: 900px) {
             .info-grid,
-            .player-grid,
-            .selection-grid,
-            .control-grid {
+            .selection-grid {
                 grid-template-columns: 1fr;
             }
 
@@ -301,48 +299,6 @@
             100% {
                 transform: scale(1) rotateY(0deg);
                 opacity: 1;
-            }
-        }
-
-        .single-selection-grid {
-            grid-template-columns: 1fr;
-        }
-
-        .pending-row {
-            display: grid;
-            grid-template-columns: 180px 1fr 1fr;
-            gap: 10px;
-            margin-bottom: 10px;
-        }
-
-        .pending-round-box {
-            background: #f8fafc;
-        }
-
-        .pending-self-ready {
-            background: var(--blue-soft);
-            border-color: var(--blue-border);
-            color: #1d4ed8;
-        }
-
-        .pending-opponent-ready {
-            background: var(--red-soft);
-            border-color: var(--red-border);
-            color: #991b1b;
-        }
-
-        .pending-opponent-waiting {
-            animation: pending-pulse 2s ease-in-out infinite;
-        }
-
-        @keyframes pending-pulse {
-            0%, 100% { opacity: 0.5; }
-            50% { opacity: 1; }
-        }
-
-        @media (max-width: 980px) {
-            .pending-row {
-                grid-template-columns: 1fr;
             }
         }
 

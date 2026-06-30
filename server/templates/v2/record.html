@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>2.0 对局回放 - ClapClap</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/auth.css') }}" />
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/v2/v2_record.css') }}" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/v1/v1_record.css') }}" />
     <style>
         :root {
             --bg: #f4f6fb;
@@ -87,7 +87,6 @@
     <script src="{{ url_for('static', filename='js/core/api.js') }}"></script>
     <script src="{{ url_for('static', filename='js/core/logout_button.js') }}"></script>
     <script src="{{ url_for('static', filename='js/core/modal.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/pages/account_modal.js') }}"></script>
     <script src="{{ url_for('static', filename='js/pages/admin_users_modal.js') }}"></script>
     <script>
         window.V2_RECORD_BATTLE_ID = {{ battle_id|tojson }};

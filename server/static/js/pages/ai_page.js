@@ -573,16 +573,33 @@ function aiInitPage() {
     }
 
     // 操作按钮
+    document.getElementById("ai-settings-btn").addEventListener("click", function() {
+        var target = document.getElementById("ai-settings-anchor");
+        if (target) {
+            target.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+    });
+    document.getElementById("ai-help-btn").addEventListener("click", function() {
+        if (typeof ModalUtils !== "undefined" && ModalUtils.showInfoModal) {
+            ModalUtils.showInfoModal({
+                title: "AI 对战帮助",
+                body: "你固定为 P1，AI 固定为 P2。选择动作后点击“出招”，后端会统一结算；简单偏随机，普通使用启发式，困难会优先尝试部署模型。",
+                buttonText: "知道了"
+            });
+        }
+    });
     document.getElementById("ai-step-btn").addEventListener("click", aiStepGame);
     document.getElementById("ai-reset-btn").addEventListener("click", function() {
         if (aiLatestState && aiLatestState.winner === null && aiLatestState.round_num > 0) {
             // 有进行中的对局，确认后重置
-            if (typeof ModalUtils !== "undefined" && ModalUtils.confirm) {
-                ModalUtils.confirm(
-                    "确认重置",
-                    "当前对局尚未结束，确定要重新开始吗？",
-                    function() { aiResetGame(); }
-                );
+            if (typeof ModalUtils !== "undefined" && ModalUtils.showConfirmModal) {
+                ModalUtils.showConfirmModal({
+                    title: "确认重置",
+                    body: "当前对局尚未结束，确定要重新开始吗？",
+                    confirmText: "重新开始",
+                    cancelText: "取消",
+                    onConfirm: function() { aiResetGame(); }
+                });
             } else {
                 aiResetGame();
             }

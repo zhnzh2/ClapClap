@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from app.constants import Move
-from app.game import GameEngine
-from app.models import GameState
+from app.v1.constants import Move
+from app.v1.game import GameEngine
+from app.v1.models import GameState
 
 
 MOVE_INPUT_MAP: dict[str, Move] = {
@@ -89,17 +89,6 @@ def print_help() -> None:
 def format_player_state(name: str, player) -> str:
     return (
         f"{name}: "
-        f"HP={player.hp}, "
-        f"Qi={player.qi}, "
-        f"Shield={player.shield}, "
-        f"Spark={player.spark}, "
-        f"Battery={player.battery}, "
-        f"Pickaxe={player.pickaxe}, "
-        f"FlashUsed={player.flash_used}"
-    )
-
-def format_resource_snapshot(player) -> str:
-    return (
         f"HP={player.hp}, "
         f"Qi={player.qi}, "
         f"Shield={player.shield}, "
