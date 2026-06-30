@@ -23,7 +23,7 @@ var aiBattleStarted = false;
 
 var aiUiSettings = {
     showMoveCodes: false,
-    showHotkeys: false,
+    showHotkeys: true,
     showPolicy: false,
     showInference: false,
     showRoundDetails: false,
@@ -129,6 +129,7 @@ function aiSetHtml(id, html) {
 
 function aiShowEntryPage() {
     aiBattleStarted = false;
+    document.body.classList.remove("ai-in-battle");
     document.getElementById("ai-entry-page").classList.remove("ai-hidden");
     document.getElementById("ai-battle-page").classList.remove("show");
     aiSetText("ai-entry-message", "默认：P1 先手，普通难度。");
@@ -137,6 +138,7 @@ function aiShowEntryPage() {
 
 function aiShowBattlePage() {
     aiBattleStarted = true;
+    document.body.classList.add("ai-in-battle");
     document.getElementById("ai-entry-page").classList.add("ai-hidden");
     document.getElementById("ai-battle-page").classList.add("show");
     aiApplyUiSettings();

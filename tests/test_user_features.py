@@ -34,6 +34,15 @@ class TestUserFeatures(unittest.TestCase):
         self.assertTrue(logged_in["ok"], logged_in)
         return registered["user"], logged_in["session_token"]
 
+    def _register_with_role(self, username: str, role: str = "user", verified: str = "1"):
+        unique_name = f"{username}-{uuid4().hex[:8]}"
+        registered = users.register(unique_name, "old-password", verified=verified, role=role)
+        self.assertTrue(registered["ok"], registered)
+        self.user_ids.append(registered["user"]["uid"])
+        logged_in = users.login(unique_name, "old-password")
+        self.assertTrue(logged_in["ok"], logged_in)
+        return registered["user"], logged_in["session_token"]
+
     def test_password_change_requires_correct_current_password(self):
         user, token = self._register_and_login("password-user")
         headers = {"X-Session-Token": token}
@@ -131,6 +140,39 @@ class TestUserFeatures(unittest.TestCase):
             for waiting in matchmaking_v2.MATCH_QUEUE_V2
         ))
 
+    def test_admin_can_bulk_verify_and_delete_users(self):
+        admin, admin_token = self._register_with_role("bulk-admin", role="admin")
+        first = users.register(f"bulk-user-a-{uuid4().hex[:8]}", "old-password", verified="0")
+        second = users.register(f"bulk-user-b-{uuid4().hex[:8]}", "old-password", verified="0")
+        self.assertTrue(first["ok"], first)
+        self.assertTrue(second["ok"], second)
+        first_uid = first["user"]["uid"]
+        second_uid = second["user"]["uid"]
+        self.user_ids.extend([first_uid, second_uid])
+
+        verify = self.client.post(
+            "/v1/api/admin/users/bulk",
+            json={"action": "verify", "uids": [first_uid, second_uid, 0]},
+            headers={"X-Session-Token": admin_token},
+        )
+        self.assertEqual(verify.status_code, 200)
+        payload = verify.get_json()
+        self.assertEqual(payload["success_count"], 2)
+        self.assertEqual(users.get_user_by_uid(first_uid)["verified"], "1")
+        self.assertEqual(users.get_user_by_uid(second_uid)["verified"], "1")
+
+        delete = self.client.post(
+            "/v1/api/admin/users/bulk",
+            json={"action": "delete", "uids": [first_uid, second_uid, 0]},
+            headers={"X-Session-Token": admin_token},
+        )
+        self.assertEqual(delete.status_code, 200)
+        payload = delete.get_json()
+        self.assertEqual(payload["success_count"], 2)
+        self.assertFalse(users.user_exists(first_uid))
+        self.assertFalse(users.user_exists(second_uid))
+        self.user_ids = [uid for uid in self.user_ids if uid not in {first_uid, second_uid}]
+
     def test_battle_list_is_paginated(self):
         user, token = self._register_and_login("history-user")
         opponent, _ = self._register_and_login("history-opponent")
@@ -152,6 +194,34 @@ class TestUserFeatures(unittest.TestCase):
         self.assertEqual(payload["total"], 5)
         self.assertTrue(payload["has_more"])
         self.assertEqual(payload["next_offset"], 3)
+
+    def test_battle_list_filters_by_date_and_opponent(self):
+        user, token = self._register_and_login("history-filter-user")
+        alpha, _ = self._register_and_login("alpha-opponent")
+        beta, _ = self._register_and_login("beta-opponent")
+
+        first_time = datetime(2026, 5, 1, 12, 0, tzinfo=timezone.utc)
+        second_time = datetime(2026, 6, 2, 12, 0, tzinfo=timezone.utc)
+        first_id = battle_recorder.create_battle({
+            "p1": {"username": user["username"], "uid": user["uid"]},
+            "p2": {"username": alpha["username"], "uid": alpha["uid"]},
+        }, first_time)
+        second_id = battle_recorder.create_battle({
+            "p1": {"username": user["username"], "uid": user["uid"]},
+            "p2": {"username": beta["username"], "uid": beta["uid"]},
+        }, second_time)
+        self.battle_ids.update({first_id, second_id})
+
+        response = self.client.get(
+            f"/v1/api/user/{user['uid']}/battles?date_from=2026-06-01&opponent=beta",
+            headers={"X-Session-Token": token},
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["total"], 1)
+        self.assertEqual(payload["battles"][0]["battle_id"], second_id)
+        self.assertEqual(payload["battles"][0]["date_bucket"], "2026-06")
+        self.assertIn(beta["username"], payload["battles"][0]["opponents"])
 
     def test_v2_battle_record_keeps_full_header_and_round_timeline(self):
         battle_id = battle_recorder.create_battle(
@@ -447,6 +517,48 @@ class TestUserFeatures(unittest.TestCase):
             self.assertEqual(sample["battle_id"], battle_id)
             self.assertEqual(sample["human_move"], "QI")
             self.assertEqual(sample["ai_move"], "SHIELD")
+
+    def test_user_can_download_selected_battle_ids_only(self):
+        player, token = self._register_and_login("selected-export-player")
+
+        first_id = battle_recorder.create_battle(
+            {
+                "p1": {"username": player["username"], "uid": player["uid"]},
+                "p2": {"username": "ClapClap AI", "uid": -2},
+            },
+            rule_version="1.0",
+            mode="ai",
+        )
+        second_id = battle_recorder.create_battle(
+            {
+                "p1": {"username": player["username"], "uid": player["uid"]},
+                "p2": {"username": "ClapClap AI", "uid": -2},
+            },
+            rule_version="1.0",
+            mode="ai",
+        )
+        self.battle_ids.update({first_id, second_id})
+        for battle_id in (first_id, second_id):
+            battle_recorder.set_battle_metadata(battle_id, {
+                "opponent_type": "ai",
+                "ai_policy_type": "heuristic",
+                "ai_difficulty": "normal",
+                "ai_seat": "p2",
+                "human_seat": "p1",
+            })
+
+        response = self.client.get(
+            f"/v1/api/user/{player['uid']}/battles/download?mode=ai&ids={first_id}",
+            headers={"X-Session-Token": token},
+        )
+        self.assertEqual(response.status_code, 200)
+
+        with zipfile.ZipFile(io.BytesIO(response.data), "r") as archive:
+            names = set(archive.namelist())
+            self.assertIn(f"battles/{first_id}.json", names)
+            self.assertNotIn(f"battles/{second_id}.json", names)
+            manifest = json.loads(archive.read("manifest.json").decode("utf-8"))
+            self.assertEqual(manifest["battle_count"], 1)
 
     def test_user_cannot_download_other_users_battles(self):
         owner, _ = self._register_and_login("download-owner")

@@ -147,14 +147,59 @@ def _battle_filters_from_request() -> dict:
         "mode": (request.args.get("mode") or "all").strip().lower(),
         "result": (request.args.get("result") or "all").strip().lower(),
         "difficulty": (request.args.get("difficulty") or "all").strip().lower(),
+        "opponent": (request.args.get("opponent") or "").strip().lower(),
+        "date_from": (request.args.get("date_from") or "").strip(),
+        "date_to": (request.args.get("date_to") or "").strip(),
         "q": (request.args.get("q") or "").strip().lower(),
     }
+
+
+def _parse_iso_date(value: str, *, end_of_day: bool = False) -> datetime | None:
+    value = (value or "").strip()
+    if not value:
+        return None
+    try:
+        if len(value) == 10:
+            suffix = "T23:59:59+00:00" if end_of_day else "T00:00:00+00:00"
+            return datetime.fromisoformat(value + suffix)
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def _battle_start_dt(data: dict) -> datetime | None:
+    raw = data.get("start_time") or ""
+    try:
+        return datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def _battle_opponent_names(data: dict, uid: int) -> list[str]:
+    participants = data.get("participants", {}) or {}
+    names: list[str] = []
+    for info in participants.values():
+        if info.get("uid") != uid:
+            name = info.get("username")
+            if name:
+                names.append(str(name))
+    return names
+
+
+def _battle_date_bucket(data: dict) -> str:
+    dt = _battle_start_dt(data)
+    if dt is None:
+        return "未知时间"
+    return dt.strftime("%Y-%m")
 
 
 def _battle_matches_filters(data: dict, uid: int, filters: dict) -> bool:
     mode_filter = filters.get("mode") or "all"
     result_filter = filters.get("result") or "all"
     difficulty_filter = filters.get("difficulty") or "all"
+    opponent_filter = filters.get("opponent") or ""
+    date_from = _parse_iso_date(filters.get("date_from") or "")
+    date_to = _parse_iso_date(filters.get("date_to") or "", end_of_day=True)
     keyword = filters.get("q") or ""
 
     bucket = _battle_mode_bucket(data)
@@ -177,6 +222,19 @@ def _battle_matches_filters(data: dict, uid: int, filters: dict) -> bool:
         if (data.get("ai_difficulty") or "").lower() != difficulty_filter:
             return False
 
+    start_dt = _battle_start_dt(data)
+    if date_from is not None:
+        if start_dt is None or start_dt < date_from:
+            return False
+    if date_to is not None:
+        if start_dt is None or start_dt > date_to:
+            return False
+
+    if opponent_filter:
+        opponent_text = " ".join(_battle_opponent_names(data, uid)).lower()
+        if opponent_filter not in opponent_text:
+            return False
+
     if keyword:
         participants = data.get("participants", {}) or {}
         haystack_parts = [
@@ -190,6 +248,18 @@ def _battle_matches_filters(data: dict, uid: int, filters: dict) -> bool:
             return False
 
     return True
+
+
+def _requested_battle_ids() -> list[str] | None:
+    raw = (request.args.get("ids") or "").strip()
+    if not raw:
+        return None
+    ids = []
+    for item in raw.split(","):
+        bid = item.strip()
+        if len(bid) == 17 and bid.isdigit():
+            ids.append(bid)
+    return ids
 
 
 def _filtered_user_battle_ids(uid: int, filters: dict) -> list[str]:
@@ -238,6 +308,8 @@ def _summarize_user_battle(uid: int, bid: str, data: dict) -> dict | None:
             "my_rank": my_rank,
             "is_winner": is_winner,
             "participant_names": participant_names,
+            "opponents": _battle_opponent_names(data, uid),
+            "date_bucket": _battle_date_bucket(data),
             "round_count": round_count,
             "winner": data.get("winner"),
             "result": _battle_result_for_uid(data, uid),
@@ -267,6 +339,8 @@ def _summarize_user_battle(uid: int, bid: str, data: dict) -> dict | None:
         "p1_name": p1.get("username", "?"),
         "p2_name": p2.get("username", "?"),
         "opponent": opponent or "?",
+        "opponents": [opponent] if opponent else [],
+        "date_bucket": _battle_date_bucket(data),
         "result": result,
         "round_count": round_count,
         "winner": winner,
@@ -634,6 +708,65 @@ def api_admin_delete(uid: int):
     return jsonify({"ok": True, "message": f"用户 {uid} 已注销。"}), 200
 
 
+@auth_bp.post("/v1/api/admin/users/bulk")
+@auth_bp.post("/v2/api/admin/users/bulk")
+@auth_bp.post("/api/admin/users/bulk")
+@require_auth
+def api_admin_users_bulk():
+    """管理员批量验证或注销用户。"""
+    if not users.is_admin(g.current_user):
+        return jsonify({"ok": False, "error": "权限不足。"}), 403
+
+    data = request.get_json(silent=True)
+    if data is None:
+        return jsonify({"ok": False, "error": "请求体必须是 JSON。"}), 400
+
+    action = data.get("action")
+    raw_uids = data.get("uids")
+    if action not in ("verify", "delete"):
+        return jsonify({"ok": False, "error": "action 必须为 verify 或 delete。"}), 400
+    if not isinstance(raw_uids, list):
+        return jsonify({"ok": False, "error": "uids 必须是数组。"}), 400
+
+    uids: list[int] = []
+    for value in raw_uids:
+        try:
+            uid = int(value)
+        except (TypeError, ValueError):
+            continue
+        if uid not in uids:
+            uids.append(uid)
+
+    results = []
+    success_count = 0
+    for uid in uids:
+        if uid == 0:
+            results.append({"uid": uid, "ok": False, "error": "admin 账号不可操作。"})
+            continue
+        if not users.user_exists(uid):
+            results.append({"uid": uid, "ok": False, "error": "用户不存在。"})
+            continue
+
+        if action == "verify":
+            ok = users.verify_user(uid)
+            results.append({"uid": uid, "ok": ok, "error": "" if ok else "验证失败。"})
+            if ok:
+                success_count += 1
+        else:
+            ok = users.delete_user(uid)
+            results.append({"uid": uid, "ok": ok, "error": "" if ok else "注销失败。"})
+            if ok:
+                success_count += 1
+
+    return jsonify({
+        "ok": True,
+        "action": action,
+        "success_count": success_count,
+        "total": len(uids),
+        "results": results,
+    }), 200
+
+
 # ── 用户公开信息接口 ────────────────────────────────────────────
 
 @auth_bp.get("/v1/api/user/<int:uid>")
@@ -705,7 +838,12 @@ def api_user_battles_download(uid: int):
         return jsonify({"ok": False, "error": "只能下载自己的对局记录。"}), 403
 
     filters = _battle_filters_from_request()
-    battle_ids = _filtered_user_battle_ids(uid, filters)
+    requested_ids = _requested_battle_ids()
+    if requested_ids is None:
+        battle_ids = _filtered_user_battle_ids(uid, filters)
+    else:
+        allowed = set(_filtered_user_battle_ids(uid, filters))
+        battle_ids = [bid for bid in requested_ids if bid in allowed]
     training_samples: list[dict] = []
     generated_at = datetime.now(timezone.utc).isoformat()
 

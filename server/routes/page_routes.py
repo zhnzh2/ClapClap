@@ -1,5 +1,6 @@
 from flask import Blueprint, redirect, render_template, current_app
 
+from app.battle_recorder import cleanup_stale_battles
 from app.v1.room_manager import get_room
 
 page_bp = Blueprint("page", __name__)
@@ -67,10 +68,12 @@ def favicon():
 @page_bp.get("/v1/user/<int:uid>")
 def user_page(uid: int):
     """用户主页。"""
+    cleanup_stale_battles(max_age_minutes=30)
     return render_template("v1/user.html", uid=uid)
 
 
 @page_bp.get("/v1/record/<battle_id>")
 def record_page(battle_id: str):
     """对局回放页面。"""
+    cleanup_stale_battles(max_age_minutes=30)
     return render_template("v1/record.html", battle_id=battle_id)

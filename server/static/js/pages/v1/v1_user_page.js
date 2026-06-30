@@ -18,8 +18,13 @@
         mode: "all",
         result: "all",
         difficulty: "all",
+        opponent: "",
+        dateFrom: "",
+        dateTo: "",
+        groupBy: "time",
         q: ""
     };
+    var selectedBattleIds = {};
 
     // DOM 缓存
     var $loading = null;
@@ -489,6 +494,21 @@
             + '<option value="normal">普通</option>'
             + '<option value="hard">困难</option>'
             + '</select></label>'
+            + '<label class="battle-filter-field">开始日期'
+            + '<input id="battle-filter-date-from" type="date" />'
+            + '</label>'
+            + '<label class="battle-filter-field">结束日期'
+            + '<input id="battle-filter-date-to" type="date" />'
+            + '</label>'
+            + '<label class="battle-filter-field">对手'
+            + '<input id="battle-filter-opponent" type="search" maxlength="32" placeholder="对手用户名" />'
+            + '</label>'
+            + '<label class="battle-filter-field">分类'
+            + '<select id="battle-filter-group-by">'
+            + '<option value="time">按月份</option>'
+            + '<option value="opponent">按对手</option>'
+            + '<option value="none">不分类</option>'
+            + '</select></label>'
             + '<label class="battle-filter-field keyword">关键词'
             + '<input id="battle-filter-q" type="search" maxlength="40" placeholder="对局 ID / 玩家名 / 策略" />'
             + '</label>'
@@ -497,8 +517,10 @@
             + '<button class="battle-tool-btn primary" id="battle-apply-filters">应用筛选</button>'
             + '<button class="battle-tool-btn" id="battle-reset-filters">重置</button>'
             + '<button class="battle-tool-btn download" id="battle-download-zip">打包下载</button>'
+            + '<button class="battle-tool-btn" id="battle-select-page">全选本页</button>'
+            + '<button class="battle-tool-btn download" id="battle-download-selected" disabled>下载选中</button>'
             + '</div>'
-            + '<div class="battle-filter-summary" id="battle-filter-summary">可按类型、胜负、AI 难度筛选历史记录。</div>'
+            + '<div class="battle-filter-summary" id="battle-filter-summary">可按类型、胜负、时间、对手和 AI 难度筛选历史记录。</div>'
             + '</div>'
             + '<div class="battle-list" id="battle-list">'
             + '<div class="battle-list-loading">加载中...</div>'
@@ -516,6 +538,9 @@
         params.set("mode", battleFilters.mode || "all");
         params.set("result", battleFilters.result || "all");
         params.set("difficulty", battleFilters.difficulty || "all");
+        if (battleFilters.opponent) params.set("opponent", battleFilters.opponent);
+        if (battleFilters.dateFrom) params.set("date_from", battleFilters.dateFrom);
+        if (battleFilters.dateTo) params.set("date_to", battleFilters.dateTo);
         if (battleFilters.q) {
             params.set("q", battleFilters.q);
         }
@@ -527,6 +552,10 @@
             mode: (document.getElementById("battle-filter-mode") || {}).value || "all",
             result: (document.getElementById("battle-filter-result") || {}).value || "all",
             difficulty: (document.getElementById("battle-filter-difficulty") || {}).value || "all",
+            opponent: ((document.getElementById("battle-filter-opponent") || {}).value || "").trim(),
+            dateFrom: (document.getElementById("battle-filter-date-from") || {}).value || "",
+            dateTo: (document.getElementById("battle-filter-date-to") || {}).value || "",
+            groupBy: (document.getElementById("battle-filter-group-by") || {}).value || "time",
             q: ((document.getElementById("battle-filter-q") || {}).value || "").trim()
         };
     }
@@ -535,10 +564,18 @@
         var mode = document.getElementById("battle-filter-mode");
         var result = document.getElementById("battle-filter-result");
         var difficulty = document.getElementById("battle-filter-difficulty");
+        var opponent = document.getElementById("battle-filter-opponent");
+        var dateFrom = document.getElementById("battle-filter-date-from");
+        var dateTo = document.getElementById("battle-filter-date-to");
+        var groupBy = document.getElementById("battle-filter-group-by");
         var q = document.getElementById("battle-filter-q");
         if (mode) mode.value = battleFilters.mode;
         if (result) result.value = battleFilters.result;
         if (difficulty) difficulty.value = battleFilters.difficulty;
+        if (opponent) opponent.value = battleFilters.opponent || "";
+        if (dateFrom) dateFrom.value = battleFilters.dateFrom || "";
+        if (dateTo) dateTo.value = battleFilters.dateTo || "";
+        if (groupBy) groupBy.value = battleFilters.groupBy || "time";
         if (q) q.value = battleFilters.q || "";
     }
 
@@ -548,18 +585,22 @@
         var applyBtn = document.getElementById("battle-apply-filters");
         var resetBtn = document.getElementById("battle-reset-filters");
         var downloadBtn = document.getElementById("battle-download-zip");
+        var selectPageBtn = document.getElementById("battle-select-page");
+        var downloadSelectedBtn = document.getElementById("battle-download-selected");
         var qInput = document.getElementById("battle-filter-q");
 
         if (applyBtn) {
             applyBtn.addEventListener("click", function () {
                 readBattleFiltersFromDom();
+                selectedBattleIds = {};
                 battlesOffset = 0;
                 loadBattles(false);
             });
         }
         if (resetBtn) {
             resetBtn.addEventListener("click", function () {
-                battleFilters = { mode: "all", result: "all", difficulty: "all", q: "" };
+                battleFilters = { mode: "all", result: "all", difficulty: "all", opponent: "", dateFrom: "", dateTo: "", groupBy: "time", q: "" };
+                selectedBattleIds = {};
                 setBattleFilterDomValues();
                 battlesOffset = 0;
                 loadBattles(false);
@@ -568,10 +609,17 @@
         if (downloadBtn) {
             downloadBtn.addEventListener("click", downloadFilteredBattles);
         }
+        if (selectPageBtn) {
+            selectPageBtn.addEventListener("click", selectLoadedBattles);
+        }
+        if (downloadSelectedBtn) {
+            downloadSelectedBtn.addEventListener("click", downloadSelectedBattles);
+        }
         if (qInput) {
             qInput.addEventListener("keydown", function (event) {
                 if (event.key === "Enter") {
                     readBattleFiltersFromDom();
+                    selectedBattleIds = {};
                     battlesOffset = 0;
                     loadBattles(false);
                 }
@@ -603,9 +651,16 @@
                     renderBattleStats(res.data.stats || null);
                     renderBattleFilterSummary(res.data.total || 0, res.data.filtered_stats || null);
                 }
+                var lastGroup = append ? getLastRenderedBattleGroup(listEl) : null;
                 battles.forEach(function (b) {
+                    var group = battleGroupLabel(b);
+                    if (battleFilters.groupBy !== "none" && group !== lastGroup) {
+                        listEl.appendChild(createBattleGroupHeader(group));
+                        lastGroup = group;
+                    }
                     listEl.appendChild(createBattleItem(b));
                 });
+                updateSelectedBattleControls();
                 battlesOffset = res.data.next_offset || (battlesOffset + battles.length);
 
                 var oldButton = document.getElementById("battle-load-more");
@@ -641,6 +696,9 @@
         if (battleFilters.mode !== "all") active.push("类型：" + battleFilters.mode);
         if (battleFilters.result !== "all") active.push("结果：" + battleFilters.result);
         if (battleFilters.difficulty !== "all") active.push("AI 难度：" + difficultyText(battleFilters.difficulty));
+        if (battleFilters.dateFrom) active.push("开始：" + battleFilters.dateFrom);
+        if (battleFilters.dateTo) active.push("结束：" + battleFilters.dateTo);
+        if (battleFilters.opponent) active.push("对手：" + battleFilters.opponent);
         if (battleFilters.q) active.push("关键词：" + battleFilters.q);
 
         el.textContent = "筛选结果 " + total + " 场"
@@ -650,18 +708,32 @@
 
     function downloadFilteredBattles() {
         readBattleFiltersFromDom();
+        downloadBattlesZip([], "battle-download-zip");
+    }
 
-        var btn = document.getElementById("battle-download-zip");
+    function downloadSelectedBattles() {
+        readBattleFiltersFromDom();
+        downloadBattlesZip(Object.keys(selectedBattleIds), "battle-download-selected");
+    }
+
+    function downloadBattlesZip(selectedIds, buttonId) {
+        var onlySelected = selectedIds && selectedIds.length > 0;
+
+        var btn = document.getElementById(buttonId);
         if (btn) {
             btn.disabled = true;
-            btn.textContent = "打包中...";
+            btn.textContent = onlySelected ? "下载中..." : "打包中...";
         }
 
         var params = new URLSearchParams();
         params.set("mode", battleFilters.mode || "all");
         params.set("result", battleFilters.result || "all");
         params.set("difficulty", battleFilters.difficulty || "all");
+        if (battleFilters.opponent) params.set("opponent", battleFilters.opponent);
+        if (battleFilters.dateFrom) params.set("date_from", battleFilters.dateFrom);
+        if (battleFilters.dateTo) params.set("date_to", battleFilters.dateTo);
         if (battleFilters.q) params.set("q", battleFilters.q);
+        if (onlySelected) params.set("ids", selectedIds.join(","));
 
         var headers = {};
         if (window.SessionUtils) {
@@ -687,13 +759,15 @@
                 var url = URL.createObjectURL(blob);
                 var a = document.createElement("a");
                 a.href = url;
-                a.download = "clapclap_battles_uid" + uid + ".zip";
+                a.download = onlySelected
+                    ? "clapclap_selected_battles_uid" + uid + ".zip"
+                    : "clapclap_battles_uid" + uid + ".zip";
                 document.body.appendChild(a);
                 a.click();
                 a.remove();
                 URL.revokeObjectURL(url);
                 var summary = document.getElementById("battle-filter-summary");
-                if (summary) summary.textContent += " · 已开始下载 ZIP";
+                if (summary) summary.textContent += onlySelected ? " · 已开始下载选中对局" : " · 已开始下载 ZIP";
             })
             .catch(function (error) {
                 var summary = document.getElementById("battle-filter-summary");
@@ -702,9 +776,60 @@
             .finally(function () {
                 if (btn) {
                     btn.disabled = false;
-                    btn.textContent = "打包下载";
+                    btn.textContent = onlySelected ? "下载选中" : "打包下载";
+                    updateSelectedBattleControls();
                 }
             });
+    }
+
+    function selectLoadedBattles() {
+        document.querySelectorAll(".battle-select-checkbox").forEach(function (input) {
+            var bid = input.getAttribute("data-battle-id");
+            if (bid) {
+                selectedBattleIds[bid] = true;
+                input.checked = true;
+            }
+        });
+        updateSelectedBattleControls();
+    }
+
+    function updateSelectedBattleControls() {
+        var count = Object.keys(selectedBattleIds).length;
+        var btn = document.getElementById("battle-download-selected");
+        var summary = document.getElementById("battle-filter-summary");
+        if (btn) {
+            btn.disabled = count === 0;
+            btn.textContent = count ? ("下载选中 " + count) : "下载选中";
+        }
+        if (summary && count) {
+            summary.setAttribute("data-selected-text", "已选 " + count + " 场");
+        }
+    }
+
+    function createBattleGroupHeader(label) {
+        var div = document.createElement("div");
+        div.className = "battle-group-header";
+        div.setAttribute("data-group-label", label);
+        div.textContent = label;
+        return div;
+    }
+
+    function getLastRenderedBattleGroup(listEl) {
+        var headers = listEl.querySelectorAll(".battle-group-header");
+        if (!headers.length) return null;
+        return headers[headers.length - 1].getAttribute("data-group-label");
+    }
+
+    function battleGroupLabel(b) {
+        if (battleFilters.groupBy === "opponent") {
+            var opponents = b.opponents || [];
+            if (opponents.length) return "对手：" + opponents.join("、");
+            return "对手：未知";
+        }
+        if (battleFilters.groupBy === "time") {
+            return b.date_bucket || "未知时间";
+        }
+        return "";
     }
 
     function renderBattleStats(stats) {
@@ -796,7 +921,8 @@
 
         var div = document.createElement("div");
         div.className = "battle-item";
-        div.innerHTML = '<div class="battle-result-badge battle-result-' + result + '">' + escHtml(resultLabel) + '</div>'
+        div.innerHTML = '<label class="battle-select-wrap" title="选择此对局"><input class="battle-select-checkbox" type="checkbox" data-battle-id="' + escHtml(b.battle_id) + '" /></label>'
+            + '<div class="battle-result-badge battle-result-' + result + '">' + escHtml(resultLabel) + '</div>'
             + '<div class="battle-info">'
             + '<div class="battle-info-row">'
             + '<span class="battle-opponent">' + escHtml(p1Name) + ' vs ' + escHtml(p2Name) + '</span>'
@@ -808,6 +934,8 @@
             + '</div>'
             + '</div>'
             + '<span class="battle-result-text result-' + result + '">' + escHtml(resultLabel) + '</span>';
+
+        bindBattleSelection(div, b.battle_id);
 
         // 点击跳转到回放页面
         div.addEventListener("click", function () {
@@ -861,7 +989,8 @@
 
         var div = document.createElement("div");
         div.className = "battle-item battle-item-v2";
-        div.innerHTML = '<div class="battle-result-badge battle-result-' + rankClass + '">' + escHtml(rankBadge) + '</div>'
+        div.innerHTML = '<label class="battle-select-wrap" title="选择此对局"><input class="battle-select-checkbox" type="checkbox" data-battle-id="' + escHtml(b.battle_id) + '" /></label>'
+            + '<div class="battle-result-badge battle-result-' + rankClass + '">' + escHtml(rankBadge) + '</div>'
             + '<div class="battle-info">'
             + '<div class="battle-info-row">'
             + modeBadge
@@ -875,11 +1004,37 @@
             + '</div>'
             + '<span class="battle-result-text result-' + rankClass + '">' + escHtml(rankBadge) + '</span>';
 
+        bindBattleSelection(div, b.battle_id);
+
         div.addEventListener("click", function () {
             window.location.href = "/v2/record/" + encodeURIComponent(b.battle_id);
         });
 
         return div;
+    }
+
+    function bindBattleSelection(div, battleId) {
+        var checkbox = div.querySelector(".battle-select-checkbox");
+        if (!checkbox) return;
+        checkbox.checked = !!selectedBattleIds[battleId];
+        checkbox.addEventListener("click", function (event) {
+            event.stopPropagation();
+        });
+        checkbox.addEventListener("change", function (event) {
+            event.stopPropagation();
+            if (checkbox.checked) {
+                selectedBattleIds[battleId] = true;
+            } else {
+                delete selectedBattleIds[battleId];
+            }
+            updateSelectedBattleControls();
+        });
+        var label = div.querySelector(".battle-select-wrap");
+        if (label) {
+            label.addEventListener("click", function (event) {
+                event.stopPropagation();
+            });
+        }
     }
 
     // ==================================================================

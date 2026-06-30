@@ -4,224 +4,260 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>ClapClap 1.0 AI 对战</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/v1/v1_local.css') }}" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/v2/v2_local.css') }}" />
     <link rel="stylesheet" href="{{ url_for('static', filename='css/auth.css') }}" />
     <style>
         body.ai-page-body {
+            min-height: 100vh;
             height: 100vh;
             overflow: hidden;
+            background: var(--bg);
         }
-        .ai-shell {
+
+        body.ai-page-body .ai-shell {
             max-width: 1180px;
             height: calc(100vh - 20px);
-            margin: 0 auto;
             display: flex;
             flex-direction: column;
-            gap: 8px;
         }
+
+        body.ai-page-body .page-top-shell {
+            min-height: 86px;
+            margin-bottom: 58px;
+            padding: 10px 0 8px;
+        }
+
+        body.ai-page-body .page-top-shell .page-version-chip {
+            top: 6px;
+        }
+
+        body.ai-page-body .page-top-shell .header-actions {
+            position: fixed;
+            top: 12px;
+            right: var(--top-action-right);
+            z-index: 100;
+        }
+
+        body.ai-page-body .page-title-block {
+            padding-top: 8px;
+        }
+
+        body.ai-page-body .page-title-block h1 {
+            font-size: 26px;
+            margin-bottom: 4px;
+            letter-spacing: 0;
+        }
+
+        body.ai-page-body .page-title-block p {
+            font-size: 13px;
+        }
+
+        body.ai-page-body .page-mode-toolbar {
+            position: fixed;
+            top: 86px;
+            right: var(--top-action-right);
+            z-index: 90;
+            width: min(560px, calc(100vw - 36px));
+            min-height: 0;
+            justify-content: flex-end;
+            pointer-events: none;
+        }
+
+        body.ai-page-body .page-mode-toolbar-group {
+            pointer-events: auto;
+        }
+
+        body.ai-page-body:not(.ai-in-battle) .ai-battle-only {
+            display: none !important;
+        }
+
         .ai-entry-page,
         .ai-battle-page {
             min-height: 0;
             flex: 1;
         }
+
         .ai-entry-page {
             display: grid;
             place-items: center;
+            padding-bottom: 8px;
         }
+
         .ai-entry-card {
-            width: min(760px, 100%);
-            background: var(--card);
-            border-radius: 12px;
-            box-shadow: var(--shadow);
-            padding: 18px;
+            width: min(820px, 100%);
+            margin-bottom: 0;
         }
-        .ai-entry-top {
-            display: flex;
-            justify-content: space-between;
-            gap: 12px;
-            align-items: flex-start;
-            margin-bottom: 16px;
+
+        .ai-entry-card h2 {
+            font-size: 20px;
         }
-        .ai-entry-title h1 {
-            margin: 0;
-            font-size: 26px;
-            line-height: 1.15;
-        }
-        .ai-entry-title p {
-            margin: 6px 0 0 0;
-            color: var(--muted);
-            font-size: 13px;
-        }
-        .ai-entry-actions,
-        .ai-battle-actions {
-            display: flex;
-            gap: 8px;
-            flex-wrap: wrap;
-            justify-content: flex-end;
-        }
+
         .ai-option-block {
-            margin-top: 12px;
+            width: 100%;
         }
+
         .ai-option-title {
-            font-weight: 800;
+            margin: 2px 0 8px;
             font-size: 13px;
-            color: #374151;
-            margin-bottom: 8px;
+            font-weight: bold;
+            color: #4b5563;
         }
+
         .ai-option-row {
             display: grid;
             grid-template-columns: repeat(3, minmax(0, 1fr));
-            gap: 8px;
+            gap: 10px;
+            width: 100%;
+            margin-bottom: 12px;
         }
-        .ai-choice-btn,
-        .ai-diff-btn,
-        .ai-seat-btn {
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            background: #fff;
-            color: var(--text);
-            cursor: pointer;
-            font-weight: 800;
-            transition: 0.15s ease;
+
+        .ai-option-row.seat-row {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
         }
+
         .ai-choice-btn {
-            min-height: 72px;
-            padding: 10px;
+            min-height: 76px;
             text-align: left;
+            align-items: flex-start;
+            border-width: 2px;
+            cursor: pointer;
         }
+
         .ai-choice-btn strong {
             display: block;
-            font-size: 15px;
             margin-bottom: 4px;
+            font-size: 15px;
+            color: var(--text);
         }
+
         .ai-choice-btn span {
-            color: var(--muted);
+            display: block;
             font-size: 12px;
-            line-height: 1.4;
+            line-height: 1.45;
+            color: var(--muted);
+            font-weight: normal;
         }
-        .ai-choice-btn.active,
-        .ai-diff-btn.active,
-        .ai-seat-btn.active {
-            border-color: #2563eb;
-            background: #eff6ff;
-            color: #1d4ed8;
-            box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.10);
+
+        .ai-choice-btn.active {
+            border-color: var(--blue);
+            background: linear-gradient(180deg, #eff6ff 0%, #ffffff 100%);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.10);
         }
-        .ai-start-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 12px;
-            margin-top: 16px;
-            flex-wrap: wrap;
-        }
+
         .ai-deploy-panel {
             display: none;
-            margin-top: 14px;
-            border: 1px solid #dbeafe;
-            border-radius: 10px;
-            padding: 10px;
-            background: #f8fbff;
+            width: 100%;
+            margin-top: 2px;
         }
+
         .ai-progress-track {
             height: 9px;
+            margin-top: 8px;
+            overflow: hidden;
             border-radius: 999px;
             background: #e5e7eb;
-            overflow: hidden;
-            margin-top: 8px;
         }
+
         .ai-progress-fill {
             width: 0;
             height: 100%;
             border-radius: 999px;
-            background: #2563eb;
+            background: var(--blue);
             transition: width 0.12s ease;
         }
+
+        .ai-entry-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            width: 100%;
+            margin-top: 10px;
+            flex-wrap: wrap;
+        }
+
         .ai-battle-page {
             display: none;
             flex-direction: column;
             gap: 8px;
         }
+
         .ai-battle-page.show {
             display: flex;
         }
-        .ai-battle-top {
+
+        .ai-battle-head {
             display: grid;
-            grid-template-columns: minmax(0, 1fr) auto;
-            gap: 8px;
+            grid-template-columns: auto minmax(0, 1fr);
             align-items: center;
-            background: #fff;
-            border-radius: 10px;
+            gap: 12px;
+            margin-bottom: 0;
             padding: 8px 10px;
-            box-shadow: var(--shadow);
         }
-        .ai-battle-title {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            flex-wrap: wrap;
-            min-width: 0;
-        }
-        .ai-battle-title h1 {
+
+        .ai-battle-head h2 {
             margin: 0;
-            font-size: 18px;
-            line-height: 1.2;
+            white-space: nowrap;
         }
+
         .ai-main-grid {
             min-height: 0;
             flex: 1;
             display: grid;
-            grid-template-columns: minmax(170px, 0.82fr) minmax(300px, 1.35fr) minmax(200px, 0.86fr);
+            grid-template-columns: minmax(174px, 0.8fr) minmax(340px, 1.45fr) minmax(220px, 0.9fr);
             gap: 8px;
         }
-        .ai-panel {
+
+        .ai-main-grid > .card {
             min-height: 0;
-            background: #fff;
-            border-radius: 10px;
-            box-shadow: var(--shadow);
-            padding: 8px;
+            margin-bottom: 0;
             overflow: hidden;
         }
-        .ai-panel h2 {
-            margin: 0 0 6px 0;
-            font-size: 14px;
-            line-height: 1.2;
+
+        .ai-resource-panel,
+        .ai-move-panel,
+        .ai-side-panel {
+            display: flex;
+            flex-direction: column;
         }
+
         .ai-resource-stack {
+            min-height: 0;
             display: grid;
+            grid-template-rows: 1fr 1fr;
             gap: 8px;
         }
+
         .ai-resource-card {
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 7px;
-            background: #f9fafb;
+            min-height: 0;
         }
-        .ai-resource-card.human {
-            background: #eff6ff;
-            border-color: #bfdbfe;
+
+        .ai-resource-card h2 {
+            font-size: 14px;
+            margin-bottom: 6px;
         }
-        .ai-resource-card.ai {
-            background: #fff1f2;
-            border-color: #fecdd3;
-        }
+
         .ai-resource-grid {
             display: grid;
             grid-template-columns: repeat(2, minmax(0, 1fr));
             gap: 5px;
         }
+
         .ai-resource-grid .resource-item {
             min-height: 42px;
             padding: 5px 7px;
-            border-radius: 7px;
+            border-radius: 8px;
         }
+
         .ai-resource-grid .resource-label {
-            font-size: 10px;
             margin-bottom: 2px;
+            font-size: 10px;
         }
+
         .ai-resource-grid .resource-value {
             font-size: 16px;
         }
+
         .ai-move-toolbar {
             display: flex;
             align-items: center;
@@ -229,220 +265,296 @@
             gap: 8px;
             margin-bottom: 4px;
         }
+
         .ai-move-toolbar h2 {
             margin: 0;
         }
-        .ai-move-panel {
-            display: flex;
-            flex-direction: column;
-        }
+
         .ai-move-groups {
             min-height: 0;
             flex: 1;
             overflow: hidden;
         }
+
         .ai-move-groups .move-group-title {
-            margin: 5px 0 3px 0;
+            margin: 5px 0 3px;
             font-size: 11px;
         }
+
         .ai-move-groups .move-grid {
             grid-template-columns: repeat(4, minmax(0, 1fr));
             gap: 5px;
         }
+
         .ai-move-groups .move-btn {
             min-height: 45px;
             padding: 5px 4px;
             border-radius: 8px;
         }
-        .ai-move-groups .move-label {
-            font-size: 13px;
-            margin-bottom: 0;
+
+        .ai-battle-page.show-hotkeys .ai-move-groups .move-btn {
+            padding-top: 13px;
         }
+
+        .ai-move-groups .move-label {
+            margin-bottom: 0;
+            font-size: 13px;
+        }
+
         .ai-move-groups .move-name,
         .ai-move-groups .move-hotkey {
             display: none;
         }
+
         .ai-battle-page.show-codes .move-name,
         .ai-battle-page.show-hotkeys .move-hotkey {
             display: block;
         }
+
+        .ai-battle-page.show-hotkeys .move-hotkey {
+            top: 3px;
+            right: 4px;
+            min-width: 18px;
+            height: 16px;
+            padding: 0 4px;
+            border-radius: 5px;
+            border: 1px solid #c7d2fe;
+            background: #eef2ff;
+            color: #3730a3;
+            font-size: 10px;
+            line-height: 15px;
+            text-align: center;
+            opacity: 1;
+        }
+
         .ai-submit-row {
             display: grid;
-            grid-template-columns: 1fr auto;
+            grid-template-columns: minmax(0, 1fr) auto;
+            align-items: center;
             gap: 8px;
             margin-top: 6px;
-            align-items: center;
         }
+
         .ai-message-line {
             min-width: 0;
+            min-height: 18px;
             color: #374151;
             font-size: 13px;
-            white-space: nowrap;
             overflow: hidden;
+            white-space: nowrap;
             text-overflow: ellipsis;
         }
+
         .ai-side-panel {
-            display: grid;
-            grid-template-rows: auto auto minmax(0, 1fr);
             gap: 8px;
         }
+
+        .ai-side-section {
+            min-height: 0;
+        }
+
         .ai-move-box,
         .ai-latest-box,
         .ai-history-box {
             border: 1px solid var(--border);
-            border-radius: 8px;
+            border-radius: 10px;
             background: #f9fafb;
             padding: 8px;
             font-size: 12px;
             line-height: 1.45;
         }
+
         .ai-latest-box.compact .round-detail-extra {
             display: none;
         }
+
         .ai-history-box {
             min-height: 0;
             overflow: auto;
         }
+
         .ai-history-box.hidden,
         .ai-policy-extra.hidden {
             display: none;
         }
+
         .ai-history-box .history-item {
             padding: 6px;
             font-size: 12px;
             line-height: 1.45;
-            border-radius: 7px;
         }
+
         .ai-settings-grid {
             display: grid;
-            gap: 8px;
-            margin: 8px 0 14px 0;
+            gap: 4px;
+            margin: 8px 0 10px;
         }
+
         .ai-setting-row {
             display: flex;
             justify-content: space-between;
             align-items: center;
             gap: 12px;
+            padding: 8px 0;
             border-bottom: 1px solid #f1f5f9;
-            padding: 7px 0;
         }
+
         .ai-setting-row span {
             color: var(--muted);
             font-size: 12px;
         }
+
         .ai-hidden {
             display: none !important;
         }
-        @media (max-width: 680px) {
+
+        @media (max-width: 860px) {
             body.ai-page-body {
+                height: auto;
                 overflow: auto;
             }
-            .ai-shell {
+
+            body.ai-page-body .ai-shell {
                 height: auto;
                 min-height: calc(100vh - 20px);
             }
+
+            body.ai-page-body .page-top-shell {
+                min-height: 0;
+                margin-bottom: 8px;
+                padding-top: 48px;
+            }
+
+            body.ai-page-body .page-top-shell .header-actions {
+                position: static;
+                justify-content: center;
+                margin-bottom: 10px;
+            }
+
+            body.ai-page-body .page-mode-toolbar {
+                position: static;
+                width: 100%;
+                margin-bottom: 8px;
+                pointer-events: auto;
+            }
+
+            body.ai-page-body .page-title-block h1 {
+                font-size: 22px;
+            }
+
             .ai-main-grid,
-            .ai-option-row {
+            .ai-option-row,
+            .ai-option-row.seat-row,
+            .ai-battle-head {
                 grid-template-columns: 1fr;
             }
-            .ai-battle-top {
-                grid-template-columns: 1fr;
+
+            .ai-move-groups {
+                overflow: visible;
             }
         }
     </style>
 </head>
 <body class="ai-page-body">
-<div class="ai-shell">
+<div class="container ai-shell">
+    <div class="page-top-shell">
+        <a class="page-version-chip" href="/v1/local" title="切换到 1.0 本地双人版">本地</a>
+        <div class="header-actions">
+            <a class="header-account-btn" href="/v1/rules">规则界面</a>
+            <button class="header-account-btn" id="header-admin-btn" style="display:none;">查看用户</button>
+            <button class="header-account-btn" id="header-account-btn">账号</button>
+            <button class="header-account-btn danger" id="header-logout-btn">退出登录</button>
+        </div>
+        <div class="page-title-block">
+            <h1>1.0 AI 对战</h1>
+            <p>选择座位和难度后开局，困难模式进入前会检查模型部署状态。</p>
+        </div>
+    </div>
+
+    <div class="page-mode-toolbar">
+        <div class="page-mode-toolbar-label">模式操作</div>
+        <div class="top-actions page-mode-toolbar-group">
+            <button class="action-btn secondary" id="ai-help-btn">帮助</button>
+            <button class="action-btn secondary ai-battle-only" id="ai-settings-btn">设置</button>
+            <button class="action-btn ai-battle-only" id="ai-refresh-btn">刷新</button>
+            <button class="action-btn danger ai-battle-only" id="ai-reset-btn">退出本局</button>
+            <a class="action-btn secondary" href="/v1">返回大厅</a>
+        </div>
+    </div>
+
     <section class="ai-entry-page" id="ai-entry-page">
-        <div class="ai-entry-card">
-            <div class="ai-entry-top">
-                <div class="ai-entry-title">
-                    <h1>1.0 AI 对战</h1>
-                    <p>选择座位和难度后进入对战。困难模式会先检查模型部署状态。</p>
+        <div class="card setup-card ai-entry-card">
+            <h2>准备阶段</h2>
+            <div class="setup-controls">
+                <div class="ai-option-block">
+                    <div class="ai-option-title">你的座位</div>
+                    <div class="ai-option-row seat-row">
+                        <button class="setup-player-card ai-choice-btn ai-seat-btn" data-seat="p1">
+                            <strong>P1 先手</strong>
+                            <span>你先行动，AI 控制 P2。</span>
+                        </button>
+                        <button class="setup-player-card ai-choice-btn ai-seat-btn" data-seat="p2">
+                            <strong>P2 后手</strong>
+                            <span>AI 控制 P1，你控制 P2。</span>
+                        </button>
+                    </div>
                 </div>
-                <div class="ai-entry-actions">
-                    <a class="action-btn secondary" href="/v1">返回大厅</a>
-                    <button class="action-btn secondary" id="header-admin-btn" style="display:none;">查看用户</button>
-                    <button class="action-btn secondary" id="header-account-btn">账号</button>
-                    <button class="action-btn danger" id="header-logout-btn">退出登录</button>
-                </div>
-            </div>
 
-            <div class="ai-option-block">
-                <div class="ai-option-title">你的座位</div>
-                <div class="ai-option-row">
-                    <button class="ai-choice-btn ai-seat-btn" data-seat="p1">
-                        <strong>P1 先手</strong>
-                        <span>你先行动，AI 控制 P2。</span>
-                    </button>
-                    <button class="ai-choice-btn ai-seat-btn" data-seat="p2">
-                        <strong>P2 后手</strong>
-                        <span>AI 控制 P1，你控制 P2。</span>
-                    </button>
+                <div class="ai-option-block">
+                    <div class="ai-option-title">AI 难度</div>
+                    <div class="ai-option-row">
+                        <button class="setup-player-card ai-choice-btn ai-diff-btn" data-diff="easy">
+                            <strong>简单</strong>
+                            <span>随机合法动作，适合熟悉规则。</span>
+                        </button>
+                        <button class="setup-player-card ai-choice-btn ai-diff-btn" data-diff="normal">
+                            <strong>普通</strong>
+                            <span>启发式策略，反应更稳定。</span>
+                        </button>
+                        <button class="setup-player-card ai-choice-btn ai-diff-btn" data-diff="hard">
+                            <strong>困难</strong>
+                            <span>进入前检查部署模型，不可用时自动降级。</span>
+                        </button>
+                    </div>
                 </div>
-            </div>
 
-            <div class="ai-option-block">
-                <div class="ai-option-title">AI 难度</div>
-                <div class="ai-option-row">
-                    <button class="ai-choice-btn ai-diff-btn" data-diff="easy">
-                        <strong>简单</strong>
-                        <span>随机合法动作，适合熟悉规则。</span>
-                    </button>
-                    <button class="ai-choice-btn ai-diff-btn" data-diff="normal">
-                        <strong>普通</strong>
-                        <span>启发式策略，反应更稳定。</span>
-                    </button>
-                    <button class="ai-choice-btn ai-diff-btn" data-diff="hard">
-                        <strong>困难</strong>
-                        <span>进入前检查部署模型，不可用时自动降级。</span>
-                    </button>
+                <div class="selection-box ai-deploy-panel" id="ai-deploy-panel">
+                    <div id="ai-deploy-text">准备进入对战...</div>
+                    <div class="ai-progress-track">
+                        <div class="ai-progress-fill" id="ai-deploy-progress"></div>
+                    </div>
                 </div>
-            </div>
 
-            <div class="ai-deploy-panel" id="ai-deploy-panel">
-                <div id="ai-deploy-text">准备进入对战...</div>
-                <div class="ai-progress-track">
-                    <div class="ai-progress-fill" id="ai-deploy-progress"></div>
+                <div class="ai-entry-footer">
+                    <div class="muted" id="ai-entry-message">默认：P1 先手，普通难度。</div>
+                    <button class="action-btn primary setup-start-btn" id="ai-start-btn">开始对战</button>
                 </div>
-            </div>
-
-            <div class="ai-start-row">
-                <div class="muted" id="ai-entry-message">默认：P1 先手，普通难度。</div>
-                <button class="action-btn primary" id="ai-start-btn">开始对战</button>
             </div>
         </div>
     </section>
 
     <section class="ai-battle-page" id="ai-battle-page">
-        <div class="ai-battle-top">
-            <div class="ai-battle-title">
-                <h1>AI 对战</h1>
-                <div id="ai-basic-info" class="status-line"></div>
-            </div>
-            <div class="ai-battle-actions">
-                <button class="action-btn secondary" id="ai-settings-btn">设置</button>
-                <button class="action-btn secondary" id="ai-help-btn">帮助</button>
-                <button class="action-btn secondary" id="ai-refresh-btn">刷新</button>
-                <button class="action-btn danger" id="ai-reset-btn">退出本局</button>
-            </div>
+        <div class="card status-card ai-battle-head">
+            <h2>对战状态</h2>
+            <div id="ai-basic-info" class="status-line"></div>
         </div>
 
         <div class="ai-main-grid">
-            <div class="ai-panel">
+            <div class="card ai-resource-panel">
+                <h2>玩家状态</h2>
                 <div class="ai-resource-stack">
-                    <div class="ai-resource-card human">
+                    <div class="player-panel focused ai-resource-card">
                         <h2 id="ai-human-state-title">你的资源 (P1)</h2>
                         <div id="ai-p1-state" class="ai-resource-grid"></div>
                     </div>
-                    <div class="ai-resource-card ai">
+                    <div class="player-panel ai-resource-card">
                         <h2 id="ai-opponent-state-title">AI 资源 (P2)</h2>
                         <div id="ai-p2-state" class="ai-resource-grid"></div>
                     </div>
                 </div>
             </div>
 
-            <div class="ai-panel ai-move-panel">
+            <div class="card ai-move-panel">
                 <div class="ai-move-toolbar">
                     <h2>你的动作</h2>
                     <button class="action-btn" id="ai-clear-btn">清空</button>
@@ -454,14 +566,14 @@
                 </div>
             </div>
 
-            <div class="ai-panel ai-side-panel">
-                <div>
+            <div class="card ai-side-panel">
+                <div class="ai-side-section">
                     <h2>AI 出招</h2>
                     <div class="ai-move-box" id="ai-move-box">
                         <div class="muted">等待你出招...</div>
                     </div>
                 </div>
-                <div>
+                <div class="ai-side-section">
                     <h2>最近结果</h2>
                     <div id="ai-latest-round" class="ai-latest-box compact">当前还没有回合记录。</div>
                 </div>
@@ -506,7 +618,7 @@
             </label>
             <label class="ai-setting-row">
                 <div>显示快捷键<br><span>动作按钮右上角的键盘提示。</span></div>
-                <input type="checkbox" class="ai-setting-toggle" data-setting="showHotkeys" />
+                <input type="checkbox" class="ai-setting-toggle" data-setting="showHotkeys" checked />
             </label>
             <label class="ai-setting-row">
                 <div>显示 AI 策略<br><span>随机、启发式、模型降级等调试信息。</span></div>
@@ -546,14 +658,16 @@
 <script src="{{ url_for('static', filename='js/pages/ai_page.js') }}"></script>
 <script>
     // 账号按钮
-    var btn = document.getElementById("header-account-btn");
-    if (btn) {
-        var user = window.SessionUtils.getSessionUser();
-        if (user) {
-            btn.textContent = user.username;
-            btn.addEventListener("click", function () {
-                window.location.href = "/v1/user/" + user.uid;
-            });
+    if (window.SessionUtils) {
+        var btn = document.getElementById("header-account-btn");
+        if (btn) {
+            var user = window.SessionUtils.getSessionUser();
+            if (user) {
+                btn.textContent = user.username;
+                btn.addEventListener("click", function () {
+                    window.location.href = "/v1/user/" + user.uid;
+                });
+            }
         }
     }
     if (typeof ModalUtils !== "undefined" && ModalUtils.bindGlobalModalEvents) {

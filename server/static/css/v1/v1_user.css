@@ -409,6 +409,36 @@
     align-items: end;
 }
 
+.battle-group-header {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    padding: 7px 10px;
+    border-radius: 10px;
+    background: #f3f6fb;
+    border: 1px solid var(--border);
+    color: #374151;
+    font-size: 12px;
+    font-weight: 900;
+}
+
+.battle-select-wrap {
+    width: 26px;
+    height: 40px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    cursor: pointer;
+}
+
+.battle-select-checkbox {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+    accent-color: var(--accent, #446aa5);
+}
+
 .battle-filter-field {
     display: flex;
     flex-direction: column;

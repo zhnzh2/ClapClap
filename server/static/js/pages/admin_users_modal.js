@@ -56,6 +56,14 @@
         title.className = "modal-title";
         title.textContent = "用户管理（共 " + users.length + " 人）";
 
+        var toolbar = document.createElement("div");
+        toolbar.className = "admin-bulk-toolbar";
+        toolbar.innerHTML =
+            '<label class="admin-select-all"><input type="checkbox" id="admin-select-all-users" /> 全选可操作用户</label>' +
+            '<span class="admin-selected-count" id="admin-selected-count">已选 0 人</span>' +
+            '<button class="admin-bulk-btn verify" id="admin-bulk-verify" disabled>批量验证</button>' +
+            '<button class="admin-bulk-btn delete" id="admin-bulk-delete" disabled>批量注销</button>';
+
         // 表格容器
         var tableWrap = document.createElement("div");
         tableWrap.style.overflowX = "auto";
@@ -67,6 +75,7 @@
         var thead = document.createElement("thead");
         var headerRow = document.createElement("tr");
         var headers = [
+            { text: "", width: "38px" },
             { text: "UID", width: "52px" },
             { text: "用户名", width: "auto" },
             { text: "创建时间", width: "150px" },
@@ -90,6 +99,7 @@
         var tbody = document.createElement("tbody");
         users.forEach(function (u) {
             var tr = document.createElement("tr");
+            tr.setAttribute("data-uid", String(u.uid));
             if (u.uid === 0) {
                 tr.style.background = "#fefce8";
             }
@@ -108,6 +118,7 @@
                 : _esc(introText);
 
             tr.innerHTML =
+                '<td style="text-align:center;">' + _buildSelectCell(u) + '</td>' +
                 '<td style="text-align:center;">' + u.uid + '</td>' +
                 '<td>' + _esc(u.username) + '</td>' +
                 '<td style="font-size:12px;color:#6b7280;white-space:nowrap;">' + _esc(u.created_at || "-") + '</td>' +
@@ -123,6 +134,7 @@
 
         // 关闭（点击遮罩区域即可关闭，不设关闭按钮）
         card.appendChild(title);
+        card.appendChild(toolbar);
         card.appendChild(tableWrap);
         mask.appendChild(card);
         document.body.appendChild(mask);
@@ -133,6 +145,14 @@
 
         _applyTableStyles();
         _bindActionEvents(mask, users);
+        _bindBulkEvents(mask, users);
+    }
+
+    function _buildSelectCell(u) {
+        if (u.uid === 0) {
+            return '<span style="color:#9ca3af;">-</span>';
+        }
+        return '<input class="admin-user-check" type="checkbox" data-uid="' + u.uid + '" />';
     }
 
     function _buildActionCell(u) {
@@ -166,6 +186,152 @@
                 }
             });
         });
+    }
+
+    function _bindBulkEvents(mask, users) {
+        var selectAll = mask.querySelector("#admin-select-all-users");
+        var bulkVerify = mask.querySelector("#admin-bulk-verify");
+        var bulkDelete = mask.querySelector("#admin-bulk-delete");
+
+        mask.querySelectorAll(".admin-user-check").forEach(function (checkbox) {
+            checkbox.addEventListener("change", function () {
+                _updateBulkToolbar(mask);
+            });
+        });
+
+        if (selectAll) {
+            selectAll.addEventListener("change", function () {
+                var checked = !!selectAll.checked;
+                mask.querySelectorAll(".admin-user-check").forEach(function (checkbox) {
+                    checkbox.checked = checked;
+                });
+                _updateBulkToolbar(mask);
+            });
+        }
+
+        if (bulkVerify) {
+            bulkVerify.addEventListener("click", function () {
+                var uids = _selectedUids(mask);
+                if (uids.length === 0) return;
+                _confirmBulk("verify", uids, mask);
+            });
+        }
+
+        if (bulkDelete) {
+            bulkDelete.addEventListener("click", function () {
+                var uids = _selectedUids(mask);
+                if (uids.length === 0) return;
+                _confirmBulk("delete", uids, mask);
+            });
+        }
+
+        _updateBulkToolbar(mask);
+    }
+
+    function _selectedUids(mask) {
+        var uids = [];
+        mask.querySelectorAll(".admin-user-check:checked").forEach(function (checkbox) {
+            var uid = parseInt(checkbox.getAttribute("data-uid"), 10);
+            if (!isNaN(uid)) uids.push(uid);
+        });
+        return uids;
+    }
+
+    function _updateBulkToolbar(mask) {
+        var selected = _selectedUids(mask);
+        var count = mask.querySelector("#admin-selected-count");
+        var bulkVerify = mask.querySelector("#admin-bulk-verify");
+        var bulkDelete = mask.querySelector("#admin-bulk-delete");
+        var selectAll = mask.querySelector("#admin-select-all-users");
+        var allChecks = mask.querySelectorAll(".admin-user-check");
+        var checkedChecks = mask.querySelectorAll(".admin-user-check:checked");
+
+        if (count) count.textContent = "已选 " + selected.length + " 人";
+        if (bulkVerify) bulkVerify.disabled = selected.length === 0;
+        if (bulkDelete) bulkDelete.disabled = selected.length === 0;
+        if (selectAll) {
+            selectAll.checked = allChecks.length > 0 && checkedChecks.length === allChecks.length;
+            selectAll.indeterminate = checkedChecks.length > 0 && checkedChecks.length < allChecks.length;
+        }
+    }
+
+    function _confirmBulk(action, uids, mask) {
+        var isDelete = action === "delete";
+        var title = isDelete ? "批量注销用户" : "批量验证用户";
+        var body = isDelete
+            ? "确认注销选中的 " + uids.length + " 个用户吗？此操作不可撤销，会清理关联房间、匹配状态并标记历史对局。"
+            : "确认验证选中的 " + uids.length + " 个用户吗？";
+
+        if (typeof ModalUtils !== "undefined" && ModalUtils.showConfirmModal) {
+            ModalUtils.showConfirmModal({
+                title: title,
+                body: body,
+                confirmText: isDelete ? "批量注销" : "批量验证",
+                cancelText: "取消",
+                confirmClassName: isDelete ? "danger" : "primary",
+                onConfirm: function () {
+                    _doBulk(action, uids, mask);
+                }
+            });
+        } else if (confirm(body)) {
+            _doBulk(action, uids, mask);
+        }
+    }
+
+    function _doBulk(action, uids, mask) {
+        _setBulkBusy(mask, true);
+        ApiUtils.apiPost(_apiUrl("/admin/users/bulk"), {
+            action: action,
+            uids: uids
+        }).then(function (result) {
+            if (!result.ok) {
+                _showError(result.error || "批量操作失败。");
+                return;
+            }
+            var okUids = (result.data.results || [])
+                .filter(function (item) { return item.ok; })
+                .map(function (item) { return item.uid; });
+
+            if (action === "verify") {
+                okUids.forEach(function (uid) {
+                    _updateVerifiedCell(mask, uid);
+                });
+            } else {
+                okUids.forEach(function (uid) {
+                    _removeTableRow(mask, uid, false);
+                });
+                _updateUserCountTitle(mask);
+            }
+            _clearSelected(mask);
+            _updateBulkToolbar(mask);
+        }).catch(function () {
+            _showError("批量操作失败。");
+        }).finally(function () {
+            _setBulkBusy(mask, false);
+        });
+    }
+
+    function _setBulkBusy(mask, busy) {
+        mask.querySelectorAll(".admin-bulk-btn").forEach(function (btn) {
+            btn.disabled = busy || _selectedUids(mask).length === 0;
+        });
+        mask.querySelectorAll(".admin-user-check, #admin-select-all-users").forEach(function (input) {
+            input.disabled = busy;
+        });
+    }
+
+    function _clearSelected(mask) {
+        mask.querySelectorAll(".admin-user-check").forEach(function (checkbox) {
+            checkbox.checked = false;
+        });
+    }
+
+    function _showError(message) {
+        if (typeof ModalUtils !== "undefined") {
+            ModalUtils.showInfoModal({ title: "错误", body: message, buttonText: "关闭" });
+        } else {
+            alert(message);
+        }
     }
 
     function _confirmVerify(uid, name, btn, mask) {
@@ -214,11 +380,7 @@
                 btn.remove();
                 _updateVerifiedCell(mask, uid);
             } else {
-                if (typeof ModalUtils !== "undefined") {
-                    ModalUtils.showInfoModal({ title: "错误", body: result.error || "验证失败。", buttonText: "关闭" });
-                } else {
-                    alert(result.error || "验证失败。");
-                }
+                _showError(result.error || "验证失败。");
             }
         });
     }
@@ -226,13 +388,9 @@
     function _doDelete(uid, mask) {
         ApiUtils.apiPost(_apiUrl("/admin/delete/" + uid), {}).then(function (result) {
             if (result.ok) {
-                _removeTableRow(mask, uid);
+                _removeTableRow(mask, uid, true);
             } else {
-                if (typeof ModalUtils !== "undefined") {
-                    ModalUtils.showInfoModal({ title: "错误", body: result.error || "注销失败。", buttonText: "关闭" });
-                } else {
-                    alert(result.error || "注销失败。");
-                }
+                _showError(result.error || "注销失败。");
             }
         });
     }
@@ -240,23 +398,30 @@
     function _updateVerifiedCell(mask, uid) {
         var rows = mask.querySelectorAll("tbody tr");
         rows.forEach(function (tr) {
-            var cells = tr.querySelectorAll("td");
-            if (cells.length > 0 && cells[0].textContent.trim() === String(uid)) {
-                if (cells[3]) {
-                    cells[3].innerHTML = '<span style="color:#16a34a;">已验证</span>';
+            if (tr.getAttribute("data-uid") === String(uid)) {
+                var cells = tr.querySelectorAll("td");
+                if (cells[4]) {
+                    cells[4].innerHTML = '<span style="color:#16a34a;">已验证</span>';
                 }
+                var verifyBtn = tr.querySelector('.verify-btn[data-uid="' + uid + '"]');
+                if (verifyBtn) verifyBtn.remove();
             }
         });
     }
 
-    function _removeTableRow(mask, uid) {
+    function _removeTableRow(mask, uid, updateTitle) {
         var rows = mask.querySelectorAll("tbody tr");
         rows.forEach(function (tr) {
-            var cells = tr.querySelectorAll("td");
-            if (cells.length > 0 && cells[0].textContent.trim() === String(uid)) {
+            if (tr.getAttribute("data-uid") === String(uid)) {
                 tr.remove();
             }
         });
+        if (updateTitle) {
+            _updateUserCountTitle(mask);
+        }
+    }
+
+    function _updateUserCountTitle(mask) {
         var titleEl = mask.querySelector(".modal-title");
         if (titleEl) {
             var remaining = mask.querySelectorAll("tbody tr").length;
@@ -302,6 +467,42 @@
                 "  vertical-align: middle;" +
                 "  line-height: 1.5;" +
                 "}" +
+                ".admin-bulk-toolbar {" +
+                "  display:flex;" +
+                "  align-items:center;" +
+                "  gap:8px;" +
+                "  flex-wrap:wrap;" +
+                "  margin-top:12px;" +
+                "  padding:10px;" +
+                "  border:1px solid #e5e7eb;" +
+                "  border-radius:10px;" +
+                "  background:#f9fafb;" +
+                "}" +
+                ".admin-select-all {" +
+                "  display:inline-flex;" +
+                "  align-items:center;" +
+                "  gap:6px;" +
+                "  font-size:13px;" +
+                "  font-weight:700;" +
+                "  color:#374151;" +
+                "}" +
+                ".admin-selected-count {" +
+                "  color:#6b7280;" +
+                "  font-size:12px;" +
+                "  margin-right:auto;" +
+                "}" +
+                ".admin-bulk-btn {" +
+                "  padding:6px 12px;" +
+                "  border:1px solid #d1d5db;" +
+                "  border-radius:8px;" +
+                "  font-size:12px;" +
+                "  font-weight:800;" +
+                "  background:white;" +
+                "  cursor:pointer;" +
+                "}" +
+                ".admin-bulk-btn.verify { color:#15803d; border-color:#86efac; }" +
+                ".admin-bulk-btn.delete { color:#dc2626; border-color:#fca5a5; }" +
+                ".admin-bulk-btn:disabled { opacity:0.45; cursor:not-allowed; }" +
                 ".admin-users-table tbody tr:hover {" +
                 "  background: #f9fafb !important;" +
                 "}" +

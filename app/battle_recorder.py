@@ -472,6 +472,61 @@ def delete_battle(battle_id: str) -> bool:
         return True
 
 
+# ── 清理过期对局 ────────────────────────────────────────────
+
+def cleanup_stale_battles(max_age_minutes: int = 30) -> int:
+    """删除超过 max_age_minutes 分钟前创建、且仍处于"进行中"的对局。
+
+    在对局记录页面打开时调用，清理被遗弃的未完成对局。
+    返回删除的对局数量。
+    """
+    _ensure_dirs()
+    now = datetime.now(timezone.utc)
+    deleted_count = 0
+    stale_ids: list[str] = []
+
+    for path in sorted(BATTLES_DIR.glob("*.json")):
+        if path.parent != BATTLES_DIR:
+            continue
+
+        battle_id = path.stem
+        # 从文件名解析创建时间
+        try:
+            created = datetime.strptime(battle_id, "%Y%m%d%H%M%S%f")
+            created = created.replace(tzinfo=timezone.utc)
+        except ValueError:
+            continue
+
+        age_minutes = (now - created).total_seconds() / 60.0
+        if age_minutes <= max_age_minutes:
+            continue
+
+        # 快速检查是否"进行中"（end_time 为 null）
+        try:
+            raw = path.read_text(encoding="utf-8")
+            # 不需要完整解析 JSON，只检查 end_time 字段
+            if '"end_time": null' not in raw and '"end_time":null' not in raw:
+                continue
+        except Exception:
+            continue
+
+        # 确认后完整读取并删除
+        data = read_battle(battle_id)
+        if data is None:
+            continue
+        if data.get("end_time") is not None:
+            continue
+
+        if delete_battle(battle_id):
+            stale_ids.append(battle_id)
+            deleted_count += 1
+
+    if stale_ids:
+        print(f"[battle] 清理了 {deleted_count} 个过期进行中对局（>{max_age_minutes}分钟）：{stale_ids}")
+
+    return deleted_count
+
+
 # ── 用户注销处理 ─────────────────────────────────────────────
 
 def mark_user_deleted_in_battles(username: str, uid: int) -> None:

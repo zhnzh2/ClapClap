@@ -2,6 +2,7 @@
 
 from flask import Blueprint, render_template, current_app
 
+from app.battle_recorder import cleanup_stale_battles
 from app.v2.room_manager import get_room_v2
 
 v2_page_bp = Blueprint("v2_page", __name__)
@@ -55,10 +56,12 @@ def v2_match():
 @v2_page_bp.get("/v2/record/<battle_id>")
 def v2_record_page(battle_id: str):
     """2.0 对局回放页面。"""
+    cleanup_stale_battles(max_age_minutes=30)
     return render_template("v2/record.html", battle_id=battle_id)
 
 
 @v2_page_bp.get("/v2/user/<int:uid>")
 def v2_user_page(uid: int):
     """用户主页在 v2 路径下的入口。"""
+    cleanup_stale_battles(max_age_minutes=30)
     return render_template("v2/user.html", uid=uid)

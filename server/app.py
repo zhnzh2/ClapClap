@@ -26,6 +26,9 @@ from server.routes.match_v2_routes import match_v2_bp
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ.get("FLASK_SECRET_KEY") or os.environ.get("SECRET_KEY") or uuid4().hex
 app.config["SERVER_BOOT_ID"] = uuid4().hex
+# 静态文件缓存：5 分钟过期，每次重启后版本号变化强制刷新
+_static_max_age = int(os.environ.get("STATIC_MAX_AGE_SECONDS", "300"))
+app.config["SEND_FILE_MAX_AGE_DEFAULT"] = _static_max_age
 
 socketio.init_app(app)
 
