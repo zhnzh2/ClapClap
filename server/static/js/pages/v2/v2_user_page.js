@@ -14,6 +14,12 @@
     var activePanel = "info";   // info | settings | battles
     var battlesOffset = 0;
     var battlesPageSize = 50;
+    var battleFilters = {
+        mode: "all",
+        result: "all",
+        difficulty: "all",
+        q: ""
+    };
 
     // DOM 缓存
     var $loading = null;
@@ -456,12 +462,121 @@
         $content.innerHTML = '<div class="user-panel">'
             + '<h2 class="user-panel-title">历史对局</h2>'
             + '<div class="battle-stats" id="battle-stats" style="display:none;"></div>'
+            + '<div class="battle-tools">'
+            + '<div class="battle-filter-grid">'
+            + '<label class="battle-filter-field">类型'
+            + '<select id="battle-filter-mode">'
+            + '<option value="all">全部</option>'
+            + '<option value="ai">AI 人机</option>'
+            + '<option value="v1">1.0 真人</option>'
+            + '<option value="v2">2.0 多人</option>'
+            + '<option value="local">本地对战</option>'
+            + '<option value="room">房间对战</option>'
+            + '</select></label>'
+            + '<label class="battle-filter-field">结果'
+            + '<select id="battle-filter-result">'
+            + '<option value="all">全部</option>'
+            + '<option value="win">胜</option>'
+            + '<option value="loss">负</option>'
+            + '<option value="draw">平</option>'
+            + '<option value="ongoing">进行中</option>'
+            + '<option value="completed">已结束</option>'
+            + '</select></label>'
+            + '<label class="battle-filter-field">AI 难度'
+            + '<select id="battle-filter-difficulty">'
+            + '<option value="all">全部</option>'
+            + '<option value="easy">简单</option>'
+            + '<option value="normal">普通</option>'
+            + '<option value="hard">困难</option>'
+            + '</select></label>'
+            + '<label class="battle-filter-field keyword">关键词'
+            + '<input id="battle-filter-q" type="search" maxlength="40" placeholder="对局 ID / 玩家名 / 策略" />'
+            + '</label>'
+            + '</div>'
+            + '<div class="battle-tool-actions">'
+            + '<button class="battle-tool-btn primary" id="battle-apply-filters">应用筛选</button>'
+            + '<button class="battle-tool-btn" id="battle-reset-filters">重置</button>'
+            + '<button class="battle-tool-btn download" id="battle-download-zip">打包下载</button>'
+            + '</div>'
+            + '<div class="battle-filter-summary" id="battle-filter-summary">可按类型、胜负、AI 难度筛选历史记录。</div>'
+            + '</div>'
             + '<div class="battle-list" id="battle-list">'
             + '<div class="battle-list-loading">加载中...</div>'
             + '</div>'
             + '</div>';
 
+        bindBattleFilterControls();
         loadBattles(false);
+    }
+
+    function battleQueryString(offset) {
+        var params = new URLSearchParams();
+        params.set("limit", String(battlesPageSize));
+        params.set("offset", String(offset));
+        params.set("mode", battleFilters.mode || "all");
+        params.set("result", battleFilters.result || "all");
+        params.set("difficulty", battleFilters.difficulty || "all");
+        if (battleFilters.q) {
+            params.set("q", battleFilters.q);
+        }
+        return params.toString();
+    }
+
+    function readBattleFiltersFromDom() {
+        battleFilters = {
+            mode: (document.getElementById("battle-filter-mode") || {}).value || "all",
+            result: (document.getElementById("battle-filter-result") || {}).value || "all",
+            difficulty: (document.getElementById("battle-filter-difficulty") || {}).value || "all",
+            q: ((document.getElementById("battle-filter-q") || {}).value || "").trim()
+        };
+    }
+
+    function setBattleFilterDomValues() {
+        var mode = document.getElementById("battle-filter-mode");
+        var result = document.getElementById("battle-filter-result");
+        var difficulty = document.getElementById("battle-filter-difficulty");
+        var q = document.getElementById("battle-filter-q");
+        if (mode) mode.value = battleFilters.mode;
+        if (result) result.value = battleFilters.result;
+        if (difficulty) difficulty.value = battleFilters.difficulty;
+        if (q) q.value = battleFilters.q || "";
+    }
+
+    function bindBattleFilterControls() {
+        setBattleFilterDomValues();
+
+        var applyBtn = document.getElementById("battle-apply-filters");
+        var resetBtn = document.getElementById("battle-reset-filters");
+        var downloadBtn = document.getElementById("battle-download-zip");
+        var qInput = document.getElementById("battle-filter-q");
+
+        if (applyBtn) {
+            applyBtn.addEventListener("click", function () {
+                readBattleFiltersFromDom();
+                battlesOffset = 0;
+                loadBattles(false);
+            });
+        }
+        if (resetBtn) {
+            resetBtn.addEventListener("click", function () {
+                battleFilters = { mode: "all", result: "all", difficulty: "all", q: "" };
+                setBattleFilterDomValues();
+                battlesOffset = 0;
+                loadBattles(false);
+            });
+        }
+        if (downloadBtn) {
+            downloadBtn.addEventListener("click", downloadFilteredBattles);
+        }
+        if (qInput) {
+            qInput.addEventListener("keydown", function (event) {
+                if (event.key === "Enter") {
+                    readBattleFiltersFromDom();
+                    battlesOffset = 0;
+                    loadBattles(false);
+                }
+            });
+        }
     }
 
     function loadBattles(append) {
@@ -469,7 +584,7 @@
         if (!listEl) return;
 
         window.ApiUtils.apiGet(
-            "/v2/api/user/" + uid + "/battles?limit=" + battlesPageSize + "&offset=" + battlesOffset
+            "/v2/api/user/" + uid + "/battles?" + battleQueryString(battlesOffset)
         )
             .then(function (res) {
                 if (!res.ok) {
@@ -484,7 +599,10 @@
                 }
 
                 if (!append) listEl.innerHTML = "";
-                if (!append) renderBattleStats(res.data.stats || null);
+                if (!append) {
+                    renderBattleStats(res.data.stats || null);
+                    renderBattleFilterSummary(res.data.total || 0, res.data.filtered_stats || null);
+                }
                 battles.forEach(function (b) {
                     listEl.appendChild(createBattleItem(b));
                 });
@@ -512,11 +630,89 @@
             });
     }
 
+    function renderBattleFilterSummary(total, filteredStats) {
+        var el = document.getElementById("battle-filter-summary");
+        if (!el) return;
+
+        var aiCount = filteredStats && filteredStats.ai ? (filteredStats.ai.total || 0) : 0;
+        var v1Count = filteredStats && filteredStats.v1 ? (filteredStats.v1.total || 0) : 0;
+        var v2Count = filteredStats && filteredStats.v2 ? (filteredStats.v2.total || 0) : 0;
+        var active = [];
+        if (battleFilters.mode !== "all") active.push("类型：" + battleFilters.mode);
+        if (battleFilters.result !== "all") active.push("结果：" + battleFilters.result);
+        if (battleFilters.difficulty !== "all") active.push("AI 难度：" + difficultyText(battleFilters.difficulty));
+        if (battleFilters.q) active.push("关键词：" + battleFilters.q);
+
+        el.textContent = "筛选结果 " + total + " 场"
+            + "（1.0 真人 " + v1Count + "，AI " + aiCount + "，2.0 " + v2Count + "）"
+            + (active.length ? " · " + active.join(" · ") : " · 当前未启用筛选");
+    }
+
+    function downloadFilteredBattles() {
+        readBattleFiltersFromDom();
+
+        var btn = document.getElementById("battle-download-zip");
+        if (btn) {
+            btn.disabled = true;
+            btn.textContent = "打包中...";
+        }
+
+        var params = new URLSearchParams();
+        params.set("mode", battleFilters.mode || "all");
+        params.set("result", battleFilters.result || "all");
+        params.set("difficulty", battleFilters.difficulty || "all");
+        if (battleFilters.q) params.set("q", battleFilters.q);
+
+        var headers = {};
+        if (window.SessionUtils) {
+            var token = window.SessionUtils.getSessionToken();
+            if (token) headers["X-Session-Token"] = token;
+        }
+
+        fetch("/v2/api/user/" + uid + "/battles/download?" + params.toString(), {
+            method: "GET",
+            headers: headers
+        })
+            .then(function (response) {
+                if (!response.ok) {
+                    return response.json().then(function (data) {
+                        throw new Error((data && data.error) || "下载失败。");
+                    }).catch(function (error) {
+                        throw error;
+                    });
+                }
+                return response.blob();
+            })
+            .then(function (blob) {
+                var url = URL.createObjectURL(blob);
+                var a = document.createElement("a");
+                a.href = url;
+                a.download = "clapclap_battles_uid" + uid + ".zip";
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                URL.revokeObjectURL(url);
+                var summary = document.getElementById("battle-filter-summary");
+                if (summary) summary.textContent += " · 已开始下载 ZIP";
+            })
+            .catch(function (error) {
+                var summary = document.getElementById("battle-filter-summary");
+                if (summary) summary.textContent = error.message || "下载失败。";
+            })
+            .finally(function () {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = "打包下载";
+                }
+            });
+    }
+
     function renderBattleStats(stats) {
         var el = document.getElementById("battle-stats");
         if (!el || !stats) return;
 
         var v1 = stats.v1 || {};
+        var ai = stats.ai || {};
         var v2 = stats.v2 || {};
         var v2Avg = v2.average_rank == null ? "—" : v2.average_rank;
         var v2Rates = v2.total
@@ -543,6 +739,15 @@
             + (v1.ongoing ? ' · 进行中 ' + v1.ongoing : '')
             + '</div>'
             + '</div>'
+            + '<div class="battle-stat-card">'
+            + '<div class="battle-stat-title">AI 人机对战</div>'
+            + '<div class="battle-stat-main">' + (ai.total || 0) + ' 场</div>'
+            + '<div class="battle-stat-sub">胜 ' + (ai.wins || 0)
+            + ' · 负 ' + (ai.losses || 0)
+            + ' · 平 ' + (ai.draws || 0)
+            + (ai.ongoing ? ' · 进行中 ' + ai.ongoing : '')
+            + '</div>'
+            + '</div>'
             + '<div class="battle-stat-card accent">'
             + '<div class="battle-stat-title">2.0 多人战绩</div>'
             + '<div class="battle-stat-main">' + (v2.total || 0) + ' 场 · 冠军 ' + (v2.championships || 0) + '</div>'
@@ -561,6 +766,7 @@
         var result = b.result || "unknown";
         var p1Name = b.p1_name || "P1";
         var p2Name = b.p2_name || "P2";
+        var isAiBattle = b.mode === "ai" || b.opponent_type === "ai";
 
         // 结果标签映射
         var resultLabels = {
@@ -584,6 +790,9 @@
         }
 
         var roundsText = (b.round_count || 0) + " 回合";
+        var modeText = isAiBattle
+            ? ' · AI ' + (b.ai_difficulty ? difficultyText(b.ai_difficulty) : '')
+            : '';
 
         var div = document.createElement("div");
         div.className = "battle-item";
@@ -595,6 +804,7 @@
             + '</div>'
             + '<div class="battle-info-row">'
             + '<span class="battle-time">' + escHtml(timeStr) + '</span>'
+            + (modeText ? '<span class="battle-time">' + escHtml(modeText) + '</span>' : '')
             + '</div>'
             + '</div>'
             + '<span class="battle-result-text result-' + result + '">' + escHtml(resultLabel) + '</span>';

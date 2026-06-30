@@ -16,6 +16,8 @@ var aiThinking = false;
 var aiEndModalShownForWinner = null;
 var aiLastMoveLabel = null;
 var aiLastMoveName = null;
+var aiPolicyType = null;
+var aiInferenceMs = null;
 
 // =========================================================================
 // 动作说明（与 local 页面一致）
@@ -245,6 +247,9 @@ function aiRenderState(state) {
     if (state.ai_difficulty) {
         aiDifficulty = state.ai_difficulty;
     }
+    if (state.ai_policy_type) {
+        aiPolicyType = state.ai_policy_type;
+    }
 
     var catalog = state.move_catalog || [];
     var logs = state.history || [];
@@ -253,7 +258,9 @@ function aiRenderState(state) {
     document.getElementById("ai-basic-info").innerHTML =
         '<span class="status-badge">回合：' + state.round_num + '</span>' +
         '<span class="winner-badge">胜负：' + aiWinnerText(state.winner) + '</span>' +
-        '<span class="status-badge">难度：' + aiDifficultyLabel(aiDifficulty) + '</span>';
+        '<span class="status-badge">难度：' + aiDifficultyLabel(aiDifficulty) + '</span>' +
+        '<span class="status-badge ai-policy-pill">策略：' + aiPolicyTypeLabel(aiPolicyType) + '</span>' +
+        (aiInferenceMs !== null ? '<span class="status-badge">推理：' + aiInferenceMs + ' ms</span>' : '');
 
     // 双方资源
     document.getElementById("ai-p1-state").innerHTML = aiRenderPlayerState(state.p1);
@@ -378,6 +385,8 @@ async function aiResetGame() {
     aiEndModalShownForWinner = null;
     aiLastMoveLabel = null;
     aiLastMoveName = null;
+    aiPolicyType = null;
+    aiInferenceMs = null;
     window._aiBattleId = null;
     aiCloseEndModal();
 
@@ -421,6 +430,8 @@ async function aiStepGame() {
     var aiMoveLabel = result.data.ai_move_label;
     aiLastMoveName = aiMove;
     aiLastMoveLabel = aiMoveLabel;
+    aiPolicyType = result.data.ai_policy_type || (result.data.state && result.data.state.ai_policy_type) || aiPolicyType;
+    aiInferenceMs = result.data.ai_inference_ms == null ? null : result.data.ai_inference_ms;
     window._aiBattleId = result.data.battle_id || (result.data.state && result.data.state.battle_id) || window._aiBattleId;
     document.getElementById("ai-move-box").innerHTML =
         '<div><strong>AI 本回合出了：</strong></div>' +
@@ -460,6 +471,14 @@ function aiDifficultyLabel(diff) {
     if (diff === "easy") return "简单";
     if (diff === "hard") return "困难";
     return "普通";
+}
+
+function aiPolicyTypeLabel(policyType) {
+    if (policyType === "model") return "训练模型";
+    if (policyType === "heuristic_fallback") return "模型降级";
+    if (policyType === "heuristic") return "启发式";
+    if (policyType === "random") return "随机";
+    return "待选择";
 }
 
 // =========================================================================

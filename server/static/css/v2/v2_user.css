@@ -394,6 +394,101 @@
     margin-bottom: 14px;
 }
 
+.battle-tools {
+    background: linear-gradient(135deg, #ffffff, #f8fbff);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 14px;
+    margin-bottom: 14px;
+}
+
+.battle-filter-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    align-items: end;
+}
+
+.battle-filter-field {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    font-size: 12px;
+    font-weight: 800;
+    color: var(--muted);
+}
+
+.battle-filter-field.keyword {
+    min-width: 180px;
+}
+
+.battle-filter-field select,
+.battle-filter-field input {
+    min-height: 36px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--card);
+    color: var(--text);
+    padding: 0 10px;
+    font-size: 13px;
+    outline: none;
+}
+
+.battle-filter-field select:focus,
+.battle-filter-field input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(74, 137, 220, 0.12);
+}
+
+.battle-tool-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.battle-tool-btn {
+    min-height: 34px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--card);
+    color: var(--text);
+    padding: 0 14px;
+    font-size: 13px;
+    font-weight: 800;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.battle-tool-btn:hover:not(:disabled) {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.battle-tool-btn.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+}
+
+.battle-tool-btn.download {
+    background: #ecfdf5;
+    border-color: #bbf7d0;
+    color: #166534;
+}
+
+.battle-tool-btn:disabled {
+    cursor: wait;
+    opacity: 0.65;
+}
+
+.battle-filter-summary {
+    margin-top: 10px;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.5;
+}
+
 .battle-stat-card {
     background: var(--card);
     border: 1px solid var(--border);
@@ -641,6 +736,18 @@
 @media (max-width: 640px) {
     .battle-stats {
         grid-template-columns: 1fr;
+    }
+
+    .battle-filter-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .battle-tool-actions {
+        flex-direction: column;
+    }
+
+    .battle-tool-btn {
+        width: 100%;
     }
 
     .user-page {

@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import io
+import json
+import zipfile
 from datetime import datetime, timezone
 import unittest
 from uuid import uuid4
@@ -338,6 +341,123 @@ class TestUserFeatures(unittest.TestCase):
         self.assertEqual(item["mode"], "ai")
         self.assertEqual(item["opponent_type"], "ai")
         self.assertEqual(item["ai_difficulty"], "normal")
+
+    def test_user_battles_can_filter_ai_records(self):
+        player, token = self._register_and_login("ai-filter-player")
+
+        ai_battle_id = battle_recorder.create_battle(
+            {
+                "p1": {"username": player["username"], "uid": player["uid"]},
+                "p2": {"username": "ClapClap AI", "uid": -2},
+            },
+            rule_version="1.0",
+            mode="ai",
+        )
+        self.battle_ids.add(ai_battle_id)
+        battle_recorder.set_battle_metadata(ai_battle_id, {
+            "opponent_type": "ai",
+            "ai_policy_type": "heuristic_fallback",
+            "ai_difficulty": "hard",
+            "ai_seat": "p2",
+            "human_seat": "p1",
+        })
+        battle_recorder.record_round(ai_battle_id, {
+            "round_num": 1,
+            "human_seat": "p1",
+            "ai_seat": "p2",
+            "human_move": "QI",
+            "ai_move": "GI",
+            "p1_move": "QI",
+            "p2_move": "GI",
+            "winner_after_round": None,
+        })
+
+        opponent, _ = self._register_and_login("ai-filter-opponent")
+        human_battle_id = battle_recorder.create_battle(
+            {
+                "p1": {"username": player["username"], "uid": player["uid"]},
+                "p2": {"username": opponent["username"], "uid": opponent["uid"]},
+            },
+            rule_version="1.0",
+            mode="local",
+        )
+        self.battle_ids.add(human_battle_id)
+
+        response = self.client.get(
+            f"/v1/api/user/{player['uid']}/battles?mode=ai&difficulty=hard",
+            headers={"X-Session-Token": token},
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+
+        self.assertEqual(payload["total"], 1)
+        self.assertEqual(payload["filtered_stats"]["ai"]["total"], 1)
+        self.assertEqual(payload["battles"][0]["battle_id"], ai_battle_id)
+        self.assertEqual(payload["battles"][0]["ai_policy_type"], "heuristic_fallback")
+
+    def test_user_can_download_filtered_ai_battles_with_training_samples(self):
+        player, token = self._register_and_login("ai-export-player")
+
+        battle_id = battle_recorder.create_battle(
+            {
+                "p1": {"username": player["username"], "uid": player["uid"]},
+                "p2": {"username": "ClapClap AI", "uid": -2},
+            },
+            rule_version="1.0",
+            mode="ai",
+        )
+        self.battle_ids.add(battle_id)
+        battle_recorder.set_battle_metadata(battle_id, {
+            "opponent_type": "ai",
+            "ai_policy_type": "heuristic",
+            "ai_difficulty": "normal",
+            "ai_seat": "p2",
+            "human_seat": "p1",
+        })
+        battle_recorder.record_round(battle_id, {
+            "round_num": 1,
+            "human_seat": "p1",
+            "ai_seat": "p2",
+            "human_move": "QI",
+            "ai_move": "SHIELD",
+            "p1_move": "QI",
+            "p2_move": "SHIELD",
+            "winner_after_round": None,
+        })
+
+        response = self.client.get(
+            f"/v1/api/user/{player['uid']}/battles/download?mode=ai",
+            headers={"X-Session-Token": token},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.mimetype, "application/zip")
+
+        with zipfile.ZipFile(io.BytesIO(response.data), "r") as archive:
+            names = set(archive.namelist())
+            self.assertIn("manifest.json", names)
+            self.assertIn(f"battles/{battle_id}.json", names)
+            self.assertIn("training/ai_battle_samples.jsonl", names)
+
+            manifest = json.loads(archive.read("manifest.json").decode("utf-8"))
+            self.assertEqual(manifest["battle_count"], 1)
+            self.assertEqual(manifest["training_sample_count"], 1)
+
+            lines = archive.read("training/ai_battle_samples.jsonl").decode("utf-8").strip().splitlines()
+            sample = json.loads(lines[0])
+            self.assertEqual(sample["battle_id"], battle_id)
+            self.assertEqual(sample["human_move"], "QI")
+            self.assertEqual(sample["ai_move"], "SHIELD")
+
+    def test_user_cannot_download_other_users_battles(self):
+        owner, _ = self._register_and_login("download-owner")
+        viewer, viewer_token = self._register_and_login("download-viewer")
+        self.assertNotEqual(owner["uid"], viewer["uid"])
+
+        response = self.client.get(
+            f"/v1/api/user/{owner['uid']}/battles/download",
+            headers={"X-Session-Token": viewer_token},
+        )
+        self.assertEqual(response.status_code, 403)
 
     def test_multiplayer_battle_moves_to_rub_only_after_all_participants_deleted(self):
         alice, _ = self._register_and_login("rub-v2-alice")

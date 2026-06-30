@@ -294,11 +294,13 @@ def ai_step():
             "state": payload,
             "ai_move": ai_move.name,
             "ai_move_label": ai_move.value,
-        "difficulty": difficulty,
-        "human_seat": human_seat,
-        "ai_seat": f"p{ai_player}",
-        "battle_id": battle_id,
-        "ai_inference_ms": ai_inference_ms,
-        "api_elapsed_ms": round((time.perf_counter() - request_started) * 1000, 4),
-    }
+            "difficulty": difficulty,
+            "human_seat": human_seat,
+            "ai_seat": f"p{ai_player}",
+            "battle_id": battle_id,
+            "ai_policy_type": session.policy_type,
+            "ai_model_status": model_status,
+            "ai_inference_ms": ai_inference_ms,
+            "api_elapsed_ms": round((time.perf_counter() - request_started) * 1000, 4),
+        }
     )

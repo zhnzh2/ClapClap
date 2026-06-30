@@ -43,6 +43,20 @@
             border-radius: 10px;
             border: 1px solid var(--border);
         }
+        .ai-mode-summary {
+            align-items: flex-start;
+            background: linear-gradient(135deg, #ffffff, #f8fbff);
+        }
+        .ai-mode-copy {
+            color: var(--muted);
+            font-size: 13px;
+            line-height: 1.5;
+        }
+        .ai-policy-pill {
+            background: #ecfdf5;
+            border-color: #bbf7d0;
+            color: #166534;
+        }
         .ai-thinking-dot {
             display: inline-block;
             animation: ai-blink 1s infinite;
@@ -77,6 +91,13 @@
             <button class="action-btn secondary" id="ai-refresh-btn">刷新状态</button>
             <button class="action-btn danger" id="ai-reset-btn">重新开始</button>
             <a class="action-btn secondary" href="/v1">返回大厅</a>
+        </div>
+    </div>
+
+    <div class="page-mode-toolbar ai-mode-summary">
+        <div class="page-mode-toolbar-label">AI 说明</div>
+        <div class="ai-mode-copy">
+            当前版本固定真人 P1、AI P2。普通/简单使用稳定启发式策略；困难模式会优先尝试部署模型，模型不可用时自动降级，并在状态栏显示真实策略。
         </div>
     </div>
 

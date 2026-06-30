@@ -21,3 +21,16 @@ Recommended first training path:
 2. Add heuristic opponents after the model can reliably beat random.
 3. Randomize AI seat between P1 and P2.
 4. Run `scripts/evaluate_ai.py --matrix` before promoting any model.
+
+Human-vs-AI battle exports:
+
+1. The user history page can download filtered battle ZIP files.
+2. ZIP files with AI battles include `training/ai_battle_samples.jsonl`.
+3. Merge one or more exports into a local dataset:
+
+   ```bash
+   python -m training.human_ai_samples exports/a.zip exports/b.zip -o training/data/human_ai_samples.jsonl
+   ```
+
+4. These samples can be used for behavior cloning, regression evaluation, and
+   human-response analysis before or alongside PPO self-play.

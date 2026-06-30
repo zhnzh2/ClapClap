@@ -1,6 +1,11 @@
 from __future__ import annotations
 
-from flask import Blueprint, g, jsonify, redirect, render_template, request
+import io
+import json
+import zipfile
+from datetime import datetime, timezone
+
+from flask import Blueprint, g, jsonify, redirect, render_template, request, send_file
 
 from app import users
 from app.battle_recorder import read_battle
@@ -53,6 +58,219 @@ def _v2_is_winner(data: dict, player_id: str | None) -> bool:
     if winner is not None:
         return str(winner) == str(player_id)
     return _latest_v2_rank(data, player_id) == 1 and data.get("end_time") is not None
+
+
+def _is_ai_battle(data: dict) -> bool:
+    return data.get("mode") == "ai" or data.get("opponent_type") == "ai"
+
+
+def _battle_mode_bucket(data: dict) -> str:
+    rule_version = str(data.get("rule_version", "1.0"))
+    if rule_version.startswith("2."):
+        return "v2"
+    if _is_ai_battle(data):
+        return "ai"
+    return str(data.get("mode") or "v1")
+
+
+def _v1_user_seat(data: dict, uid: int) -> str | None:
+    participants = data.get("participants", {}) or {}
+    p1 = participants.get("p1", {}) or {}
+    p2 = participants.get("p2", {}) or {}
+    if p1.get("uid") == uid:
+        return "p1"
+    if p2.get("uid") == uid:
+        return "p2"
+    return None
+
+
+def _battle_result_for_uid(data: dict, uid: int) -> str:
+    rule_version = str(data.get("rule_version", "1.0"))
+    if rule_version.startswith("2."):
+        participants = data.get("participants", {}) or {}
+        player_id = _get_participant_player_id(participants, uid)
+        if not data.get("end_time"):
+            return "ongoing"
+        return "win" if _v2_is_winner(data, player_id) else "loss"
+
+    my_seat = _v1_user_seat(data, uid)
+    winner = data.get("winner")
+    if winner is not None and my_seat is not None:
+        if winner == 0:
+            return "draw"
+        if (winner == 1 and my_seat == "p1") or (winner == 2 and my_seat == "p2"):
+            return "win"
+        return "loss"
+    if data.get("end_time") is None:
+        return "ongoing"
+    return "unknown"
+
+
+def _battle_filters_from_request() -> dict:
+    return {
+        "mode": (request.args.get("mode") or "all").strip().lower(),
+        "result": (request.args.get("result") or "all").strip().lower(),
+        "difficulty": (request.args.get("difficulty") or "all").strip().lower(),
+        "q": (request.args.get("q") or "").strip().lower(),
+    }
+
+
+def _battle_matches_filters(data: dict, uid: int, filters: dict) -> bool:
+    mode_filter = filters.get("mode") or "all"
+    result_filter = filters.get("result") or "all"
+    difficulty_filter = filters.get("difficulty") or "all"
+    keyword = filters.get("q") or ""
+
+    bucket = _battle_mode_bucket(data)
+    if mode_filter != "all":
+        if mode_filter == "v1":
+            if str(data.get("rule_version", "1.0")).startswith("2.") or _is_ai_battle(data):
+                return False
+        elif mode_filter != bucket and mode_filter != data.get("mode"):
+            return False
+
+    if result_filter != "all":
+        result = _battle_result_for_uid(data, uid)
+        if result_filter == "completed":
+            if data.get("end_time") is None:
+                return False
+        elif result != result_filter:
+            return False
+
+    if difficulty_filter != "all":
+        if (data.get("ai_difficulty") or "").lower() != difficulty_filter:
+            return False
+
+    if keyword:
+        participants = data.get("participants", {}) or {}
+        haystack_parts = [
+            str(data.get("battle_id", "")),
+            str(data.get("mode_label", "")),
+            str(data.get("ai_difficulty", "")),
+            str(data.get("ai_policy_type", "")),
+        ]
+        haystack_parts.extend(str(info.get("username", "")) for info in participants.values())
+        if keyword not in " ".join(haystack_parts).lower():
+            return False
+
+    return True
+
+
+def _filtered_user_battle_ids(uid: int, filters: dict) -> list[str]:
+    filtered: list[str] = []
+    for bid in users.get_user_battle_ids(uid):
+        data = read_battle(bid)
+        if data is None:
+            continue
+        if _battle_matches_filters(data, uid, filters):
+            filtered.append(bid)
+    return filtered
+
+
+def _summarize_user_battle(uid: int, bid: str, data: dict) -> dict | None:
+    rule_version = str(data.get("rule_version", "1.0"))
+    participants = data.get("participants", {})
+    round_count = len(data.get("rounds", []))
+
+    if rule_version.startswith("2."):
+        final_result = data.get("final_result", {})
+        rankings = final_result.get("rankings", [])
+        my_player_id = _get_participant_player_id(participants, uid)
+        my_rank = None
+        is_winner = False
+        for r in rankings:
+            if participants.get(r.get("player_id", ""), {}).get("uid") == uid:
+                my_rank = r.get("rank")
+                is_winner = r.get("is_winner", False)
+                break
+        if my_rank is None:
+            my_rank = _latest_v2_rank(data, my_player_id)
+            is_winner = _v2_is_winner(data, my_player_id)
+
+        participant_names = [
+            p.get("username", "?") for p in participants.values()
+        ]
+
+        return {
+            "battle_id": bid,
+            "rule_version": rule_version,
+            "start_time": data.get("start_time", ""),
+            "end_time": data.get("end_time"),
+            "mode": data.get("mode"),
+            "mode_label": data.get("mode_label", ""),
+            "player_count": len(participants),
+            "my_rank": my_rank,
+            "is_winner": is_winner,
+            "participant_names": participant_names,
+            "round_count": round_count,
+            "winner": data.get("winner"),
+            "result": _battle_result_for_uid(data, uid),
+        }
+
+    p1 = participants.get("p1", {})
+    p2 = participants.get("p2", {})
+    my_seat = _v1_user_seat(data, uid)
+    if my_seat is None:
+        return None
+
+    opponent = p2.get("username", "?") if my_seat == "p1" else p1.get("username", "?")
+    winner = data.get("winner")
+    result = _battle_result_for_uid(data, uid)
+
+    return {
+        "battle_id": bid,
+        "rule_version": rule_version,
+        "start_time": data.get("start_time", ""),
+        "end_time": data.get("end_time"),
+        "mode": data.get("mode"),
+        "mode_label": data.get("mode_label", ""),
+        "opponent_type": data.get("opponent_type"),
+        "ai_difficulty": data.get("ai_difficulty"),
+        "ai_policy_type": data.get("ai_policy_type"),
+        "ai_model_version": data.get("ai_model_version"),
+        "p1_name": p1.get("username", "?"),
+        "p2_name": p2.get("username", "?"),
+        "opponent": opponent or "?",
+        "result": result,
+        "round_count": round_count,
+        "winner": winner,
+    }
+
+
+def _ai_training_samples_from_battle(data: dict, uid: int) -> list[dict]:
+    if not _is_ai_battle(data):
+        return []
+
+    battle_id = data.get("battle_id")
+    ai_seat = data.get("ai_seat") or "p2"
+    human_seat = data.get("human_seat") or ("p1" if ai_seat == "p2" else "p2")
+    samples: list[dict] = []
+
+    for round_data in data.get("rounds", []) or []:
+        ai_move = round_data.get("ai_move") or round_data.get(f"{ai_seat}_move")
+        human_move = round_data.get("human_move") or round_data.get(f"{human_seat}_move")
+        if not ai_move or not human_move:
+            continue
+
+        samples.append({
+            "schema": "clapclap-ai-human-battle-sample-v1",
+            "battle_id": battle_id,
+            "round_num": round_data.get("round_num"),
+            "source_uid": uid,
+            "rule_version": data.get("rule_version", "1.0"),
+            "ai_seat": ai_seat,
+            "human_seat": human_seat,
+            "human_move": human_move,
+            "ai_move": ai_move,
+            "winner_after_round": round_data.get("winner_after_round"),
+            "battle_winner": data.get("winner"),
+            "ai_difficulty": round_data.get("ai_difficulty") or data.get("ai_difficulty"),
+            "ai_policy_type": round_data.get("ai_policy_type") or data.get("ai_policy_type"),
+            "ai_model_version": round_data.get("ai_model_version") or data.get("ai_model_version"),
+            "round": round_data,
+        })
+
+    return samples
 
 
 def _build_user_battle_stats(uid: int, battle_ids: list[str]) -> dict:
@@ -402,109 +620,102 @@ def api_user_battles(uid: int):
     offset = request.args.get("offset", default=0, type=int)
     limit = min(max(limit or 50, 1), 100)
     offset = max(offset or 0, 0)
-    battle_ids, total = users.get_user_battle_page(uid, limit, offset)
+    filters = _battle_filters_from_request()
     all_battle_ids = users.get_user_battle_ids(uid)
+    filtered_battle_ids = _filtered_user_battle_ids(uid, filters)
+    total = len(filtered_battle_ids)
+    battle_ids = filtered_battle_ids[offset:offset + limit]
     stats = _build_user_battle_stats(uid, all_battle_ids)
+    filtered_stats = _build_user_battle_stats(uid, filtered_battle_ids)
     battles: list[dict] = []
 
     for bid in battle_ids:
         data = read_battle(bid)
         if data is None:
             continue
-
-        rule_version = str(data.get("rule_version", "1.0"))
-        participants = data.get("participants", {})
-        round_count = len(data.get("rounds", []))
-
-        if rule_version.startswith("2."):
-            # ── 2.0 摘要 ──────────────────────────────────────────
-            final_result = data.get("final_result", {})
-            rankings = final_result.get("rankings", [])
-            my_player_id = _get_participant_player_id(participants, uid)
-            my_rank = None
-            is_winner = False
-            for r in rankings:
-                if participants.get(r.get("player_id", ""), {}).get("uid") == uid:
-                    my_rank = r.get("rank")
-                    is_winner = r.get("is_winner", False)
-                    break
-            if my_rank is None:
-                my_rank = _latest_v2_rank(data, my_player_id)
-                is_winner = _v2_is_winner(data, my_player_id)
-
-            participant_names = [
-                p.get("username", "?") for p in participants.values()
-            ]
-
-            battles.append({
-                "battle_id": bid,
-                "rule_version": rule_version,
-                "start_time": data.get("start_time", ""),
-                "end_time": data.get("end_time"),
-                "mode": data.get("mode"),
-                "mode_label": data.get("mode_label", ""),
-                "player_count": len(participants),
-                "my_rank": my_rank,
-                "is_winner": is_winner,
-                "participant_names": participant_names,
-                "round_count": round_count,
-                "winner": data.get("winner"),
-            })
-        else:
-            # ── 1.0 摘要（保持现有逻辑）────────────────────────────
-            p1 = participants.get("p1", {})
-            p2 = participants.get("p2", {})
-
-            # 判断当前用户是哪一方
-            my_seat = None
-            opponent = None
-            if p1.get("uid") == uid:
-                my_seat = "p1"
-                opponent = p2.get("username", "?")
-            elif p2.get("uid") == uid:
-                my_seat = "p2"
-                opponent = p1.get("username", "?")
-
-            # 判断结果
-            winner = data.get("winner")
-            result = "unknown"
-            if winner is not None and my_seat is not None:
-                if winner == 0:
-                    result = "draw"
-                elif (winner == 1 and my_seat == "p1") or (winner == 2 and my_seat == "p2"):
-                    result = "win"
-                else:
-                    result = "loss"
-            elif data.get("end_time") is None:
-                result = "ongoing"
-
-            battles.append({
-                "battle_id": bid,
-                "rule_version": rule_version,
-                "start_time": data.get("start_time", ""),
-                "end_time": data.get("end_time"),
-                "mode": data.get("mode"),
-                "mode_label": data.get("mode_label", ""),
-                "opponent_type": data.get("opponent_type"),
-                "ai_difficulty": data.get("ai_difficulty"),
-                "ai_policy_type": data.get("ai_policy_type"),
-                "p1_name": p1.get("username", "?"),
-                "p2_name": p2.get("username", "?"),
-                "opponent": opponent or "?",
-                "result": result,
-                "round_count": round_count,
-                "winner": winner,
-            })
+        summary = _summarize_user_battle(uid, bid, data)
+        if summary is not None:
+            battles.append(summary)
 
     next_offset = offset + len(battle_ids)
     return jsonify({
         "ok": True,
         "battles": battles,
         "stats": stats,
+        "filtered_stats": filtered_stats,
+        "filters": filters,
         "total": total,
         "has_more": next_offset < total,
         "next_offset": next_offset,
     }), 200
+
+
+@auth_bp.get("/v1/api/user/<int:uid>/battles/download")
+@auth_bp.get("/v2/api/user/<int:uid>/battles/download")
+@auth_bp.get("/api/user/<int:uid>/battles/download")
+@require_auth
+def api_user_battles_download(uid: int):
+    """按当前筛选条件打包下载对局记录，并附带 AI 训练样本。"""
+    if not users.user_exists(uid):
+        return jsonify({"ok": False, "error": "用户不存在。"}), 404
+
+    current_uid = g.current_user.get("uid") if hasattr(g, "current_user") else None
+    if current_uid != uid and not users.is_admin(g.current_user):
+        return jsonify({"ok": False, "error": "只能下载自己的对局记录。"}), 403
+
+    filters = _battle_filters_from_request()
+    battle_ids = _filtered_user_battle_ids(uid, filters)
+    training_samples: list[dict] = []
+    generated_at = datetime.now(timezone.utc).isoformat()
+
+    memory_file = io.BytesIO()
+    with zipfile.ZipFile(memory_file, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for bid in battle_ids:
+            data = read_battle(bid)
+            if data is None:
+                continue
+            archive.writestr(
+                f"battles/{bid}.json",
+                json.dumps(data, ensure_ascii=False, indent=2),
+            )
+            training_samples.extend(_ai_training_samples_from_battle(data, uid))
+
+        if training_samples:
+            jsonl = "\n".join(
+                json.dumps(sample, ensure_ascii=False, separators=(",", ":"))
+                for sample in training_samples
+            )
+            archive.writestr("training/ai_battle_samples.jsonl", jsonl + "\n")
+
+        manifest = {
+            "schema": "clapclap-user-battle-export-v1",
+            "generated_at": generated_at,
+            "uid": uid,
+            "filters": filters,
+            "battle_count": len(battle_ids),
+            "training_sample_count": len(training_samples),
+            "contains": {
+                "raw_battles": True,
+                "ai_training_samples_jsonl": bool(training_samples),
+            },
+            "notes": [
+                "raw_battles 可用于回放、审计和后续重新抽取训练特征。",
+                "training/ai_battle_samples.jsonl 是从人机对局中抽出的轻量训练样本。",
+            ],
+        }
+        archive.writestr(
+            "manifest.json",
+            json.dumps(manifest, ensure_ascii=False, indent=2),
+        )
+
+    memory_file.seek(0)
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
+    return send_file(
+        memory_file,
+        mimetype="application/zip",
+        as_attachment=True,
+        download_name=f"clapclap_battles_uid{uid}_{timestamp}.zip",
+    )
 
 
 @auth_bp.get("/v1/api/battles/<battle_id>")

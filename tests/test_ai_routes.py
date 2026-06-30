@@ -140,6 +140,8 @@ class TestAiApi(unittest.TestCase):
         self.assertIn("ai_move_label", data)
         self.assertIn("difficulty", data)
         self.assertIn("battle_id", data)
+        self.assertIn("ai_policy_type", data)
+        self.assertIn("ai_model_status", data)
         self.assertIn("ai_inference_ms", data)
         self.assertIn("api_elapsed_ms", data)
         self.assertEqual(data["battle_id"], data["state"]["battle_id"])
@@ -149,6 +151,7 @@ class TestAiApi(unittest.TestCase):
         self.assertEqual(data["human_seat"], "p1")
         self.assertEqual(data["ai_seat"], "p2")
         self.assertEqual(data["difficulty"], "easy")
+        self.assertEqual(data["ai_policy_type"], "random")
 
     def test_v1_api_aliases_work(self):
         """AI API 同时提供 /v1/api/ai/* 版本化路径。"""
