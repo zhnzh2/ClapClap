@@ -156,7 +156,12 @@ def select_move(
 
     if difficulty == "hard":
         from app.ai.model_runtime import select_model_move
-        model_move = select_model_move(state, controlled_player, rng)
+        model_move = select_model_move(
+            state,
+            controlled_player,
+            rng,
+            config.get("ai_model_key") or config.get("model_key"),
+        )
         if model_move is not None:
             return model_move
 

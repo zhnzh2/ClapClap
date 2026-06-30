@@ -22,9 +22,11 @@ from flask import Blueprint, g, jsonify, request
 from app.ai.engine import select_move
 from app.ai.model_runtime import (
     clear_model_status_cache,
+    get_ai_model_options,
     get_model_status,
     model_status_for_difficulty,
     model_version_for_difficulty,
+    normalize_model_key,
     policy_type_for_difficulty,
 )
 from app.ai.space import ACTION_SPACE_SIZE, get_action_space_fingerprint
@@ -54,7 +56,13 @@ def _get_ai_state_payload(session: runtime.AISession) -> dict:
     payload["human_seat"] = session.human_seat
     payload["ai_seat"] = session.ai_seat
     payload["ai_policy_type"] = session.policy_type
+    payload["ai_model_key"] = session.ai_model_key
+    payload["ai_model_options"] = get_ai_model_options()
     return payload
+
+
+def _parse_ai_model_key(data: dict) -> str:
+    return normalize_model_key(data.get("ai_model_key") or data.get("model_key"))
 
 
 # ---------------------------------------------------------------------------
@@ -91,6 +99,7 @@ def deploy_ai_model():
     """
     data = request.get_json(silent=True) or {}
     difficulty = data.get("difficulty", "hard")
+    ai_model_key = _parse_ai_model_key(data)
     if difficulty not in ("easy", "normal", "hard"):
         return jsonify(
             {"ok": False, "error": f"未知难度: {difficulty}。可选: easy, normal, hard"}
@@ -102,13 +111,14 @@ def deploy_ai_model():
                 "ok": True,
                 "message": "当前难度不需要部署模型。",
                 "needs_deploy": False,
-                "policy_type": policy_type_for_difficulty(difficulty),
+                "policy_type": policy_type_for_difficulty(difficulty, ai_model_key),
                 "model_status": None,
+                "ai_model_key": ai_model_key,
             }
         )
 
     clear_model_status_cache()
-    status = get_model_status()
+    status = get_model_status(ai_model_key)
     return jsonify(
         {
             "ok": True,
@@ -116,6 +126,7 @@ def deploy_ai_model():
             "needs_deploy": True,
             "policy_type": status.policy_type,
             "model_status": status.to_dict(),
+            "ai_model_key": ai_model_key,
         }
     )
 
@@ -185,6 +196,7 @@ def ai_step():
     human_move_name = data.get("human_move")
     difficulty = data.get("difficulty", "normal")
     human_seat = data.get("human_seat", "p1")
+    ai_model_key = _parse_ai_model_key(data)
 
     # 2. 校验字段类型
     if not isinstance(human_move_name, str):
@@ -236,6 +248,14 @@ def ai_step():
                 }
             ), 400
 
+        if session.ai_model_key is not None and ai_model_key != session.ai_model_key:
+            return jsonify(
+                {
+                    "ok": False,
+                    "error": f"本局 AI 模型已锁定为 {session.ai_model_key}，请重置后再切换。",
+                }
+            ), 400
+
         # 5. 校验真人动作合法
         human_player_state = state.p1 if human_player == 1 else state.p2
         if not GameEngine.can_afford(human_player_state, human_move):
@@ -254,7 +274,10 @@ def ai_step():
         inference_started = time.perf_counter()
         try:
             ai_move = select_move(
-                state_for_ai, ai_player, rng, {"difficulty": difficulty}
+                state_for_ai,
+                ai_player,
+                rng,
+                {"difficulty": difficulty, "ai_model_key": ai_model_key},
             )
         except ValueError as exc:
             return jsonify({"ok": False, "error": str(exc)}), 400
@@ -271,15 +294,16 @@ def ai_step():
         # 9. 对战记录
         human_username = get_current_username()
         human_uid = g.current_user.get("uid", -1) if hasattr(g, "current_user") else -1
-        policy_type = policy_type_for_difficulty(difficulty)
-        model_version = model_version_for_difficulty(difficulty)
-        model_status = model_status_for_difficulty(difficulty)
+        policy_type = policy_type_for_difficulty(difficulty, ai_model_key)
+        model_version = model_version_for_difficulty(difficulty, ai_model_key)
+        model_status = model_status_for_difficulty(difficulty, ai_model_key)
 
         if session.battle_id is None:
             session.difficulty = difficulty
             session.human_seat = human_seat
             session.ai_seat = f"p{ai_player}"
             session.policy_type = policy_type
+            session.ai_model_key = ai_model_key
 
             # 参与者：P1=真人/AI, P2=AI/真人
             p1_entry = {
@@ -301,6 +325,7 @@ def ai_step():
             set_battle_metadata(session.battle_id, {
                 "opponent_type": "ai",
                 "ai_policy_type": policy_type,
+                "ai_model_key": ai_model_key,
                 "ai_difficulty": difficulty,
                 "ai_model_version": model_version,
                 "ai_model_status": model_status,
@@ -321,6 +346,7 @@ def ai_step():
                 "ai_move": ai_move.name,
                 "ai_difficulty": session.difficulty,
                 "ai_policy_type": session.policy_type,
+                "ai_model_key": session.ai_model_key,
                 "ai_model_version": model_version,
                 "ai_model_status": model_status,
                 "ai_inference_ms": ai_inference_ms,
@@ -347,6 +373,7 @@ def ai_step():
             "ai_seat": f"p{ai_player}",
             "battle_id": battle_id,
             "ai_policy_type": session.policy_type,
+            "ai_model_key": session.ai_model_key,
             "ai_model_status": model_status,
             "ai_inference_ms": ai_inference_ms,
             "api_elapsed_ms": round((time.perf_counter() - request_started) * 1000, 4),

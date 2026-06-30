@@ -144,6 +144,56 @@
             box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.10);
         }
 
+        .ai-model-scale {
+            display: grid;
+            grid-template-columns: repeat(8, minmax(0, 1fr));
+            width: 100%;
+            margin-bottom: 8px;
+            overflow: hidden;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            background: #f8fafc;
+        }
+
+        .ai-model-btn {
+            min-height: 48px;
+            border: 0;
+            border-right: 1px solid var(--border);
+            background: #ffffff;
+            color: var(--text);
+            font-size: 16px;
+            font-weight: 800;
+            cursor: pointer;
+        }
+
+        .ai-model-btn:last-child {
+            border-right: 0;
+        }
+
+        .ai-model-btn.active {
+            background: var(--blue);
+            color: #ffffff;
+        }
+
+        .ai-model-btn:disabled {
+            cursor: not-allowed;
+            background: #f3f4f6;
+            color: #9ca3af;
+        }
+
+        .ai-model-btn.active:disabled {
+            background: var(--blue);
+            color: #ffffff;
+        }
+
+        .ai-model-note {
+            min-height: 18px;
+            margin-bottom: 12px;
+            color: var(--muted);
+            font-size: 12px;
+            line-height: 1.45;
+        }
+
         .ai-deploy-panel {
             display: none;
             width: 100%;
@@ -516,6 +566,21 @@
                             <span>进入前检查部署模型，不可用时自动降级。</span>
                         </button>
                     </div>
+                </div>
+
+                <div class="ai-option-block">
+                    <div class="ai-option-title">AI 模型</div>
+                    <div class="ai-model-scale" aria-label="AI 模型选择">
+                        <button class="ai-model-btn" type="button" data-model-key="clapfish1" title="ClapFish1">1</button>
+                        <button class="ai-model-btn" type="button" data-model-key="clapfish2" title="ClapFish2">2</button>
+                        <button class="ai-model-btn" type="button" disabled title="暂未开放">3</button>
+                        <button class="ai-model-btn" type="button" disabled title="暂未开放">4</button>
+                        <button class="ai-model-btn" type="button" disabled title="暂未开放">5</button>
+                        <button class="ai-model-btn" type="button" disabled title="暂未开放">6</button>
+                        <button class="ai-model-btn" type="button" disabled title="暂未开放">7</button>
+                        <button class="ai-model-btn" type="button" disabled title="暂未开放">8</button>
+                    </div>
+                    <div class="ai-model-note" id="ai-model-note">当前模型：ClapFish1</div>
                 </div>
 
                 <div class="selection-box ai-deploy-panel" id="ai-deploy-panel">

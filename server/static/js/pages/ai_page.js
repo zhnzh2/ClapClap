@@ -20,6 +20,12 @@ var aiLastMoveName = null;
 var aiPolicyType = null;
 var aiInferenceMs = null;
 var aiBattleStarted = false;
+var aiModelKey = "clapfish1";
+
+var aiModelLabels = {
+    clapfish1: "ClapFish1",
+    clapfish2: "ClapFish2"
+};
 
 var aiUiSettings = {
     showMoveCodes: false,
@@ -113,6 +119,16 @@ function aiPolicyTypeLabel(policyType) {
     return "待选择";
 }
 
+function aiModelLabel(modelKey) {
+    return aiModelLabels[modelKey] || "ClapFish1";
+}
+
+function aiEntrySelectionText() {
+    return "已选择：" + aiSeatLabel(aiHumanSeat) + "，" +
+        aiDifficultyLabel(aiDifficulty) + "难度，" +
+        aiModelLabel(aiModelKey) + "。";
+}
+
 function aiSetText(id, text) {
     var el = document.getElementById(id);
     if (el) el.textContent = text;
@@ -132,7 +148,7 @@ function aiShowEntryPage() {
     document.body.classList.remove("ai-in-battle");
     document.getElementById("ai-entry-page").classList.remove("ai-hidden");
     document.getElementById("ai-battle-page").classList.remove("show");
-    aiSetText("ai-entry-message", "默认：P1 先手，普通难度。");
+    aiSetText("ai-entry-message", aiEntrySelectionText());
     aiHideDeployPanel();
 }
 
@@ -158,6 +174,18 @@ function aiUpdateChoiceControls() {
         seatBtns[j].disabled = aiBattleStarted && aiLatestState && aiLatestState.winner === null;
         seatBtns[j].classList.toggle("active", seat === aiHumanSeat);
     }
+
+    var modelBtns = document.querySelectorAll(".ai-model-btn");
+    for (var k = 0; k < modelBtns.length; k++) {
+        var modelKey = modelBtns[k].getAttribute("data-model-key");
+        var locked = aiBattleStarted && aiLatestState && aiLatestState.winner === null;
+        if (modelKey) {
+            modelBtns[k].disabled = locked;
+            modelBtns[k].classList.toggle("active", modelKey === aiModelKey);
+        }
+    }
+
+    aiSetText("ai-model-note", "当前模型：" + aiModelLabel(aiModelKey));
 }
 
 function aiSetDifficulty(diff) {
@@ -169,7 +197,7 @@ function aiSetDifficulty(diff) {
     }
     aiDifficulty = diff;
     aiUpdateChoiceControls();
-    aiSetText("ai-entry-message", "已选择：" + aiSeatLabel(aiHumanSeat) + "，" + aiDifficultyLabel(aiDifficulty) + "难度。");
+    aiSetText("ai-entry-message", aiEntrySelectionText());
 }
 
 function aiSetHumanSeat(seat) {
@@ -182,8 +210,20 @@ function aiSetHumanSeat(seat) {
     aiHumanSeat = seat;
     aiSelectedMove = null;
     aiUpdateChoiceControls();
-    aiSetText("ai-entry-message", "已选择：" + aiSeatLabel(aiHumanSeat) + "，" + aiDifficultyLabel(aiDifficulty) + "难度。");
+    aiSetText("ai-entry-message", aiEntrySelectionText());
     if (aiLatestState && aiBattleStarted) aiRenderState(aiLatestState);
+}
+
+function aiSetModelKey(modelKey) {
+    if (modelKey !== "clapfish1" && modelKey !== "clapfish2") return;
+    if (aiBattleStarted && aiLatestState && aiLatestState.winner === null) {
+        aiSetText("ai-message", "本局 AI 模型已锁定，退出本局后可以切换。");
+        aiUpdateChoiceControls();
+        return;
+    }
+    aiModelKey = modelKey;
+    aiUpdateChoiceControls();
+    aiSetText("ai-entry-message", aiEntrySelectionText());
 }
 
 function aiApplyUiSettings() {
@@ -251,7 +291,8 @@ async function aiRunDeployProgress() {
         var started = Date.now();
         if (i === 1) {
             deployResult = await ApiUtils.apiPost("/v1/api/ai/deploy", {
-                difficulty: aiDifficulty
+                difficulty: aiDifficulty,
+                ai_model_key: aiModelKey
             });
         }
         var elapsed = Date.now() - started;
@@ -490,6 +531,7 @@ function aiRenderState(state) {
     if (state.ai_difficulty) aiDifficulty = state.ai_difficulty;
     if (state.human_seat) aiHumanSeat = state.human_seat;
     if (state.ai_policy_type) aiPolicyType = state.ai_policy_type;
+    if (state.ai_model_key) aiModelKey = state.ai_model_key;
 
     var catalog = state.move_catalog || [];
     var logs = state.history || [];
@@ -500,7 +542,8 @@ function aiRenderState(state) {
         '<span class="winner-badge">' + aiWinnerText(state.winner) + '</span>' +
         '<span class="status-badge">你 ' + aiSeatLabel(aiHumanSeat) + '</span>' +
         '<span class="status-badge">AI ' + aiSeatLabel(aiSeat) + '</span>' +
-        '<span class="status-badge">' + aiDifficultyLabel(aiDifficulty) + '</span>';
+        '<span class="status-badge">' + aiDifficultyLabel(aiDifficulty) + '</span>' +
+        '<span class="status-badge">' + aiModelLabel(aiModelKey) + '</span>';
     if (aiUiSettings.showPolicy) {
         statusHtml += '<span class="status-badge ai-policy-extra">策略 ' + aiPolicyTypeLabel(aiPolicyType) + '</span>';
     }
@@ -648,7 +691,8 @@ async function aiStepGame() {
     var result = await ApiUtils.apiPost("/v1/api/ai/step", {
         human_move: aiSelectedMove,
         difficulty: aiDifficulty,
-        human_seat: aiHumanSeat
+        human_seat: aiHumanSeat,
+        ai_model_key: aiModelKey
     });
 
     aiThinking = false;
@@ -662,6 +706,7 @@ async function aiStepGame() {
     aiLastMoveName = result.data.ai_move;
     aiLastMoveLabel = result.data.ai_move_label;
     aiPolicyType = result.data.ai_policy_type || (result.data.state && result.data.state.ai_policy_type) || aiPolicyType;
+    aiModelKey = result.data.ai_model_key || (result.data.state && result.data.state.ai_model_key) || aiModelKey;
     aiInferenceMs = result.data.ai_inference_ms == null ? null : result.data.ai_inference_ms;
     window._aiBattleId = result.data.battle_id || (result.data.state && result.data.state.battle_id) || window._aiBattleId;
 
@@ -765,6 +810,13 @@ function aiInitPage() {
         });
     }
 
+    var modelBtns = document.querySelectorAll(".ai-model-btn");
+    for (var mi = 0; mi < modelBtns.length; mi++) {
+        modelBtns[mi].addEventListener("click", function() {
+            aiSetModelKey(this.getAttribute("data-model-key"));
+        });
+    }
+
     document.getElementById("ai-start-btn").addEventListener("click", aiStartBattle);
     document.getElementById("ai-settings-btn").addEventListener("click", aiOpenSettingsModal);
     document.getElementById("ai-help-btn").addEventListener("click", function() {
@@ -825,6 +877,7 @@ function aiInitPage() {
 
     aiSetDifficulty("normal");
     aiSetHumanSeat("p1");
+    aiSetModelKey("clapfish1");
     aiSyncSettingInputs();
     aiShowEntryPage();
 }

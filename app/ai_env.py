@@ -35,6 +35,54 @@ def random_opponent_policy(state: GameState, controlled_player: Seat, rng: rando
     return rng.choice(legal)
 
 
+def normal_heuristic_policy(state: GameState, controlled_player: Seat, rng: random.Random) -> Move:
+    """Normal 难度启发式策略（conservative=False）。"""
+    from app.ai.engine import select_move
+    return select_move(state.copy(), controlled_player, rng, {"difficulty": "normal"})
+
+
+def hard_heuristic_policy(state: GameState, controlled_player: Seat, rng: random.Random) -> Move:
+    """Hard 难度启发式策略（conservative=True）。"""
+    from app.ai.engine import select_move
+    return select_move(state.copy(), controlled_player, rng, {"difficulty": "hard"})
+
+
+def make_opponent_pool(
+    policies: list[OpponentPolicy],
+    weights: list[float] | None = None,
+    *,
+    seed: int | None = None,
+) -> OpponentPolicy:
+    """创建一个对手池策略：每局开始时随机选一个子策略，局内固定。
+
+    参数
+    ----------
+    policies : 子策略列表。
+    weights : 抽样权重，默认均匀。
+    seed : 池内抽样的随机种子（与对局内 RNG 分离）。
+    """
+    import random as _random
+    pool_rng = _random.Random(seed)
+
+    # 用可变容器保存当前局所选策略，reset 时通过 round_num==0 重新抽样
+    current: list[OpponentPolicy | None] = [None]
+
+    def pooled(state: GameState, player: Seat, rng: random.Random) -> Move:
+        if state.round_num == 0 or current[0] is None:
+            current[0] = pool_rng.choices(policies, weights=weights, k=1)[0]
+        return current[0](state, player, rng)
+
+    return pooled
+
+
+# 预置对手池
+DEFAULT_OPPONENT_POOL = make_opponent_pool(
+    policies=[random_opponent_policy, normal_heuristic_policy, hard_heuristic_policy],
+    weights=[0.2, 0.4, 0.4],
+    seed=20260630,
+)
+
+
 @dataclass
 class StepResult:
     observation: dict

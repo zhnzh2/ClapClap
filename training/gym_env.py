@@ -74,8 +74,18 @@ def _require_training_dependencies() -> None:
         )
 
 
-def make_gymnasium_env(**env_kwargs: Any):
-    """Create a Gymnasium-compatible env for MaskablePPO training."""
+def make_gymnasium_env(randomize_seat: bool = False, **env_kwargs: Any):
+    """Create a Gymnasium-compatible env for MaskablePPO training.
+
+    Parameters
+    ----------
+    randomize_seat : bool
+        If True, the AI player seat (P1 or P2) is randomly chosen on every
+        ``reset()``, even when no ``options`` dict is passed. This is the
+        intended mode for training.
+    **env_kwargs
+        Forwarded to ``ClapClapEnv.__init__()``.
+    """
     _require_training_dependencies()
 
     class ClapClapGymEnv(gym.Env):  # type: ignore[union-attr]
@@ -83,6 +93,7 @@ def make_gymnasium_env(**env_kwargs: Any):
 
         def __init__(self, **kwargs: Any) -> None:
             super().__init__()
+            self._randomize_seat = randomize_seat
             self.core = ClapClapEnv(**kwargs)
             self.action_space = spaces.Discrete(ACTION_SPACE_SIZE)
             self.observation_space = spaces.Box(
@@ -95,6 +106,8 @@ def make_gymnasium_env(**env_kwargs: Any):
         def reset(self, *, seed: int | None = None, options: dict | None = None):
             ai_player = None
             if options and options.get("randomize_seat"):
+                ai_player = self.core.rng.choice((1, 2))
+            elif self._randomize_seat:
                 ai_player = self.core.rng.choice((1, 2))
             observation = self.core.reset(seed=seed, ai_player=ai_player)
             return self._vector(observation), {"metadata": observation["metadata"]}

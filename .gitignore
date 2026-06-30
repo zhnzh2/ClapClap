@@ -46,14 +46,13 @@ reports/
 *.synctex.gz
 *.toc
 
-# AI local artifacts
-models/ai/v1/dev/
-models/ai/v1/runs/
-models/ai/v1/checkpoints/
-models/ai/v1/*.zip
+# AI local artifacts (模型文件不入库)
+models/ai/
 training/runs/
 training/checkpoints/
 training/datasets/generated/
+# 只保留目录结构占位
+!models/ai/v1/.gitkeep
 
 # OS files
 .DS_Store

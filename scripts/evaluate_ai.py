@@ -5,7 +5,7 @@ import json
 import random
 import time
 from collections import Counter
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Literal
 
@@ -15,11 +15,13 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from app.ai.engine import get_legal_moves_list, select_move
+from app.ai.engine import get_legal_action_mask, get_legal_moves_list, select_move
+from app.ai_env import validate_model_metadata
 from app.v1.game import GameEngine
 from app.v1.models import GameState
 
 Difficulty = Literal["easy", "normal", "hard"]
+PolicyType = Literal["easy", "normal", "hard", "model"]
 DIFFICULTIES: tuple[Difficulty, ...] = ("easy", "normal", "hard")
 DEFAULT_MATRIX: tuple[tuple[Difficulty, Difficulty], ...] = (
     ("easy", "easy"),
@@ -27,6 +29,11 @@ DEFAULT_MATRIX: tuple[tuple[Difficulty, Difficulty], ...] = (
     ("hard", "easy"),
     ("hard", "normal"),
     ("normal", "hard"),
+)
+MODEL_MATRIX: tuple[tuple[PolicyType, PolicyType], ...] = (
+    ("model", "easy"),
+    ("model", "normal"),
+    ("model", "hard"),
 )
 
 
@@ -120,12 +127,164 @@ class EvaluationResult:
         return round(self.total_inference_ms / self.inference_calls, 4)
 
 
+# ---------------------------------------------------------------------------
+# 模型评估器
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class ModelEvalInfo:
+    """加载模型时的元信息，会写入评估报告。"""
+
+    model_version: str = ""
+    manifest_path: str = ""
+    weights_path: str = ""
+    algorithm: str = ""
+    inference_adapter: str = ""
+    training_timesteps: int = 0
+    load_error: str = ""
+
+
+class ModelEvaluator:
+    """加载训练好的模型并提供推理接口。
+
+    仅在 ``--model-dir`` 指定时才尝试加载；加载失败时标记 ``load_error``
+    并回退到 heuristic hard，评估报告会记录失败原因。
+    """
+
+    def __init__(self, model_dir: Path, max_rounds: int):
+        self.model_dir = model_dir
+        self.max_rounds = max_rounds
+        self.info = ModelEvalInfo()
+        self._model: object | None = None
+        self._loaded = False
+        self._load()
+
+    # ── 公开属性 ────────────────────────────────────────────────
+
+    @property
+    def is_loaded(self) -> bool:
+        return self._loaded and self._model is not None
+
+    # ── 推理 ────────────────────────────────────────────────────
+
+    def select_move(
+        self, state: GameState, player: int, rng: random.Random
+    ) -> tuple[object, float]:
+        """返回 ``(move, elapsed_ms)``。未加载时回退 heuristic-hard。"""
+        if not self.is_loaded:
+            return self._heuristic_fallback(state, player, rng)
+
+        import numpy as np
+        from training.gym_env import encode_observation_vector
+
+        t0 = time.perf_counter()
+        try:
+            obs_dict = self._build_observation(state, player)
+            vec = np.array(
+                encode_observation_vector(obs_dict, max_rounds=self.max_rounds),
+                dtype=np.float32,
+            )
+            mask = np.array(obs_dict["legal_action_mask"], dtype=bool)
+
+            action_index, _ = self._model.predict(  # type: ignore[union-attr]
+                vec, action_masks=mask, deterministic=True
+            )
+            action_int = int(action_index)
+            from app.ai.space import get_move_by_index
+
+            move = get_move_by_index(action_int)
+            if not mask[action_int]:
+                return self._heuristic_fallback(state, player, rng)
+        except Exception:
+            return self._heuristic_fallback(state, player, rng)
+
+        elapsed_ms = (time.perf_counter() - t0) * 1000
+        return move, elapsed_ms
+
+    # ── 内部 ────────────────────────────────────────────────────
+
+    def _load(self) -> None:
+        manifest_path = self.model_dir / "manifest.json"
+        if not manifest_path.exists():
+            self.info.load_error = "manifest_missing"
+            return
+
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except Exception as exc:
+            self.info.load_error = f"manifest_unreadable:{exc.__class__.__name__}"
+            return
+
+        env_meta = manifest.get("env_metadata", {})
+        if not isinstance(env_meta, dict) or not validate_model_metadata(env_meta):
+            self.info.load_error = "metadata_mismatch"
+            return
+
+        weights_rel = manifest.get("weights_path", "model.zip")
+        weights_path = self.model_dir / weights_rel
+        if not weights_path.exists():
+            self.info.load_error = f"weights_missing:{weights_rel}"
+            return
+
+        try:
+            from sb3_contrib import MaskablePPO
+
+            model_path = str(weights_path).replace(".zip", "")
+            self._model = MaskablePPO.load(model_path)
+        except Exception as exc:
+            self.info.load_error = f"model_load_failed:{exc.__class__.__name__}"
+            return
+
+        self._loaded = True
+        training = manifest.get("training", {})
+        self.info = ModelEvalInfo(
+            model_version=manifest.get("model_version", ""),
+            manifest_path=str(manifest_path),
+            weights_path=str(weights_path),
+            algorithm=manifest.get("algorithm", ""),
+            inference_adapter=manifest.get("inference_adapter", ""),
+            training_timesteps=training.get("total_timesteps", 0),
+        )
+
+    @staticmethod
+    def _build_observation(state: GameState, player: int) -> dict:
+        self_p = (state.p1 if player == 1 else state.p2).to_dict()
+        opp_p = (state.p2 if player == 1 else state.p1).to_dict()
+        mask = get_legal_action_mask(state, player)
+        return {
+            "round_num": state.round_num,
+            "self": self_p,
+            "opponent": opp_p,
+            "legal_action_mask": mask,
+        }
+
+    @staticmethod
+    def _heuristic_fallback(
+        state: GameState, player: int, rng: random.Random
+    ) -> tuple[object, float]:
+        t0 = time.perf_counter()
+        move = select_move(
+            state.copy(), player, rng, {"difficulty": "hard"}
+        )
+        elapsed_ms = (time.perf_counter() - t0) * 1000
+        return move, elapsed_ms
+
+
+# ---------------------------------------------------------------------------
+# 评估核心
+# ---------------------------------------------------------------------------
+
+
 def _choose_move(
     state: GameState,
     player: int,
-    difficulty: Difficulty,
+    difficulty: Difficulty | str,
     rng: random.Random,
+    model: ModelEvaluator | None = None,
 ) -> tuple[object, float]:
+    if difficulty == "model" and model is not None:
+        return model.select_move(state, player, rng)
     started = time.perf_counter()
     move = select_move(state.copy(), player, rng, {"difficulty": difficulty})
     elapsed_ms = (time.perf_counter() - started) * 1000
@@ -138,12 +297,13 @@ def _player_state(state: GameState, player: int):
 
 def play_game(
     *,
-    ai_difficulty: Difficulty,
-    opponent_difficulty: Difficulty,
+    ai_difficulty: Difficulty | str,
+    opponent_difficulty: Difficulty | str,
     ai_player: int,
     rng: random.Random,
     max_rounds: int,
     collect_log: bool = False,
+    model: ModelEvaluator | None = None,
 ) -> dict:
     state = GameState()
     action_counts: Counter = Counter()
@@ -161,8 +321,12 @@ def play_game(
             move.name for move in get_legal_moves_list(round_start, opponent_player)
         ]
 
-        ai_move, ai_elapsed_ms = _choose_move(round_start, ai_player, ai_difficulty, rng)
-        opponent_move, _ = _choose_move(round_start, opponent_player, opponent_difficulty, rng)
+        ai_move, ai_elapsed_ms = _choose_move(
+            round_start, ai_player, ai_difficulty, rng, model=model
+        )
+        opponent_move, _ = _choose_move(
+            round_start, opponent_player, opponent_difficulty, rng, model=model
+        )
         inference_times_ms.append(ai_elapsed_ms)
 
         if ai_player == 1:
@@ -218,11 +382,12 @@ def play_game(
 def evaluate(
     *,
     games: int,
-    ai_difficulty: Difficulty,
-    opponent_difficulty: Difficulty,
+    ai_difficulty: Difficulty | str,
+    opponent_difficulty: Difficulty | str,
     seed: int,
     max_rounds: int,
     collect_logs: bool = False,
+    model: ModelEvaluator | None = None,
 ) -> dict:
     if games <= 0:
         raise ValueError("games must be greater than 0")
@@ -252,6 +417,7 @@ def evaluate(
             rng=rng,
             max_rounds=max_rounds,
             collect_log=collect_logs,
+            model=model,
         )
         winner = game["winner"]
         rounds = game["rounds"]
@@ -330,11 +496,15 @@ def evaluate_matrix(
     games: int,
     seed: int,
     max_rounds: int,
-    matchups: tuple[tuple[Difficulty, Difficulty], ...] = DEFAULT_MATRIX,
+    matchups: tuple[tuple[str, str], ...] | None = None,
     collect_logs: bool = False,
+    model: ModelEvaluator | None = None,
 ) -> dict:
-    results = []
-    matrix = {}
+    if matchups is None:
+        matchups = MODEL_MATRIX if model is not None else DEFAULT_MATRIX
+
+    results: list[dict] = []
+    matrix: dict[str, dict] = {}
     for index, (ai_difficulty, opponent_difficulty) in enumerate(matchups):
         matchup_seed = seed + index * 1009
         result = evaluate(
@@ -344,6 +514,7 @@ def evaluate_matrix(
             seed=matchup_seed,
             max_rounds=max_rounds,
             collect_logs=collect_logs,
+            model=model,
         )
         key = f"{ai_difficulty}_vs_{opponent_difficulty}"
         matrix[key] = {
@@ -357,7 +528,8 @@ def evaluate_matrix(
             "p2_win_rate": result["p2_win_rate"],
         }
         results.append(result)
-    return {
+
+    report: dict = {
         "report_type": "clapclap_ai_matrix",
         "games_per_matchup": games,
         "seed": seed,
@@ -365,6 +537,18 @@ def evaluate_matrix(
         "matrix": matrix,
         "results": results,
     }
+    if model is not None:
+        report["model_info"] = {
+            "model_version": model.info.model_version,
+            "manifest_path": model.info.manifest_path,
+            "weights_path": model.info.weights_path,
+            "algorithm": model.info.algorithm,
+            "inference_adapter": model.info.inference_adapter,
+            "training_timesteps": model.info.training_timesteps,
+            "is_loaded": model.is_loaded,
+            "load_error": model.info.load_error,
+        }
+    return report
 
 
 def format_summary(report: dict) -> str:
@@ -413,14 +597,31 @@ def enforce_thresholds(
 def main() -> None:
     parser = argparse.ArgumentParser(description="Evaluate ClapClap 1.0 AI policies.")
     parser.add_argument("--games", type=int, default=100)
-    parser.add_argument("--ai", choices=["easy", "normal", "hard"], default="normal")
-    parser.add_argument("--opponent", choices=["easy", "normal", "hard"], default="easy")
+    parser.add_argument(
+        "--ai", choices=["easy", "normal", "hard", "model"], default="normal"
+    )
+    parser.add_argument(
+        "--opponent", choices=["easy", "normal", "hard", "model"], default="easy"
+    )
     parser.add_argument("--seed", type=int, default=20260629)
     parser.add_argument("--max-rounds", type=int, default=200)
-    parser.add_argument("--matrix", action="store_true", help="Run the default evaluation matrix.")
+    parser.add_argument(
+        "--matrix",
+        action="store_true",
+        help="Run the default evaluation matrix (or model matrix if --model-dir is set).",
+    )
+    parser.add_argument(
+        "--model-dir",
+        type=Path,
+        help="Evaluate a trained model (directory containing manifest.json + weights).",
+    )
     parser.add_argument("--output", type=Path, help="Write JSON report to this path.")
-    parser.add_argument("--log-games", type=Path, help="Write detailed game logs as JSONL.")
-    parser.add_argument("--summary", action="store_true", help="Print a compact table instead of JSON.")
+    parser.add_argument(
+        "--log-games", type=Path, help="Write detailed game logs as JSONL."
+    )
+    parser.add_argument(
+        "--summary", action="store_true", help="Print a compact table instead of JSON."
+    )
     parser.add_argument("--min-win-rate", type=float)
     parser.add_argument("--max-truncated-rate", type=float)
     args = parser.parse_args()
@@ -430,12 +631,26 @@ def main() -> None:
     if args.max_rounds <= 0:
         raise SystemExit("--max-rounds must be greater than 0")
 
+    # ── 模型加载 ──────────────────────────────────────────────
+    model: ModelEvaluator | None = None
+    if args.model_dir:
+        model = ModelEvaluator(args.model_dir.resolve(), max_rounds=args.max_rounds)
+        if model.is_loaded:
+            print(
+                f"[model] 已加载: version={model.info.model_version}, "
+                f"adapter={model.info.inference_adapter}"
+            )
+        else:
+            print(f"[model] 加载失败: {model.info.load_error}，将回退 heuristic hard")
+
+    # ── 评估 ─────────────────────────────────────────────────
     if args.matrix:
         report = evaluate_matrix(
             games=args.games,
             seed=args.seed,
             max_rounds=args.max_rounds,
             collect_logs=bool(args.log_games),
+            model=model,
         )
     else:
         report = evaluate(
@@ -445,6 +660,7 @@ def main() -> None:
             seed=args.seed,
             max_rounds=args.max_rounds,
             collect_logs=bool(args.log_games),
+            model=model,
         )
 
     if args.log_games:

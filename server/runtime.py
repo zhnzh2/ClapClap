@@ -29,6 +29,7 @@ class AISession:
     human_seat: str | None = None
     ai_seat: str | None = None
     policy_type: str | None = None
+    ai_model_key: str | None = None
     created_at: float = field(default_factory=time.time)
     updated_at: float = field(default_factory=time.time)
 

@@ -275,6 +275,63 @@ class TestAiApi(unittest.TestCase):
         self.assertIn("难度已锁定", second.get_json().get("error", ""))
         battle_recorder.delete_battle(first["battle_id"])
 
+    def test_step_accepts_and_records_ai_model_key(self):
+        """AI 对战可选择具体 ClapFish 模型，并写入本局元信息。"""
+        seen_configs = []
+
+        def fake_select_move(state, controlled_player, rng, config):
+            seen_configs.append(config)
+            return Move.QI
+
+        with patch("server.routes.ai_routes.select_move", side_effect=fake_select_move):
+            resp = self.client.post(
+                "/api/ai/step",
+                json={
+                    "human_move": "QI",
+                    "difficulty": "easy",
+                    "ai_model_key": "clapfish2",
+                },
+                headers=self.headers,
+            )
+
+        self.assertEqual(resp.status_code, 200)
+        data = resp.get_json()
+        self.assertTrue(data["ok"], data)
+        self.assertEqual(data["ai_model_key"], "clapfish2")
+        self.assertEqual(data["state"]["ai_model_key"], "clapfish2")
+        self.assertEqual(seen_configs[0]["ai_model_key"], "clapfish2")
+
+        battle = battle_recorder.read_battle(data["battle_id"])
+        self.assertEqual(battle.get("ai_model_key"), "clapfish2")
+        battle_recorder.delete_battle(data["battle_id"])
+
+    def test_ai_model_key_is_locked_after_first_round(self):
+        """同一局开始后不允许中途切换 AI 模型，避免记录和实际策略不一致。"""
+        first = self.client.post(
+            "/api/ai/step",
+            json={
+                "human_move": "QI",
+                "difficulty": "easy",
+                "ai_model_key": "clapfish1",
+            },
+            headers=self.headers,
+        ).get_json()
+        self.assertTrue(first["ok"], first)
+
+        second = self.client.post(
+            "/api/ai/step",
+            json={
+                "human_move": "QI",
+                "difficulty": "easy",
+                "ai_model_key": "clapfish2",
+            },
+            headers=self.headers,
+        )
+
+        self.assertEqual(second.status_code, 400)
+        self.assertIn("AI 模型已锁定", second.get_json().get("error", ""))
+        battle_recorder.delete_battle(first["battle_id"])
+
     def test_step_supports_human_seat_p2(self):
         """真人坐 P2 时，AI 应自动控制 P1 并正确记录座位。"""
         resp = self.client.post(
@@ -602,11 +659,16 @@ class TestAiApi(unittest.TestCase):
 
     def test_hard_battle_records_heuristic_fallback_without_model(self):
         """困难模式无部署模型时，应记录启发式降级而不是假装使用模型。"""
-        resp = self.client.post(
-            "/api/ai/step",
-            json={"human_move": "QI", "difficulty": "hard"},
-            headers=self.headers,
-        )
+        with patch.dict("os.environ", {"CLAPCLAP_AI_MODEL_DIR": "tests/missing-ai-model"}):
+            from app.ai.model_runtime import clear_model_status_cache
+
+            clear_model_status_cache()
+            resp = self.client.post(
+                "/api/ai/step",
+                json={"human_move": "QI", "difficulty": "hard"},
+                headers=self.headers,
+            )
+            clear_model_status_cache()
         data = resp.get_json()
         self.assertTrue(data["ok"], data)
 

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import random
+import tempfile
 import unittest
 from argparse import Namespace
+from unittest.mock import patch
 
 from app.ai.space import ACTION_SPACE_SIZE, get_action_space_fingerprint
 from app.ai_env import ClapClapEnv, action_index, validate_model_metadata
@@ -159,12 +161,14 @@ class TestClapClapEnv(unittest.TestCase):
             self.assertEqual(env.action_space.n, 17)
 
     def test_missing_production_model_falls_back_to_heuristic(self):
-        clear_model_status_cache()
-        status = get_model_status()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch.dict("os.environ", {"CLAPCLAP_AI_MODEL_DIR": tmpdir}):
+                clear_model_status_cache()
+                status = get_model_status()
 
-        self.assertFalse(status.available)
-        self.assertEqual(status.policy_type, "heuristic_fallback")
-        self.assertEqual(policy_type_for_difficulty("hard"), "heuristic_fallback")
+                self.assertFalse(status.available)
+                self.assertEqual(status.policy_type, "heuristic_fallback")
+                self.assertEqual(policy_type_for_difficulty("hard"), "heuristic_fallback")
 
 
 class TestEvaluateAi(unittest.TestCase):
