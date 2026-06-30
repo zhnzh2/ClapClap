@@ -14,9 +14,9 @@ from unittest.mock import patch
 from uuid import uuid4
 
 from app import battle_recorder, users
+from app.ai.space import ACTION_SPACE_SIZE, get_action_space_fingerprint
 from app.v1.constants import Move
 from app.v1.game import GameEngine
-from app.v1.models import GameState
 from server.app import app
 import server.runtime as runtime
 
@@ -38,19 +38,39 @@ class TestAiApi(unittest.TestCase):
             cls._test_uid = -1
             cls._token = ""
 
+        second_unique = f"ai-tester-{uuid4().hex[:8]}"
+        second_reg = users.register(second_unique, "test1234", verified="1")
+        if second_reg["ok"]:
+            cls._second_uid = second_reg["user"]["uid"]
+            cls._second_username = second_unique
+            second_login = users.login(second_unique, "test1234")
+            cls._second_token = second_login.get("session_token", "")
+        else:
+            cls._second_uid = -1
+            cls._second_username = ""
+            cls._second_token = ""
+
     @classmethod
     def tearDownClass(cls):
         # 清理测试用户
         if cls._test_uid >= 0:
             users.delete_user(cls._test_uid)
+        if cls._second_uid >= 0:
+            users.delete_user(cls._second_uid)
 
     def setUp(self):
         self.client = app.test_client()
         self.headers = {"X-Session-Token": self._token}
-        # 每个测试前重置 AI_STATE
+        self.second_headers = {"X-Session-Token": self._second_token}
+        # 每个测试前重置 AI session store
         with runtime.AI_STATE_LOCK:
-            runtime.AI_STATE = GameState()
-            runtime.CURRENT_AI_BATTLE_ID = None
+            runtime.clear_ai_sessions()
+
+    def _current_ai_session(self):
+        session_key = runtime.get_ai_session_key(
+            {"uid": self._test_uid, "username": self._test_username}
+        )
+        return runtime.get_ai_session(session_key)
 
     # ------------------------------------------------------------------
     # GET /api/ai/state
@@ -150,15 +170,16 @@ class TestAiApi(unittest.TestCase):
 
     def test_step_round_increments(self):
         """每步后 round_num 递增。"""
-        for expected_round in range(1, 4):
-            resp = self.client.post(
-                "/api/ai/step",
-                json={"human_move": "QI", "difficulty": "easy"},
-                headers=self.headers,
-            )
-            data = resp.get_json()
-            self.assertTrue(data["ok"], data)
-            self.assertEqual(data["state"]["round_num"], expected_round)
+        with patch("server.routes.ai_routes.select_move", return_value=Move.QI):
+            for expected_round in range(1, 4):
+                resp = self.client.post(
+                    "/api/ai/step",
+                    json={"human_move": "QI", "difficulty": "easy"},
+                    headers=self.headers,
+                )
+                data = resp.get_json()
+                self.assertTrue(data["ok"], data)
+                self.assertEqual(data["state"]["round_num"], expected_round)
 
     def test_step_ai_move_is_legal(self):
         """AI 返回的动作不会导致非法判负（即 AI 动作对其座位合法）。"""
@@ -199,6 +220,25 @@ class TestAiApi(unittest.TestCase):
             data = resp.get_json()
             self.assertTrue(data["ok"], f"难度 {difficulty}: {data}")
             self.assertEqual(data["difficulty"], difficulty)
+
+    def test_difficulty_is_locked_after_first_round(self):
+        """同一局开始后不允许中途切换 AI 难度，保证记录元信息准确。"""
+        first = self.client.post(
+            "/api/ai/step",
+            json={"human_move": "QI", "difficulty": "easy"},
+            headers=self.headers,
+        ).get_json()
+        self.assertTrue(first["ok"], first)
+
+        second = self.client.post(
+            "/api/ai/step",
+            json={"human_move": "QI", "difficulty": "normal"},
+            headers=self.headers,
+        )
+
+        self.assertEqual(second.status_code, 400)
+        self.assertIn("难度已锁定", second.get_json().get("error", ""))
+        battle_recorder.delete_battle(first["battle_id"])
 
     def test_step_supports_human_seat_p2(self):
         """真人坐 P2 时，AI 应自动控制 P1 并正确记录座位。"""
@@ -360,7 +400,7 @@ class TestAiApi(unittest.TestCase):
         """游戏结束后继续提交返回 400。"""
         # 强制设 winner 模拟终局
         with runtime.AI_STATE_LOCK:
-            runtime.AI_STATE.winner = 1
+            self._current_ai_session().state.winner = 1
 
         resp = self.client.post(
             "/api/ai/step",
@@ -400,6 +440,57 @@ class TestAiApi(unittest.TestCase):
         self.assertNotEqual(ai_state["round_num"], local_state["round_num"],
                             "AI 状态和本地模式状态应独立")
 
+    def test_ai_state_isolated_per_user(self):
+        """不同登录用户的 AI 对局状态互不影响。"""
+        first_step = self.client.post(
+            "/api/ai/step",
+            json={"human_move": "QI", "difficulty": "easy"},
+            headers=self.headers,
+        ).get_json()
+        self.assertTrue(first_step["ok"], first_step)
+
+        first_state = self.client.get("/api/ai/state", headers=self.headers).get_json()
+        second_state = self.client.get(
+            "/api/ai/state", headers=self.second_headers
+        ).get_json()
+
+        self.assertEqual(first_state["round_num"], 1)
+        self.assertIsInstance(first_state["battle_id"], str)
+        self.assertEqual(second_state["round_num"], 0)
+        self.assertIsNone(second_state["battle_id"])
+
+        battle_recorder.delete_battle(first_state["battle_id"])
+
+    def test_ai_reset_only_resets_current_user(self):
+        """用户 A reset 不会清掉用户 B 的 AI 对局。"""
+        first = self.client.post(
+            "/api/ai/step",
+            json={"human_move": "QI", "difficulty": "easy"},
+            headers=self.headers,
+        ).get_json()
+        second = self.client.post(
+            "/api/ai/step",
+            json={"human_move": "QI", "difficulty": "easy"},
+            headers=self.second_headers,
+        ).get_json()
+        self.assertTrue(first["ok"], first)
+        self.assertTrue(second["ok"], second)
+
+        self.client.post("/api/ai/reset", headers=self.headers)
+
+        first_state = self.client.get("/api/ai/state", headers=self.headers).get_json()
+        second_state = self.client.get(
+            "/api/ai/state", headers=self.second_headers
+        ).get_json()
+
+        self.assertEqual(first_state["round_num"], 0)
+        self.assertIsNone(first_state["battle_id"])
+        self.assertEqual(second_state["round_num"], 1)
+        self.assertEqual(second_state["battle_id"], second["battle_id"])
+
+        battle_recorder.delete_battle(first["battle_id"])
+        battle_recorder.delete_battle(second["battle_id"])
+
     # ------------------------------------------------------------------
     # 对战记录验证
     # ------------------------------------------------------------------
@@ -414,9 +505,9 @@ class TestAiApi(unittest.TestCase):
         data = resp.get_json()
         self.assertTrue(data["ok"])
 
-        # 检查 runtime 中有 battle_id
+        # 检查当前用户 session 中有 battle_id
         with runtime.AI_STATE_LOCK:
-            battle_id = runtime.CURRENT_AI_BATTLE_ID
+            battle_id = self._current_ai_session().battle_id
 
         self.assertIsNotNone(battle_id)
 
@@ -426,9 +517,28 @@ class TestAiApi(unittest.TestCase):
         self.assertEqual(battle.get("opponent_type"), "ai")
         self.assertEqual(battle.get("ai_difficulty"), "normal")
         self.assertEqual(battle.get("ai_seat"), "p2")  # 默认真人 P1, AI P2
+        self.assertEqual(battle.get("human_seat"), "p1")
+        self.assertEqual(battle.get("ai_policy_type"), "heuristic")
+        self.assertIsNone(battle.get("ai_model_version"))
+        self.assertEqual(battle.get("action_space_size"), ACTION_SPACE_SIZE)
+        self.assertEqual(
+            battle.get("action_space_fingerprint"),
+            get_action_space_fingerprint(),
+        )
+        self.assertEqual(
+            battle.get("observation_version"),
+            "clapclap-v1-public-state-v1",
+        )
         self.assertEqual(battle.get("rule_version"), "1.0")
         self.assertEqual(battle.get("mode"), "ai")
         self.assertEqual(len(battle.get("rounds", [])), 1)
+        latest_round = battle.get("rounds", [])[0]
+        self.assertEqual(latest_round.get("human_seat"), "p1")
+        self.assertEqual(latest_round.get("ai_seat"), "p2")
+        self.assertEqual(latest_round.get("ai_difficulty"), "normal")
+        self.assertEqual(latest_round.get("ai_policy_type"), "heuristic")
+        self.assertEqual(latest_round.get("ai_move"), data["ai_move"])
+        self.assertEqual(latest_round.get("human_move"), "QI")
 
         # 清理
         battle_recorder.delete_battle(battle_id)
@@ -444,7 +554,7 @@ class TestAiApi(unittest.TestCase):
         self.assertTrue(data["ok"])
 
         with runtime.AI_STATE_LOCK:
-            battle_id = runtime.CURRENT_AI_BATTLE_ID
+            battle_id = self._current_ai_session().battle_id
 
         battle = battle_recorder.read_battle(battle_id)
         participants = battle.get("participants", {})

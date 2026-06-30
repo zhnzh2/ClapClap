@@ -6,7 +6,12 @@ import unittest
 from app.ai_env import ClapClapEnv, action_index
 from app.v1.constants import Move
 from app.v1.models import GameState
-from scripts.evaluate_ai import evaluate
+from scripts.evaluate_ai import (
+    enforce_thresholds,
+    evaluate,
+    evaluate_matrix,
+    format_summary,
+)
 
 
 class TestClapClapEnv(unittest.TestCase):
@@ -64,11 +69,77 @@ class TestEvaluateAi(unittest.TestCase):
 
         self.assertEqual(result["games"], 4)
         self.assertIn("win_rate", result)
+        self.assertIn("loss_rate", result)
+        self.assertIn("draw_rate", result)
+        self.assertIn("truncated_rate", result)
         self.assertIn("average_rounds", result)
         self.assertIn("action_counts", result)
+        self.assertIn("average_inference_ms", result)
         self.assertEqual(result["illegal_moves"], 0)
         self.assertEqual(result["ai_as_p1_games"], 2)
         self.assertEqual(result["ai_as_p2_games"], 2)
+
+    def test_evaluate_rejects_invalid_games(self):
+        with self.assertRaises(ValueError):
+            evaluate(
+                games=0,
+                ai_difficulty="normal",
+                opponent_difficulty="easy",
+                seed=123,
+                max_rounds=60,
+            )
+
+    def test_evaluate_matrix_returns_default_matchups(self):
+        report = evaluate_matrix(games=2, seed=123, max_rounds=40)
+
+        self.assertEqual(report["report_type"], "clapclap_ai_matrix")
+        self.assertEqual(report["games_per_matchup"], 2)
+        self.assertIn("normal_vs_easy", report["matrix"])
+        self.assertEqual(len(report["results"]), 5)
+        self.assertIn("illegal_moves", report["matrix"]["normal_vs_easy"])
+
+    def test_format_summary_for_matrix(self):
+        report = evaluate_matrix(games=2, seed=123, max_rounds=40)
+        summary = format_summary(report)
+
+        self.assertIn("matchup win loss draw", summary)
+        self.assertIn("normal_vs_easy", summary)
+
+    def test_enforce_thresholds_reports_illegal_moves(self):
+        failures = enforce_thresholds(
+            {
+                "ai_difficulty": "normal",
+                "opponent_difficulty": "easy",
+                "illegal_moves": 1,
+                "win_rate": 1.0,
+                "truncated_rate": 0.0,
+            },
+            min_win_rate=0.5,
+            max_truncated_rate=0.2,
+        )
+
+        self.assertTrue(failures)
+
+    def test_evaluate_can_collect_game_logs(self):
+        result = evaluate(
+            games=1,
+            ai_difficulty="normal",
+            opponent_difficulty="easy",
+            seed=123,
+            max_rounds=40,
+            collect_logs=True,
+        )
+
+        self.assertIn("game_logs", result)
+        self.assertEqual(len(result["game_logs"]), 1)
+        first_game = result["game_logs"][0]
+        self.assertIn("rounds_log", first_game)
+        self.assertTrue(first_game["rounds_log"])
+        first_round = first_game["rounds_log"][0]
+        self.assertIn("round_start_state", first_round)
+        self.assertIn("ai_legal_actions", first_round)
+        self.assertIn("ai_move", first_round)
+        self.assertIn("round_end_state", first_round)
 
 
 if __name__ == "__main__":

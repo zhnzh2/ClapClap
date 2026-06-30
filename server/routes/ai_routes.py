@@ -19,6 +19,7 @@ import random
 from flask import Blueprint, g, jsonify, request
 
 from app.ai.engine import select_move
+from app.ai.space import ACTION_SPACE_SIZE, get_action_space_fingerprint
 from app.battle_recorder import (
     create_battle,
     end_battle,
@@ -31,12 +32,25 @@ from server.auth_middleware import get_current_username, require_auth
 import server.runtime as runtime
 
 ai_bp = Blueprint("ai", __name__)
+AI_OBSERVATION_VERSION = "clapclap-v1-public-state-v1"
 
 
-def _get_ai_state_payload() -> dict:
-    payload = get_game_state_payload(runtime.AI_STATE, include_history=True)
-    payload["battle_id"] = runtime.CURRENT_AI_BATTLE_ID
+def _get_ai_session_key() -> str:
+    return runtime.get_ai_session_key(g.current_user)
+
+
+def _get_ai_state_payload(session: runtime.AISession) -> dict:
+    payload = get_game_state_payload(session.state, include_history=True)
+    payload["battle_id"] = session.battle_id
+    payload["ai_difficulty"] = session.difficulty
+    payload["human_seat"] = session.human_seat
+    payload["ai_seat"] = session.ai_seat
+    payload["ai_policy_type"] = session.policy_type
     return payload
+
+
+def _policy_type_for_difficulty(difficulty: str) -> str:
+    return "random" if difficulty == "easy" else "heuristic"
 
 
 # ---------------------------------------------------------------------------
@@ -49,8 +63,10 @@ def _get_ai_state_payload() -> dict:
 @require_auth
 def get_ai_state():
     """返回当前 AI 对战状态。"""
+    session_key = _get_ai_session_key()
     with runtime.AI_STATE_LOCK:
-        payload = _get_ai_state_payload()
+        session = runtime.get_ai_session(session_key)
+        payload = _get_ai_state_payload(session)
     return jsonify(payload)
 
 
@@ -64,10 +80,10 @@ def get_ai_state():
 @require_auth
 def reset_ai_game():
     """重置 AI 对战状态，清空对局记录 ID。"""
+    session_key = _get_ai_session_key()
     with runtime.AI_STATE_LOCK:
-        runtime.AI_STATE = runtime.AI_STATE.__class__()
-        runtime.CURRENT_AI_BATTLE_ID = None
-        payload = _get_ai_state_payload()
+        session = runtime.reset_ai_session(session_key)
+        payload = _get_ai_state_payload(session)
     return jsonify(
         {
             "ok": True,
@@ -140,14 +156,32 @@ def ai_step():
 
     human_player = 1 if human_seat == "p1" else 2
     ai_player = 2 if human_seat == "p1" else 1
+    session_key = _get_ai_session_key()
 
     with runtime.AI_STATE_LOCK:
-        state = runtime.AI_STATE
+        session = runtime.get_ai_session(session_key)
+        state = session.state
 
         # 4. 校验游戏未结束
         if state.winner is not None:
             return jsonify(
                 {"ok": False, "error": "游戏已结束，请重置后再继续。"}
+            ), 400
+
+        if session.difficulty is not None and difficulty != session.difficulty:
+            return jsonify(
+                {
+                    "ok": False,
+                    "error": f"本局难度已锁定为 {session.difficulty}，请重置后再切换。",
+                }
+            ), 400
+
+        if session.human_seat is not None and human_seat != session.human_seat:
+            return jsonify(
+                {
+                    "ok": False,
+                    "error": f"本局真人座位已锁定为 {session.human_seat}，请重置后再切换。",
+                }
             ), 400
 
         # 5. 校验真人动作合法
@@ -183,8 +217,14 @@ def ai_step():
         # 9. 对战记录
         human_username = get_current_username()
         human_uid = g.current_user.get("uid", -1) if hasattr(g, "current_user") else -1
+        policy_type = _policy_type_for_difficulty(difficulty)
 
-        if runtime.CURRENT_AI_BATTLE_ID is None:
+        if session.battle_id is None:
+            session.difficulty = difficulty
+            session.human_seat = human_seat
+            session.ai_seat = f"p{ai_player}"
+            session.policy_type = policy_type
+
             # 参与者：P1=真人/AI, P2=AI/真人
             p1_entry = {
                 "username": human_username if human_seat == "p1" else "ClapClap AI",
@@ -195,31 +235,46 @@ def ai_step():
                 "uid": -2 if human_seat == "p1" else human_uid,
             }
 
-            runtime.CURRENT_AI_BATTLE_ID = create_battle(
+            session.battle_id = create_battle(
                 {"p1": p1_entry, "p2": p2_entry},
                 mode="ai",
                 rule_version="1.0",
             )
 
             # 写入 AI 元信息
-            set_battle_metadata(runtime.CURRENT_AI_BATTLE_ID, {
+            set_battle_metadata(session.battle_id, {
                 "opponent_type": "ai",
-                "ai_policy_type": "heuristic" if difficulty != "easy" else "random",
+                "ai_policy_type": policy_type,
                 "ai_difficulty": difficulty,
                 "ai_model_version": None,
                 "ai_seat": f"p{ai_player}",
+                "human_seat": human_seat,
+                "action_space_size": ACTION_SPACE_SIZE,
+                "action_space_fingerprint": get_action_space_fingerprint(),
+                "observation_version": AI_OBSERVATION_VERSION,
             })
 
         # 记录本回合
         if state.history:
-            record_round(runtime.CURRENT_AI_BATTLE_ID, state.history[-1].to_dict())
+            round_data = state.history[-1].to_dict()
+            round_data.update({
+                "human_seat": human_seat,
+                "ai_seat": f"p{ai_player}",
+                "human_move": human_move.name,
+                "ai_move": ai_move.name,
+                "ai_difficulty": session.difficulty,
+                "ai_policy_type": session.policy_type,
+                "ai_model_version": None,
+            })
+            record_round(session.battle_id, round_data)
 
         # 10. 终局处理
         if state.winner is not None:
-            end_battle(runtime.CURRENT_AI_BATTLE_ID, state.winner)
+            end_battle(session.battle_id, state.winner)
 
-        payload = _get_ai_state_payload()
-        battle_id = runtime.CURRENT_AI_BATTLE_ID
+        session.touch()
+        payload = _get_ai_state_payload(session)
+        battle_id = session.battle_id
 
     return jsonify(
         {

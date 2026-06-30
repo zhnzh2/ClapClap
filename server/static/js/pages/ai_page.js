@@ -166,12 +166,12 @@ function aiRenderMoveButtons(containerId, legalMoves, catalog, selectedMove, onS
                 '<div class="move-label">' + item.label + '</div>' +
                 '<div class="move-name">' + item.name + '</div>';
 
-            btn.addEventListener("click", (function(moveName) {
+            btn.addEventListener("click", (function(moveName, isLegal) {
                 return function() {
-                    if (!legal) return;
+                    if (!isLegal) return;
                     onSelect(moveName);
                 };
-            })(item.name));
+            })(item.name, legal));
 
             wrap.appendChild(btn);
             grid.appendChild(wrap);
@@ -242,6 +242,9 @@ function aiRenderHistory(logs) {
 function aiRenderState(state) {
     aiLatestState = state;
     window._aiBattleId = state.battle_id || window._aiBattleId || null;
+    if (state.ai_difficulty) {
+        aiDifficulty = state.ai_difficulty;
+    }
 
     var catalog = state.move_catalog || [];
     var logs = state.history || [];
@@ -304,7 +307,22 @@ function aiRenderState(state) {
         stepBtn.textContent = "出招";
     }
 
+    aiUpdateDifficultyControls(state);
     aiMaybeShowEndModal(state);
+}
+
+function aiUpdateDifficultyControls(state) {
+    var locked = !!(state && state.battle_id && state.round_num > 0 && state.winner === null);
+    var btns = document.querySelectorAll(".ai-diff-btn");
+    for (var i = 0; i < btns.length; i++) {
+        var diff = btns[i].getAttribute("data-diff");
+        btns[i].disabled = locked;
+        if (diff === aiDifficulty) {
+            btns[i].classList.add("active");
+        } else {
+            btns[i].classList.remove("active");
+        }
+    }
 }
 
 function aiMaybeShowEndModal(state) {
@@ -421,16 +439,21 @@ async function aiStepGame() {
 // =========================================================================
 
 function aiSetDifficulty(diff) {
+    if (
+        aiLatestState &&
+        aiLatestState.battle_id &&
+        aiLatestState.round_num > 0 &&
+        aiLatestState.winner === null
+    ) {
+        document.getElementById("ai-message").textContent =
+            "本局难度已锁定，重置后可以切换。";
+        aiUpdateDifficultyControls(aiLatestState);
+        return;
+    }
+
     aiDifficulty = diff;
     // 更新按钮状态
-    var btns = document.querySelectorAll(".ai-diff-btn");
-    for (var i = 0; i < btns.length; i++) {
-        if (btns[i].getAttribute("data-diff") === diff) {
-            btns[i].classList.add("active");
-        } else {
-            btns[i].classList.remove("active");
-        }
-    }
+    aiUpdateDifficultyControls(aiLatestState);
 }
 
 function aiDifficultyLabel(diff) {
