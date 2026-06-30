@@ -36,6 +36,23 @@
             color: #fff;
             border-color: var(--blue);
         }
+        .ai-seat-btn {
+            padding: 5px 14px;
+            border: 2px solid var(--border);
+            border-radius: 20px;
+            background: var(--card);
+            color: var(--text);
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: bold;
+            transition: all 0.15s;
+        }
+        .ai-seat-btn:hover { border-color: #16a34a; color: #15803d; }
+        .ai-seat-btn.active {
+            background: #16a34a;
+            color: #fff;
+            border-color: #16a34a;
+        }
         .ai-move-box {
             min-height: 60px;
             padding: 14px;
@@ -99,7 +116,7 @@
         </div>
         <div class="page-title-block">
             <h1>1.0 AI 对战</h1>
-            <p>人机对战 · 你（P1） vs AI（P2）</p>
+            <p>人机对战 · 可选择先手或后手</p>
         </div>
     </div>
 
@@ -118,13 +135,13 @@
     <!-- 双方资源 -->
     <div class="two-col">
         <div class="card">
-            <h2>你的资源 (P1)</h2>
+            <h2 id="ai-human-state-title">你的资源 (P1)</h2>
             <div class="player-panel p1-theme">
                 <div id="ai-p1-state" class="resource-grid"></div>
             </div>
         </div>
         <div class="card">
-            <h2>AI 资源 (P2)</h2>
+            <h2 id="ai-opponent-state-title">AI 资源 (P2)</h2>
             <div class="player-panel p2-theme">
                 <div id="ai-p2-state" class="resource-grid"></div>
             </div>
@@ -136,6 +153,9 @@
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
             <h2 style="margin:0;">你的动作</h2>
             <div class="ai-diff-bar" id="ai-settings-anchor">
+                <span class="label">你的座位：</span>
+                <button class="ai-seat-btn" data-seat="p1">P1 先手</button>
+                <button class="ai-seat-btn" data-seat="p2">P2 后手</button>
                 <span class="label">AI 难度：</span>
                 <button class="ai-diff-btn" data-diff="easy">简单</button>
                 <button class="ai-diff-btn" data-diff="normal">普通</button>

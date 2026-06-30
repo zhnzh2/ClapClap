@@ -1,7 +1,7 @@
 /**
  * ClapClap 1.0 AI 对战页面。
  *
- * 真人固定 P1，AI 固定 P2。
+ * 真人可选择 P1 或 P2，AI 固定控制另一侧。
  * 复用 core/api.js、core/session.js、core/logout_button.js、core/modal.js。
  */
 
@@ -12,6 +12,7 @@
 var aiLatestState = null;
 var aiSelectedMove = null;
 var aiDifficulty = "normal";
+var aiHumanSeat = "p1";
 var aiThinking = false;
 var aiEndModalShownForWinner = null;
 var aiLastMoveLabel = null;
@@ -55,11 +56,32 @@ var aiFixedKeyMap = {
 // 渲染函数
 // =========================================================================
 
+function aiOtherSeat(seat) {
+    return seat === "p1" ? "p2" : "p1";
+}
+
+function aiSeatPlayerNumber(seat) {
+    return seat === "p2" ? 2 : 1;
+}
+
+function aiSeatLabel(seat) {
+    return seat === "p2" ? "P2" : "P1";
+}
+
+function aiHumanPlayerNumber() {
+    return aiSeatPlayerNumber(aiHumanSeat);
+}
+
+function aiAiSeat() {
+    if (aiLatestState && aiLatestState.ai_seat) return aiLatestState.ai_seat;
+    return aiOtherSeat(aiHumanSeat);
+}
+
 function aiWinnerText(winner) {
     if (winner === null) return "未结束";
     if (winner === 0) return "双败 / 平局";
-    if (winner === 1) return "你获胜了！";
-    if (winner === 2) return "AI 获胜";
+    if (winner === aiHumanPlayerNumber()) return "你获胜了！";
+    return "AI 获胜";
     return "未知";
 }
 
@@ -124,7 +146,7 @@ function aiGetMoveGroups(catalog) {
     return groups;
 }
 
-function aiRenderMoveButtons(containerId, legalMoves, catalog, selectedMove, onSelect) {
+function aiRenderMoveButtons(containerId, legalMoves, catalog, selectedMove, selectedSeat, onSelect) {
     var container = document.getElementById(containerId);
     container.innerHTML = "";
 
@@ -159,6 +181,7 @@ function aiRenderMoveButtons(containerId, legalMoves, catalog, selectedMove, onS
             }
             if (selectedMove === item.name) {
                 btn.classList.add("selected");
+                btn.classList.add(selectedSeat === "p2" ? "p2-selected" : "p1-selected");
             }
 
             var hotkey = aiFixedKeyMap[item.name] || "";
@@ -188,24 +211,29 @@ function aiRenderLatestRound(log) {
         return "<div class='muted'>当前还没有回合记录。</div>";
     }
 
+    var humanSeat = aiHumanSeat;
+    var aiSeat = aiAiSeat();
+    var humanPrefix = humanSeat + "_";
+    var aiPrefix = aiSeat + "_";
+
     var resultLine = "";
     if (log.winner_after_round === 0) {
         resultLine = "<div><strong>本局结果：</strong><span class='danger-text'>双败 / 平局</span></div>";
-    } else if (log.winner_after_round === 1) {
+    } else if (log.winner_after_round === aiSeatPlayerNumber(humanSeat)) {
         resultLine = "<div><strong>本局结果：</strong><span class='good-text'>你获胜了！</span></div>";
-    } else if (log.winner_after_round === 2) {
+    } else if (log.winner_after_round === aiSeatPlayerNumber(aiSeat)) {
         resultLine = "<div><strong>本局结果：</strong><span class='good-text'>AI 获胜</span></div>";
     }
 
     return (
         '<div class="round-box">' +
         '<div><strong>第 ' + log.round_num + ' 回合</strong></div>' +
-        '<div>你的动作：' + log.p1_move_label + ' (' + log.p1_move + ')</div>' +
-        '<div>AI 动作：' + log.p2_move_label + ' (' + log.p2_move + ')</div>' +
-        '<div>你受到伤害：<span class="' + (log.p1_damage_taken > 0 ? "danger-text" : "good-text") + '">' + log.p1_damage_taken + '</span></div>' +
-        '<div>AI 受到伤害：<span class="' + (log.p2_damage_taken > 0 ? "danger-text" : "good-text") + '">' + log.p2_damage_taken + '</span></div>' +
-        '<div>你的说明：' + (log.p1_note || "无") + '</div>' +
-        '<div>AI 说明：' + (log.p2_note || "无") + '</div>' +
+        '<div>你的动作：' + log[humanPrefix + "move_label"] + ' (' + log[humanPrefix + "move"] + ')</div>' +
+        '<div>AI 动作：' + log[aiPrefix + "move_label"] + ' (' + log[aiPrefix + "move"] + ')</div>' +
+        '<div>你受到伤害：<span class="' + (log[humanPrefix + "damage_taken"] > 0 ? "danger-text" : "good-text") + '">' + log[humanPrefix + "damage_taken"] + '</span></div>' +
+        '<div>AI 受到伤害：<span class="' + (log[aiPrefix + "damage_taken"] > 0 ? "danger-text" : "good-text") + '">' + log[aiPrefix + "damage_taken"] + '</span></div>' +
+        '<div>你的说明：' + (log[humanPrefix + "note"] || "无") + '</div>' +
+        '<div>AI 说明：' + (log[aiPrefix + "note"] || "无") + '</div>' +
         '<div><strong>总结：</strong>' + log.summary + '</div>' +
         resultLine +
         '</div>'
@@ -223,14 +251,18 @@ function aiRenderHistory(logs) {
 
     for (var i = logs.length - 1; i >= 0; i--) {
         var log = logs[i];
+        var humanSeat = log.human_seat || aiHumanSeat;
+        var aiSeat = log.ai_seat || aiOtherSeat(humanSeat);
+        var humanPrefix = humanSeat + "_";
+        var aiPrefix = aiSeat + "_";
         var item = document.createElement("div");
         item.className = "history-item";
         item.innerHTML =
             '<div><strong>第 ' + log.round_num + ' 回合</strong></div>' +
-            '<div>你：' + log.p1_move_label + ' (' + log.p1_move + ') | AI：' + log.p2_move_label + ' (' + log.p2_move + ')</div>' +
-            '<div>你受伤：' + log.p1_damage_taken + ' | AI 受伤：' + log.p2_damage_taken + '</div>' +
-            '<div>你的说明：' + (log.p1_note || "无") + '</div>' +
-            '<div>AI 说明：' + (log.p2_note || "无") + '</div>' +
+            '<div>你：' + log[humanPrefix + "move_label"] + ' (' + log[humanPrefix + "move"] + ') | AI：' + log[aiPrefix + "move_label"] + ' (' + log[aiPrefix + "move"] + ')</div>' +
+            '<div>你受伤：' + log[humanPrefix + "damage_taken"] + ' | AI 受伤：' + log[aiPrefix + "damage_taken"] + '</div>' +
+            '<div>你的说明：' + (log[humanPrefix + "note"] || "无") + '</div>' +
+            '<div>AI 说明：' + (log[aiPrefix + "note"] || "无") + '</div>' +
             '<div><strong>总结：</strong>' + log.summary + '</div>';
         historyEl.appendChild(item);
     }
@@ -247,28 +279,38 @@ function aiRenderState(state) {
     if (state.ai_difficulty) {
         aiDifficulty = state.ai_difficulty;
     }
+    if (state.human_seat) {
+        aiHumanSeat = state.human_seat;
+    }
     if (state.ai_policy_type) {
         aiPolicyType = state.ai_policy_type;
     }
 
     var catalog = state.move_catalog || [];
     var logs = state.history || [];
+    var aiSeat = state.ai_seat || aiAiSeat();
 
     // 基本信息
     document.getElementById("ai-basic-info").innerHTML =
         '<span class="status-badge">回合：' + state.round_num + '</span>' +
         '<span class="winner-badge">胜负：' + aiWinnerText(state.winner) + '</span>' +
+        '<span class="status-badge">你：' + aiSeatLabel(aiHumanSeat) + '</span>' +
+        '<span class="status-badge">AI：' + aiSeatLabel(aiSeat) + '</span>' +
         '<span class="status-badge">难度：' + aiDifficultyLabel(aiDifficulty) + '</span>' +
         '<span class="status-badge ai-policy-pill">策略：' + aiPolicyTypeLabel(aiPolicyType) + '</span>' +
         (aiInferenceMs !== null ? '<span class="status-badge">推理：' + aiInferenceMs + ' ms</span>' : '');
 
     // 双方资源
-    document.getElementById("ai-p1-state").innerHTML = aiRenderPlayerState(state.p1);
-    document.getElementById("ai-p2-state").innerHTML = aiRenderPlayerState(state.p2);
+    var humanPlayer = state[aiHumanSeat] || state.p1;
+    var aiPlayer = state[aiSeat] || state.p2;
+    document.getElementById("ai-human-state-title").textContent = "你的资源 (" + aiSeatLabel(aiHumanSeat) + ")";
+    document.getElementById("ai-opponent-state-title").textContent = "AI 资源 (" + aiSeatLabel(aiSeat) + ")";
+    document.getElementById("ai-p1-state").innerHTML = aiRenderPlayerState(humanPlayer);
+    document.getElementById("ai-p2-state").innerHTML = aiRenderPlayerState(aiPlayer);
 
-    // P1 动作按钮
-    var legal = state.legal_moves ? (state.legal_moves.p1 || []) : [];
-    aiRenderMoveButtons("ai-p1-move-groups", legal, catalog, aiSelectedMove, function(moveName) {
+    // 真人动作按钮
+    var legal = state.legal_moves ? (state.legal_moves[aiHumanSeat] || []) : [];
+    aiRenderMoveButtons("ai-p1-move-groups", legal, catalog, aiSelectedMove, aiHumanSeat, function(moveName) {
         aiSelectedMove = moveName;
         aiRenderState(aiLatestState);
         document.getElementById("ai-message").textContent =
@@ -285,9 +327,11 @@ function aiRenderState(state) {
             '<div class="good-text">' + aiLastMoveLabel + ' (' + aiLastMoveName + ')</div>';
     } else if (state.winner === null && logs.length > 0) {
         var lastLog = logs[logs.length - 1];
+        var lastAiSeat = lastLog.ai_seat || aiSeat;
+        var lastAiPrefix = lastAiSeat + "_";
         aiMoveBox.innerHTML =
             '<div><strong>AI 上一回合出了：</strong></div>' +
-            '<div class="good-text">' + lastLog.p2_move_label + ' (' + lastLog.p2_move + ')</div>';
+            '<div class="good-text">' + lastLog[lastAiPrefix + "move_label"] + ' (' + lastLog[lastAiPrefix + "move"] + ')</div>';
     } else if (state.winner !== null) {
         aiMoveBox.innerHTML = "<div class='muted'>游戏已结束。</div>";
     } else {
@@ -315,6 +359,7 @@ function aiRenderState(state) {
     }
 
     aiUpdateDifficultyControls(state);
+    aiUpdateSeatControls(state);
     aiMaybeShowEndModal(state);
 }
 
@@ -325,6 +370,20 @@ function aiUpdateDifficultyControls(state) {
         var diff = btns[i].getAttribute("data-diff");
         btns[i].disabled = locked;
         if (diff === aiDifficulty) {
+            btns[i].classList.add("active");
+        } else {
+            btns[i].classList.remove("active");
+        }
+    }
+}
+
+function aiUpdateSeatControls(state) {
+    var locked = !!(state && state.battle_id && state.round_num > 0 && state.winner === null);
+    var btns = document.querySelectorAll(".ai-seat-btn");
+    for (var i = 0; i < btns.length; i++) {
+        var seat = btns[i].getAttribute("data-seat");
+        btns[i].disabled = locked;
+        if (seat === aiHumanSeat) {
             btns[i].classList.add("active");
         } else {
             btns[i].classList.remove("active");
@@ -387,6 +446,7 @@ async function aiResetGame() {
     aiLastMoveName = null;
     aiPolicyType = null;
     aiInferenceMs = null;
+    aiUpdateSeatControls(null);
     window._aiBattleId = null;
     aiCloseEndModal();
 
@@ -413,7 +473,7 @@ async function aiStepGame() {
     var result = await ApiUtils.apiPost("/v1/api/ai/step", {
         human_move: aiSelectedMove,
         difficulty: aiDifficulty,
-        human_seat: "p1"
+        human_seat: aiHumanSeat
     });
 
     aiThinking = false;
@@ -467,6 +527,29 @@ function aiSetDifficulty(diff) {
     aiUpdateDifficultyControls(aiLatestState);
 }
 
+function aiSetHumanSeat(seat) {
+    if (seat !== "p1" && seat !== "p2") return;
+
+    if (
+        aiLatestState &&
+        aiLatestState.battle_id &&
+        aiLatestState.round_num > 0 &&
+        aiLatestState.winner === null
+    ) {
+        document.getElementById("ai-message").textContent =
+            "本局座位已锁定，重置后可以换边。";
+        aiUpdateSeatControls(aiLatestState);
+        return;
+    }
+
+    aiHumanSeat = seat;
+    aiSelectedMove = null;
+    aiUpdateSeatControls(aiLatestState);
+    if (aiLatestState) aiRenderState(aiLatestState);
+    document.getElementById("ai-message").textContent =
+        "已切换为你控制 " + aiSeatLabel(aiHumanSeat) + "。";
+}
+
 function aiDifficultyLabel(diff) {
     if (diff === "easy") return "简单";
     if (diff === "hard") return "困难";
@@ -506,7 +589,7 @@ function aiHandleKeyboard(keyText) {
 
     if (!matchedMove) return;
 
-    var legal = aiLatestState.legal_moves ? (aiLatestState.legal_moves.p1 || []) : [];
+    var legal = aiLatestState.legal_moves ? (aiLatestState.legal_moves[aiHumanSeat] || []) : [];
     if (legal.indexOf(matchedMove) !== -1) {
         aiSelectedMove = matchedMove;
         aiRenderState(aiLatestState);
@@ -572,6 +655,14 @@ function aiInitPage() {
         });
     }
 
+    // 座位按钮
+    var seatBtns = document.querySelectorAll(".ai-seat-btn");
+    for (var si = 0; si < seatBtns.length; si++) {
+        seatBtns[si].addEventListener("click", function() {
+            aiSetHumanSeat(this.getAttribute("data-seat"));
+        });
+    }
+
     // 操作按钮
     document.getElementById("ai-settings-btn").addEventListener("click", function() {
         var target = document.getElementById("ai-settings-anchor");
@@ -583,7 +674,7 @@ function aiInitPage() {
         if (typeof ModalUtils !== "undefined" && ModalUtils.showInfoModal) {
             ModalUtils.showInfoModal({
                 title: "AI 对战帮助",
-                body: "你固定为 P1，AI 固定为 P2。选择动作后点击“出招”，后端会统一结算；简单偏随机，普通使用启发式，困难会优先尝试部署模型。",
+                body: "你可以选择控制 P1 或 P2，AI 会自动控制另一侧。选择动作后点击“出招”，后端会统一结算；简单偏随机，普通使用启发式，困难会优先尝试部署模型。",
                 buttonText: "知道了"
             });
         }
@@ -626,6 +717,7 @@ function aiInitPage() {
 
     // 初始加载
     aiSetDifficulty("normal");
+    aiSetHumanSeat("p1");
     aiFetchState();
 }
 
