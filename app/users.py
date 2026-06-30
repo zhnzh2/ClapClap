@@ -18,7 +18,7 @@
 CSV 用于快速登录校验和 UID 分配。
 User_X/ 文件夹是每个用户数据的完整存储。
 
-密码哈希：sha256(password + "clapclap" + str(uid))
+密码哈希：PBKDF2-SHA256；旧版 SHA-256 哈希会在用户下次登录成功时自动升级。
 """
 
 from __future__ import annotations
@@ -26,8 +26,10 @@ from __future__ import annotations
 import csv
 import hashlib
 import hmac
+import os
 import secrets
 import shutil
+import tempfile
 import threading
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -39,8 +41,10 @@ CSV_PATH = USERS_DIR / "users.csv"
 
 # 未验证账号最长存活天数
 UNVERIFIED_MAX_DAYS = 30
+SESSION_MAX_AGE_DAYS = int(os.environ.get("CLAPCLAP_SESSION_MAX_AGE_DAYS", "7"))
+PASSWORD_HASH_ITERATIONS = int(os.environ.get("CLAPCLAP_PASSWORD_HASH_ITERATIONS", "200000"))
 
-_csv_lock = threading.Lock()
+_csv_lock = threading.RLock()
 _session_lock = threading.RLock()
 _session_to_uid: dict[str, int] = {}
 _uid_to_session: dict[int, str] = {}
@@ -78,7 +82,41 @@ def _read_file(filepath: Path) -> str:
 
 
 def _hash_password(password: str, uid: int) -> str:
+    salt = secrets.token_hex(16)
+    derived = hashlib.pbkdf2_hmac(
+        "sha256",
+        password.encode("utf-8"),
+        f"{salt}:{uid}".encode("utf-8"),
+        PASSWORD_HASH_ITERATIONS,
+    ).hex()
+    return f"pbkdf2_sha256${PASSWORD_HASH_ITERATIONS}${salt}${derived}"
+
+
+def _legacy_hash_password(password: str, uid: int) -> str:
     return hashlib.sha256((password + "clapclap" + str(uid)).encode("utf-8")).hexdigest()
+
+
+def _verify_password_hash(password: str, uid: int, stored_hash: str) -> bool:
+    if not stored_hash:
+        return False
+    if stored_hash.startswith("pbkdf2_sha256$"):
+        try:
+            _algo, iterations_raw, salt, expected = stored_hash.split("$", 3)
+            iterations = int(iterations_raw)
+        except (ValueError, TypeError):
+            return False
+        derived = hashlib.pbkdf2_hmac(
+            "sha256",
+            password.encode("utf-8"),
+            f"{salt}:{uid}".encode("utf-8"),
+            iterations,
+        ).hex()
+        return hmac.compare_digest(expected, derived)
+    return hmac.compare_digest(stored_hash, _legacy_hash_password(password, uid))
+
+
+def _password_hash_needs_upgrade(stored_hash: str) -> bool:
+    return not stored_hash.startswith("pbkdf2_sha256$")
 
 
 def _ensure_session_index() -> None:
@@ -113,6 +151,7 @@ def _set_session(uid: int, token: str) -> None:
             _uid_to_session[uid] = token
             _session_to_uid[token] = uid
         (_user_dir(uid) / "session").write_text(token, encoding="utf-8")
+        (_user_dir(uid) / "session_created_at").write_text(_server_now(), encoding="utf-8")
 
 
 def _migrate_csv_row(row: dict) -> dict:
@@ -138,20 +177,52 @@ def _read_csv() -> list[dict]:
 
 def _write_csv(rows: list[dict]) -> None:
     with _csv_lock:
-        with open(CSV_PATH, "w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=CSV_FIELDS)
-            writer.writeheader()
-            for row in rows:
-                writer.writerow({
-                    k: row.get(k, "") for k in CSV_FIELDS
-                })
+        fd, tmp_name = tempfile.mkstemp(
+            prefix="users_",
+            suffix=".csv.tmp",
+            dir=str(USERS_DIR),
+            text=True,
+        )
+        tmp_path = Path(tmp_name)
+        try:
+            with os.fdopen(fd, "w", newline="", encoding="utf-8") as f:
+                writer = csv.DictWriter(f, fieldnames=CSV_FIELDS)
+                writer.writeheader()
+                for row in rows:
+                    writer.writerow({
+                        k: row.get(k, "") for k in CSV_FIELDS
+                    })
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp_path, CSV_PATH)
+        finally:
+            if tmp_path.exists():
+                tmp_path.unlink(missing_ok=True)
 
 
 def _append_csv_row(row: dict) -> None:
     with _csv_lock:
-        with open(CSV_PATH, "a", newline="", encoding="utf-8") as f:
-            writer = csv.writer(f)
-            writer.writerow([row.get(k, "") for k in CSV_FIELDS])
+        rows = _read_csv()
+        rows.append({k: row.get(k, "") for k in CSV_FIELDS})
+        _write_csv(rows)
+
+
+def _write_user_folder(uid: int, username: str, password_hash: str,
+                       intro: str, created_at: str, verified: str, role: str) -> None:
+    user_dir = _user_dir(uid)
+    user_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        (user_dir / "username").write_text(username, encoding="utf-8")
+        (user_dir / "password").write_text(password_hash, encoding="utf-8")
+        (user_dir / "intro").write_text(intro, encoding="utf-8")
+        (user_dir / "session").write_text("", encoding="utf-8")
+        (user_dir / "session_created_at").write_text("", encoding="utf-8")
+        (user_dir / "created_at").write_text(created_at, encoding="utf-8")
+        (user_dir / "verified").write_text(verified, encoding="utf-8")
+        (user_dir / "role").write_text(role, encoding="utf-8")
+    except Exception:
+        shutil.rmtree(user_dir, ignore_errors=True)
+        raise
 
 
 def _update_csv_row(uid: int, **kwargs) -> bool:
@@ -181,18 +252,15 @@ def _delete_csv_row(uid: int) -> bool:
 # ── UID 分配 ──────────────────────────────────────────────────
 
 def _assign_uid() -> int:
-    """分配最小的未使用 UID（正整数，从 1 开始，0 留给 admin）。"""
+    """分配单调递增 UID，避免删除用户后新用户复用旧 UID。"""
     rows = _read_csv()
-    used: set[int] = set()
+    max_uid = 0
     for row in rows:
         try:
-            used.add(int(row["UID"]))
+            max_uid = max(max_uid, int(row["UID"]))
         except (ValueError, KeyError):
             pass
-    uid = 1
-    while uid in used:
-        uid += 1
-    return uid
+    return max_uid + 1
 
 
 def _assign_visitor_uid() -> int:
@@ -204,25 +272,10 @@ def _assign_visitor_uid() -> int:
             used.add(int(row["UID"]))
         except (ValueError, KeyError):
             pass
-    for uid in range(10000, 100000):
-        if uid not in used:
-            return uid
+    uid = max(10000, max((value for value in used if value >= 10000), default=9999) + 1)
+    if uid < 100000:
+        return uid
     return _assign_uid()
-
-
-# ── 写用户文件夹 ──────────────────────────────────────────────
-
-def _write_user_folder(uid: int, username: str, password_hash: str,
-                       intro: str, created_at: str, verified: str, role: str) -> None:
-    user_dir = _user_dir(uid)
-    user_dir.mkdir(parents=True, exist_ok=True)
-    (user_dir / "username").write_text(username, encoding="utf-8")
-    (user_dir / "password").write_text(password_hash, encoding="utf-8")
-    (user_dir / "intro").write_text(intro, encoding="utf-8")
-    (user_dir / "session").write_text("", encoding="utf-8")
-    (user_dir / "created_at").write_text(created_at, encoding="utf-8")
-    (user_dir / "verified").write_text(verified, encoding="utf-8")
-    (user_dir / "role").write_text(role, encoding="utf-8")
 
 
 # ── 用户 CRUD ─────────────────────────────────────────────────
@@ -245,30 +298,35 @@ def register(username: str, password: str, intro: str = "",
         return {"ok": False, "error": "密码不能超过 128 个字符。"}
 
     # 检查用户名是否已存在
-    rows = _read_csv()
-    for row in rows:
-        if row["用户名"] == username:
-            return {"ok": False, "error": "该用户名已被注册。"}
-
-    if uid is None:
-        uid = _assign_uid()
-    else:
-        # 检查指定 uid 是否已被占用
+    with _csv_lock:
+        rows = _read_csv()
         for row in rows:
-            if row["UID"] == str(uid):
-                return {"ok": False, "error": f"UID {uid} 已被占用。"}
-    pw_hash = _hash_password(password, uid)
-    created_at = _server_now()
+            if row["用户名"] == username:
+                return {"ok": False, "error": "该用户名已被注册。"}
 
-    _write_user_folder(uid, username, pw_hash, intro, created_at, verified, role)
-    _append_csv_row({
-        "UID": str(uid),
-        "用户名": username,
-        "密码": pw_hash,
-        "创建时间": created_at,
-        "已验证": verified,
-        "权限": role,
-    })
+        if uid is None:
+            uid = _assign_uid()
+        else:
+            # 检查指定 uid 是否已被占用
+            for row in rows:
+                if row["UID"] == str(uid):
+                    return {"ok": False, "error": f"UID {uid} 已被占用。"}
+        pw_hash = _hash_password(password, uid)
+        created_at = _server_now()
+
+        _write_user_folder(uid, username, pw_hash, intro, created_at, verified, role)
+        try:
+            _append_csv_row({
+                "UID": str(uid),
+                "用户名": username,
+                "密码": pw_hash,
+                "创建时间": created_at,
+                "已验证": verified,
+                "权限": role,
+            })
+        except Exception:
+            shutil.rmtree(_user_dir(uid), ignore_errors=True)
+            raise
 
     return {
         "ok": True,
@@ -304,9 +362,13 @@ def login(username: str, password: str) -> dict:
     if uid is None:
         return {"ok": False, "error": "用户名或密码错误。"}
 
-    expected_hash = _hash_password(password, uid)
-    if not hmac.compare_digest(stored_hash or "", expected_hash):
+    if not _verify_password_hash(password, uid, stored_hash or ""):
         return {"ok": False, "error": "用户名或密码错误。"}
+
+    if stored_hash and _password_hash_needs_upgrade(stored_hash):
+        new_hash = _hash_password(password, uid)
+        (_user_dir(uid) / "password").write_text(new_hash, encoding="utf-8")
+        _update_csv_row(uid, **{"密码": new_hash})
 
     session_token = secrets.token_hex(32)
 
@@ -336,6 +398,25 @@ def get_user_by_session_token(token: str) -> dict | None:
         uid = _session_to_uid.get(token)
     if uid is None:
         return None
+    user_dir = _user_dir(uid)
+    if not user_dir.is_dir():
+        with _session_lock:
+            _session_to_uid.pop(token, None)
+            _uid_to_session.pop(uid, None)
+        return None
+    created_raw = _read_file(user_dir / "session_created_at")
+    if created_raw:
+        try:
+            created_at = datetime.strptime(created_raw, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+            if _server_now_dt() - created_at > timedelta(days=SESSION_MAX_AGE_DAYS):
+                logout_token(token)
+                return None
+        except ValueError:
+            logout_token(token)
+            return None
+    else:
+        # 兼容旧会话：首次读取时补写创建时间，之后按新规则过期。
+        (user_dir / "session_created_at").write_text(_server_now(), encoding="utf-8")
     return get_user_by_uid(uid)
 
 
@@ -344,8 +425,7 @@ def verify_password(uid: int, password: str) -> bool:
     if not password:
         return False
     stored_hash = _read_file(_user_dir(uid) / "password")
-    expected_hash = _hash_password(password, uid)
-    return bool(stored_hash) and hmac.compare_digest(stored_hash, expected_hash)
+    return _verify_password_hash(password, uid, stored_hash)
 
 
 def update_user(uid: int, username: str | None = None, password: str | None = None,
@@ -404,7 +484,7 @@ def update_user(uid: int, username: str | None = None, password: str | None = No
 
 
 def delete_user(uid: int) -> bool:
-    """永久删除用户及其所有数据（含关联房间和匹配状态）。UID 可被重新分配。"""
+    """永久删除用户及其所有数据（含关联房间和匹配状态）。UID 不再回收复用。"""
     if uid == 0:
         return False  # admin 账号不可删除
 
@@ -562,7 +642,10 @@ def ensure_admin_account() -> None:
             return  # admin 已存在
 
     username = "zhnzh"
-    password = "207101"
+    password = os.environ.get("CLAPCLAP_ADMIN_PASSWORD", "").strip()
+    if not password:
+        password = secrets.token_urlsafe(18)
+        print("[users] 已创建初始管理员 zhnzh。请设置 CLAPCLAP_ADMIN_PASSWORD 后重建生产管理员密码；本次临时密码仅输出一次:", password)
     uid = 0
     pw_hash = _hash_password(password, uid)
     created_at = _server_now()
@@ -711,4 +794,3 @@ def get_user_battle_ids(uid: int) -> list[str]:
     ids = [line.strip() for line in text.splitlines() if line.strip()]
     ids.reverse()
     return ids
-

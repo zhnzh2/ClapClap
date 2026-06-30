@@ -20,6 +20,7 @@ window.initRoomDetailPage = function () {
         let roomStateController = null;
         let serverBootChanged = false;
         let roomPollTimer = null;
+        let heartbeatTimer = null;
 
         const socket = typeof io === "function" ? io() : null;
 
@@ -81,7 +82,7 @@ window.initRoomDetailPage = function () {
                     loadChatHistory(data.room.chat_messages);
                 }
 
-                if (!result.handledResolvedPreview) {
+                if (!result.handledResolvedPreview && !result.ignoredStale) {
                     setRoomMessage("房间状态已实时同步。", "info");
                 }
             });
@@ -186,7 +187,7 @@ window.initRoomDetailPage = function () {
             }
         }
 
-        window.setInterval(emitRoomHeartbeat, 5000);
+        heartbeatTimer = window.setInterval(emitRoomHeartbeat, 5000);
 
         function seatDisplayText(seat) {
             if (seat === "p1") return "1号位";
@@ -517,7 +518,7 @@ window.initRoomDetailPage = function () {
             if (offlineSeconds < 30) {
                 return `短暂离线 ${offlineSeconds}s`;
             }
-            return `长时间离线 ${offlineSeconds}s`;
+            return `长时间离线 ${Math.min(offlineSeconds, 999)}s`;
         }
 
         function renderInvitePanel() {
@@ -1551,8 +1552,10 @@ window.initRoomDetailPage = function () {
                     mySeat = data.room.requester_seat;
                 }
 
-                renderRoom(data.room);
-                roomStateController.markResolvedHistoryAsRendered(data.room);
+                const resultInfo = roomStateController.applyIncomingRoomState(data.room);
+                if (!resultInfo.ignoredStale) {
+                    roomStateController.markResolvedHistoryAsRendered(data.room);
+                }
             } catch (error) {
                 setRoomMessage("房间状态获取失败：" + error, "error");
             }

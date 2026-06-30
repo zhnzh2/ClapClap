@@ -69,4 +69,5 @@ def get_room_payload(room) -> dict:
         "chat_messages": getattr(room, "chat_messages", []),
         "battle_id": getattr(room, "battle_id", None),
         "rule_version": getattr(room, "rule_version", "1.0"),
+        "updated_at": room.updated_at.isoformat() if getattr(room, "updated_at", None) else "",
     }

@@ -320,6 +320,10 @@ class RoomV2:
                     self.game_state.round_num,
                     DEATH_SURRENDER,
                 )
+                alive = self.game_state.alive_players()
+                if len(alive) <= 1:
+                    self.game_state.winner = alive[0].player_id if alive else ""
+                    self.game_state.assign_ranks()
 
         # 房主转移：只转移房主，不重排席位
         new_host_token = None

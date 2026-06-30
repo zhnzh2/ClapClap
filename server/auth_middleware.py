@@ -13,14 +13,9 @@ from app.users import get_user_by_session_token
 
 
 def _extract_session_token() -> str | None:
-    """从请求中提取 session token（header / query / body）。"""
+    """从请求中提取 session token（只接受 header / JSON body）。"""
     # Header
     token = request.headers.get("X-Session-Token", "").strip()
-    if token:
-        return token
-
-    # Query param
-    token = (request.args.get("session_token") or "").strip()
     if token:
         return token
 

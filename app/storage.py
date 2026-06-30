@@ -22,6 +22,16 @@ def init_storage() -> None:
     with get_connection() as conn:
         conn.execute(
             """
+            CREATE TABLE IF NOT EXISTS schema_migrations (
+                version INTEGER PRIMARY KEY,
+                name TEXT NOT NULL,
+                applied_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+            """
+        )
+
+        conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS room_store (
                 room_id TEXT PRIMARY KEY,
                 payload TEXT NOT NULL,
@@ -41,6 +51,18 @@ def init_storage() -> None:
         )
 
         conn.commit()
+        _record_migration(conn, 1, "initial_room_and_kv_store")
+
+
+def _record_migration(conn: sqlite3.Connection, version: int, name: str) -> None:
+    conn.execute(
+        """
+        INSERT OR IGNORE INTO schema_migrations (version, name)
+        VALUES (?, ?)
+        """,
+        (version, name),
+    )
+    conn.commit()
 
 def save_room(room_id: str, payload: str | dict, updated_at: str | None = None) -> None:
     if not isinstance(payload, str):

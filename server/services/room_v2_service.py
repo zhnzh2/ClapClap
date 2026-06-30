@@ -14,6 +14,7 @@ from app.v2.constants import (
     STEP_ACTION_ROUND_COMPLETE,
 )
 from app.v2.game import GameEngineV2
+from app.v2.models import GameStateV2
 from app.v2.room import LEAVE_QUIT, LEAVE_SURRENDER, RoomV2
 from app.v2.room_manager import (
     create_room_v2,
@@ -377,9 +378,12 @@ def submit_move_v2_service(
             }, 500
 
         try:
+            state_snapshot = room.game_state.to_dict(include_history=True)
             engine = GameEngineV2(room.game_state)
             result = engine.begin_settlement(moves)
         except Exception as exc:
+            room.game_state = GameStateV2.from_dict(state_snapshot)
+            persist_room_v2(room)
             import traceback
             traceback.print_exc()
             return {
@@ -485,6 +489,11 @@ def leave_room_v2_service(room_id: str, player_token: str) -> tuple[dict, int]:
             "ok": True,
             "message": "你已退出房间。房间已解散。",
         }, 200
+
+    if room.game_state is not None and room.game_state.is_game_over():
+        room.status = "finished"
+        _try_end_battle(room)
+        persist_room_v2(room)
 
     from server.socket_events_v2 import emit_room_v2_state, emit_player_left_v2, emit_host_changed_v2
 
@@ -641,19 +650,29 @@ def submit_decision_v2_service(
     if player_id in room.game_state.decision_submitted_by:
         return {"ok": False, "error": "你已经提交过决策，等待其他玩家。"}, 400
 
-    # ── 超时检查：将超时玩家的决策替换为默认值 ──
+    if set(decisions.keys()) - {player_id}:
+        return {"ok": False, "error": "只能提交自己的决策，不能替其他玩家提交。"}, 403
+
+    if player_id not in decisions:
+        return {"ok": False, "error": "决策数据缺少当前玩家。"}, 400
+
+    # ── 收集当前玩家决策，未凑齐前不推进引擎 ──
+    room.game_state.pending_decisions[player_id] = decisions[player_id]
+    room.game_state.decision_submitted_by.append(player_id)
+
     import time
     now = time.time()
     deadline = room.game_state.decision_deadline
+    expected_players = set()
+    for r in room.game_state.current_decision_requests:
+        pid = r.player_id if hasattr(r, 'player_id') else r.get('player_id', '')
+        if pid:
+            expected_players.add(pid)
+    submitted_players = set(room.game_state.decision_submitted_by)
+
     if deadline > 0 and now > deadline:
         # 收集所有超时未提交的玩家
-        expected_players = set()
-        for r in room.game_state.current_decision_requests:
-            pid = r.player_id if hasattr(r, 'player_id') else r.get('player_id', '')
-            if pid:
-                expected_players.add(pid)
-        already_submitted = set(room.game_state.decision_submitted_by)
-        timed_out = expected_players - already_submitted - {player_id}
+        timed_out = expected_players - submitted_players
 
         if timed_out:
             # 为超时玩家生成默认决策
@@ -663,16 +682,36 @@ def submit_decision_v2_service(
                 if (r.player_id if hasattr(r, 'player_id') else r.get('player_id', '')) in timed_out
             ]
             timeout_defaults = GameEngineV2._make_default_decisions(default_reqs)
-            decisions.update(timeout_defaults)
+            room.game_state.pending_decisions.update(timeout_defaults)
+            room.game_state.decision_submitted_by.extend(
+                pid for pid in timed_out
+                if pid not in room.game_state.decision_submitted_by
+            )
+            submitted_players = set(room.game_state.decision_submitted_by)
 
-    # ── 标记已提交 ──
-    room.game_state.decision_submitted_by.append(player_id)
+    if expected_players - submitted_players:
+        persist_room_v2(room)
+        from server.socket_events_v2 import emit_room_v2_state
+        emit_room_v2_state(room_id)
+        return {
+            "ok": True,
+            "message": "决策已接收，等待其他玩家。",
+            "resolved": False,
+            "settlement_phase": "awaiting_decisions",
+            "room": get_room_v2_payload(room, requester_token=player_token),
+        }, 200
+
+    decisions_to_apply = dict(room.game_state.pending_decisions)
+    room.game_state.pending_decisions = {}
 
     # ── 调用引擎继续结算 ──
     try:
+        state_snapshot = room.game_state.to_dict(include_history=True)
         engine = GameEngineV2(room.game_state)
-        result = engine.continue_settlement(decisions)
+        result = engine.continue_settlement(decisions_to_apply)
     except Exception as exc:
+        room.game_state = GameStateV2.from_dict(state_snapshot)
+        persist_room_v2(room)
         import traceback
         traceback.print_exc()
         return {

@@ -5,12 +5,17 @@ ClapClap 2.0 Socket.IO 事件处理。
 处理 v2 多人房间的实时通信。
 """
 
+import time
+
 from flask import request as flask_request
 from flask_socketio import emit, join_room as socket_join_room
 
-from app.v2.room_manager import get_room_v2, mark_seen_v2, mark_disconnected_v2, mark_reconnected_v2
+from app.v2.room_manager import get_room_v2, mark_seen_v2, mark_disconnected_v2, mark_reconnected_v2, persist_room_v2
 from app.v2.state_api import get_room_v2_payload
 from server.extensions import socketio
+
+_SOCKET_V2_IDENTITIES: dict[str, tuple[str, str]] = {}
+_CHAT_V2_RECENT: dict[str, list[float]] = {}
 
 
 def _player_socket_room(room_id: str, player_token: str) -> str:
@@ -124,12 +129,14 @@ def handle_join_room_v2(data):
         seat = room.get_seat_by_token(player_token)
         if seat is not None:
             mark_reconnected_v2(room_id, player_token)
+            _SOCKET_V2_IDENTITIES[flask_request.sid] = (room_id, player_token)
             socket_join_room(_player_socket_room(room_id, player_token))
         else:
             spec = room.get_spectator_by_token(player_token)
             if spec is None:
                 emit("room_v2_error", {"ok": False, "error": "身份无效。"})
                 return
+            _SOCKET_V2_IDENTITIES[flask_request.sid] = (room_id, player_token)
             socket_join_room(_player_socket_room(room_id, player_token))
 
     socket_join_room(room_id)
@@ -159,9 +166,13 @@ def handle_room_v2_heartbeat(data):
 @socketio.on("disconnect")
 def handle_disconnect_v2():
     """Socket.IO 断连时标记玩家离线。"""
-    # 无法直接从 disconnect 事件获取 room_id 和 player_token
-    # 需要由前端在断连前发送 leave_room_v2 事件
-    pass
+    identity = _SOCKET_V2_IDENTITIES.pop(flask_request.sid, None)
+    if identity is None:
+        return
+
+    room_id, player_token = identity
+    mark_disconnected_v2(room_id, player_token)
+    emit_room_v2_state(room_id)
 
 
 @socketio.on("chat_message_v2")
@@ -178,6 +189,15 @@ def handle_chat_message_v2(data):
     if len(message) > 50:
         emit("chat_v2_error", {"ok": False, "error": "消息不能超过 50 个字符。"})
         return
+
+    now = time.time()
+    chat_key = player_token or flask_request.sid
+    recent = [ts for ts in _CHAT_V2_RECENT.get(chat_key, []) if now - ts < 10]
+    if len(recent) >= 5:
+        emit("chat_v2_error", {"ok": False, "error": "发送太频繁，请稍后再试。"})
+        return
+    recent.append(now)
+    _CHAT_V2_RECENT[chat_key] = recent
 
     room = get_room_v2(room_id)
     if room is None:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+import os
 from pathlib import Path
 from uuid import uuid4
 
@@ -23,6 +24,7 @@ from server.routes.room_v2_routes import room_v2_bp
 from server.routes.match_v2_routes import match_v2_bp
 
 app = Flask(__name__)
+app.config["SECRET_KEY"] = os.environ.get("FLASK_SECRET_KEY") or os.environ.get("SECRET_KEY") or uuid4().hex
 app.config["SERVER_BOOT_ID"] = uuid4().hex
 
 socketio.init_app(app)

@@ -215,7 +215,7 @@ def _try_match_v2() -> dict:
 
 def _create_match_room(players: list[WaitingPlayerV2]) -> dict:
     """为匹配到的玩家创建 v2 房间。"""
-    from app.v2.room_manager import create_room_v2, join_room_v2
+    from app.v2.room_manager import create_room_v2, delete_room_v2, join_room_v2
 
     # 第一个玩家作为房主创建房间
     host = players[0]
@@ -244,9 +244,9 @@ def _create_match_room(players: list[WaitingPlayerV2]) -> dict:
         "matched_at": _now_utc().isoformat(),
     }
 
-    # 其余玩家加入房间
-    for player in players[1:]:
-        try:
+    # 其余玩家加入房间。任何一人失败都回滚，避免生成缺人的匹配房。
+    try:
+        for player in players[1:]:
             _, seat_index, player_token = join_room_v2(
                 room.room_id,
                 player.player_name,
@@ -259,13 +259,19 @@ def _create_match_room(players: list[WaitingPlayerV2]) -> dict:
                 "room_player_token": player_token,
                 "matched_at": _now_utc().isoformat(),
             }
-        except Exception:
-            import traceback
-            traceback.print_exc()
+    except Exception:
+        import traceback
+        traceback.print_exc()
+        delete_room_v2(room.room_id)
+        for player in players:
             PLAYER_MATCH_STATE_V2[player.player_token] = {
-                "status": "idle",
+                "status": "queued",
                 "player_name": player.player_name,
+                "preferred_players": player.preferred_players,
+                "joined_at": player.joined_at.isoformat(),
             }
+        _persist_match_state_v2()
+        return {"matched": False}
 
     # 从队列中移除已匹配的玩家
     matched_tokens = {p.player_token for p in players}

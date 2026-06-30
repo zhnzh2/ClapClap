@@ -446,6 +446,7 @@ class GameEngineV2:
             self.state.sub_phase = SUB_PHASE_THREE_CHAIN_SELECT
             self.state.current_decision_requests = decision_requests
             self.state.decision_submitted_by = []
+            self.state.pending_decisions = {}
             self.state.decision_deadline = self._now() + 30
             return SettlementStepResult(
                 action=STEP_ACTION_REQUEST_DECISION,
@@ -651,6 +652,7 @@ class GameEngineV2:
                     self.state.sub_phase = SUB_PHASE_LAYER_TARGETING
                     self.state.current_decision_requests = decision_requests
                     self.state.decision_submitted_by = []
+                    self.state.pending_decisions = {}
                     self.state.decision_deadline = self._now() + 30
                     return SettlementStepResult(
                         action=STEP_ACTION_REQUEST_DECISION,
@@ -827,6 +829,7 @@ class GameEngineV2:
             self.state.sub_phase = SUB_PHASE_LAYER_NEGOTIATION
             self.state.current_decision_requests = negotiation_requests
             self.state.decision_submitted_by = []
+            self.state.pending_decisions = {}
             self.state.decision_deadline = self._now() + 20
 
             return SettlementStepResult(
@@ -1141,6 +1144,7 @@ class GameEngineV2:
                 layer, remaining_conflicts, declarations,
             )
             self.state.current_decision_requests = negotiation_requests
+            self.state.pending_decisions = {}
 
             return SettlementStepResult(
                 action=STEP_ACTION_REQUEST_DECISION,

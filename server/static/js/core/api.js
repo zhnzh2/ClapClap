@@ -3,7 +3,12 @@
         try {
             return await response.json();
         } catch (error) {
-            return null;
+            try {
+                const text = await response.clone().text();
+                return text ? { ok: false, error: text } : null;
+            } catch (_ignored) {
+                return null;
+            }
         }
     }
 

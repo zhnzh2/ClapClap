@@ -1,5 +1,5 @@
 """
-定时将 SQLite 数据库备份到 GitHub 私有仓库。
+定时将 SQLite 数据库、用户目录和对战记录备份到 GitHub 私有仓库。
 
 环境变量：
   BACKUP_GITHUB_TOKEN     - GitHub Personal Access Token（需要 repo 权限）
@@ -29,6 +29,8 @@ RETENTION_HOURS = int(os.environ.get("BACKUP_RETENTION_HOURS", "24"))
 
 REPO_DIR = DATA_DIR / "_backup_repo"
 BACKUP_FILE = REPO_DIR / "clapclap.db"
+BATTLES_BACKUP_DIR = REPO_DIR / "battles"
+USERS_BACKUP_DIR = REPO_DIR / "users"
 
 _thread_started = False
 
@@ -77,16 +79,25 @@ def _ensure_repo() -> bool:
 
 
 def _run_backup() -> None:
-    """执行一次备份：复制数据库 → 提交 → 推送。"""
+    """执行一次备份：复制数据 → 提交 → 推送。"""
     if not DB_PATH.exists():
         print("[backup] 数据库文件不存在，跳过")
         return
 
-    # 复制数据库文件到仓库目录
+    # 复制数据库文件和文件系统数据到仓库目录
     shutil.copy2(DB_PATH, BACKUP_FILE)
+    for source, target in (
+        (DATA_DIR / "battles", BATTLES_BACKUP_DIR),
+        (DATA_DIR / "users", USERS_BACKUP_DIR),
+    ):
+        if target.exists():
+            shutil.rmtree(target)
+        if source.exists():
+            ignore = shutil.ignore_patterns("_backup_repo", "__pycache__", "*.tmp")
+            shutil.copytree(source, target, ignore=ignore)
 
     # 暂存
-    result = _git("add", "clapclap.db")
+    result = _git("add", "clapclap.db", "battles", "users")
     if result.returncode != 0:
         print(f"[backup] git add 失败: {result.stderr.strip()}")
         return

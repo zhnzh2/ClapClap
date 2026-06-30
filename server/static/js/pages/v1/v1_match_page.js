@@ -8,6 +8,7 @@ window.initMatchPage = function () {
         let matchStateController = null;
         let matchSocket = null;
         let matchPollTimer = null;
+        let matchedNavigateTimer = null;
 
         function startMatchFallbackPolling() {
             if (matchPollTimer) return;
@@ -53,6 +54,10 @@ window.initMatchPage = function () {
 
         function setMatchedRoomId(value) {
             matchedRoomId = value || null;
+            if (!matchedRoomId && matchedNavigateTimer) {
+                window.clearTimeout(matchedNavigateTimer);
+                matchedNavigateTimer = null;
+            }
         }
 
         function getCurrentSeat() {
@@ -219,7 +224,14 @@ window.initMatchPage = function () {
         function delayedGoToMatchedRoom(opponentName) {
             showMatchedTransition(opponentName);
 
-            window.setTimeout(async () => {
+            if (matchedNavigateTimer) {
+                window.clearTimeout(matchedNavigateTimer);
+            }
+            matchedNavigateTimer = window.setTimeout(async () => {
+                matchedNavigateTimer = null;
+                if (!matchedRoomId || !currentSeat || !currentRoomPlayerToken) {
+                    return;
+                }
                 await goToMatchedRoom();
             }, 1000);
         }

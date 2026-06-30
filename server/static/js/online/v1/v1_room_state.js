@@ -17,6 +17,7 @@
         let waitingManualRevealAdvance = false;
         let resolvePreviewRoundNumber = null;
         let lastResolvedHistoryLength = 0;
+        let latestRoomUpdatedAt = "";
 
         function getLatestRoom() {
             return latestRoom;
@@ -52,6 +53,7 @@
         }
 
         function setLatestRoom(room) {
+            latestRoomUpdatedAt = room?.updated_at || latestRoomUpdatedAt;
             latestRoom = room;
         }
 
@@ -106,6 +108,14 @@
         }
 
         function applyIncomingRoomState(room) {
+            const incomingUpdatedAt = room?.updated_at || "";
+            if (latestRoomUpdatedAt && incomingUpdatedAt && incomingUpdatedAt < latestRoomUpdatedAt) {
+                return {
+                    handledResolvedPreview: false,
+                    ignoredStale: true
+                };
+            }
+            latestRoomUpdatedAt = incomingUpdatedAt || latestRoomUpdatedAt;
             latestRoom = room;
 
             const historyLength = Array.isArray(room?.game?.history) ? room.game.history.length : 0;

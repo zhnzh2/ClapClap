@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import json
+import time
 import zipfile
 from datetime import datetime, timezone
 
@@ -12,6 +13,33 @@ from app.battle_recorder import read_battle
 from server.auth_middleware import require_auth
 
 auth_bp = Blueprint("auth", __name__)
+_LOGIN_ATTEMPTS: dict[str, list[float]] = {}
+_LOGIN_WINDOW_SECONDS = 60
+_LOGIN_MAX_ATTEMPTS = 8
+
+
+def _rate_limit_key(username: str) -> str:
+    forwarded_for = (request.headers.get("X-Forwarded-For") or "").split(",")[0].strip()
+    ip = forwarded_for or request.remote_addr or "unknown"
+    return f"{ip}:{username.lower()}"
+
+
+def _is_login_rate_limited(username: str) -> bool:
+    now = time.time()
+    cutoff = now - _LOGIN_WINDOW_SECONDS
+    key = _rate_limit_key(username)
+    attempts = [ts for ts in _LOGIN_ATTEMPTS.get(key, []) if ts >= cutoff]
+    _LOGIN_ATTEMPTS[key] = attempts
+    return len(attempts) >= _LOGIN_MAX_ATTEMPTS
+
+
+def _record_failed_login(username: str) -> None:
+    key = _rate_limit_key(username)
+    _LOGIN_ATTEMPTS.setdefault(key, []).append(time.time())
+
+
+def _clear_failed_logins(username: str) -> None:
+    _LOGIN_ATTEMPTS.pop(_rate_limit_key(username), None)
 
 
 @auth_bp.get("/login")
@@ -426,10 +454,15 @@ def api_login():
     if not username or not password:
         return jsonify({"ok": False, "error": "用户名和密码不能为空。"}), 400
 
+    if _is_login_rate_limited(username):
+        return jsonify({"ok": False, "error": "登录尝试过于频繁，请稍后再试。"}), 429
+
     result = users.login(username, password)
     if not result["ok"]:
+        _record_failed_login(username)
         return jsonify(result), 401
 
+    _clear_failed_logins(username)
     return jsonify(result), 200
 
 

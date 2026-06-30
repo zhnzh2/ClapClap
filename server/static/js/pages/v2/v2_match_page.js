@@ -95,7 +95,17 @@
     }
 
     function _generateToken() {
-        return "v2m_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 8);
+        if (window.crypto && typeof window.crypto.randomUUID === "function") {
+            return "v2m_" + window.crypto.randomUUID().replace(/-/g, "");
+        }
+        var bytes = new Uint8Array(16);
+        if (window.crypto && typeof window.crypto.getRandomValues === "function") {
+            window.crypto.getRandomValues(bytes);
+            return "v2m_" + Array.prototype.map.call(bytes, function (b) {
+                return b.toString(16).padStart(2, "0");
+            }).join("");
+        }
+        return "v2m_" + Date.now().toString(36);
     }
 
     // ═══════════════════════════════════════════════════════
@@ -139,7 +149,10 @@
     async function checkMyState() {
         try {
             var result = await ApiUtils.apiGet("/v2/api/match/me?player_token=" + encodeURIComponent(myToken));
-            if (!result.ok) return;
+            if (!result.ok) {
+                _msg("queue-message", result.error || "匹配状态刷新失败。", "error");
+                return;
+            }
             var state = result.data.state;
             if (state.status === "matched") {
                 _onMatched(state.room_id, state.room_player_token, state.seat_index);
@@ -148,13 +161,18 @@
             } else if (myState === "queued") {
                 _onIdle("匹配状态已变更。");
             }
-        } catch (e) { /* ignore polling errors */ }
+        } catch (e) {
+            _msg("queue-message", "匹配状态刷新失败，请检查网络后重试。", "error");
+        }
     }
 
     async function fetchQueueStatus() {
         try {
             var result = await ApiUtils.apiGet("/v2/api/match/status");
-            if (!result.ok) return;
+            if (!result.ok) {
+                document.getElementById("queue-status-text").textContent = result.error || "队列信息刷新失败。";
+                return;
+            }
             var status = result.data.status;
             document.getElementById("queue-status-text").textContent =
                 "当前队列 " + (status.queue_size || 0) + " 人等待中";
@@ -172,7 +190,9 @@
                     '</div>';
             }
             document.getElementById("queue-players").innerHTML = playersHtml || '<div class="queue-empty">暂无排队玩家</div>';
-        } catch (e) { /* ignore */ }
+        } catch (e) {
+            document.getElementById("queue-status-text").textContent = "队列信息刷新失败。";
+        }
     }
 
     async function enterRoom() {
