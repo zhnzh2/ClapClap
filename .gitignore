@@ -29,12 +29,15 @@ data/battles/
 .vscode/
 .idea/
 .github/
+.agents/
+.codex/
 .claude/
 CLAUDE.md
 history.md
 
 # Logs
 *.log
+reports/
 
 # LaTeX auxiliary files
 *.aux
@@ -42,6 +45,15 @@ history.md
 *.fdb_latexmk
 *.synctex.gz
 *.toc
+
+# AI local artifacts
+models/ai/v1/dev/
+models/ai/v1/runs/
+models/ai/v1/checkpoints/
+models/ai/v1/*.zip
+training/runs/
+training/checkpoints/
+training/datasets/generated/
 
 # OS files
 .DS_Store

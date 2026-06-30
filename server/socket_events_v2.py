@@ -14,6 +14,8 @@ from app.v2.room_manager import get_room_v2, mark_seen_v2, mark_disconnected_v2,
 from app.v2.state_api import get_room_v2_payload
 from server.extensions import socketio
 
+# SID → (room_id, player_token) 映射。disconnect 事件触发时自动清理。
+# 极少情况下（网络分区导致 disconnect 未触发），旧 SID 可能残留，但新连接使用新 SID，不影响功能。
 _SOCKET_V2_IDENTITIES: dict[str, tuple[str, str]] = {}
 _CHAT_V2_RECENT: dict[str, list[float]] = {}
 
@@ -198,6 +200,10 @@ def handle_chat_message_v2(data):
         return
     recent.append(now)
     _CHAT_V2_RECENT[chat_key] = recent
+    # 定期清理过期条目，避免长期运行内存缓慢增长
+    if len(_CHAT_V2_RECENT) > 500:
+        _CHAT_V2_RECENT = {k: [ts for ts in v if now - ts < 10] for k, v in _CHAT_V2_RECENT.items()}
+        _CHAT_V2_RECENT = {k: v for k, v in _CHAT_V2_RECENT.items() if v}
 
     room = get_room_v2(room_id)
     if room is None:

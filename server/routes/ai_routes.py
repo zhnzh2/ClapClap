@@ -21,6 +21,8 @@ from flask import Blueprint, g, jsonify, request
 
 from app.ai.engine import select_move
 from app.ai.model_runtime import (
+    clear_model_status_cache,
+    get_model_status,
     model_status_for_difficulty,
     model_version_for_difficulty,
     policy_type_for_difficulty,
@@ -70,6 +72,52 @@ def get_ai_state():
         session = runtime.get_ai_session(session_key)
         payload = _get_ai_state_payload(session)
     return jsonify(payload)
+
+
+# ---------------------------------------------------------------------------
+# POST /api/ai/deploy
+# ---------------------------------------------------------------------------
+
+
+@ai_bp.post("/v1/api/ai/deploy")
+@ai_bp.post("/api/ai/deploy")
+@require_auth
+def deploy_ai_model():
+    """预热/检查 AI 模型部署状态。
+
+    目前困难模式仍会在无可用模型时自动降级为启发式。这个接口先把模型
+    manifest 校验和状态缓存做在进入对战页之前，后续接入真实推理适配器
+    时可以继续复用同一入口。
+    """
+    data = request.get_json(silent=True) or {}
+    difficulty = data.get("difficulty", "hard")
+    if difficulty not in ("easy", "normal", "hard"):
+        return jsonify(
+            {"ok": False, "error": f"未知难度: {difficulty}。可选: easy, normal, hard"}
+        ), 400
+
+    if difficulty != "hard":
+        return jsonify(
+            {
+                "ok": True,
+                "message": "当前难度不需要部署模型。",
+                "needs_deploy": False,
+                "policy_type": policy_type_for_difficulty(difficulty),
+                "model_status": None,
+            }
+        )
+
+    clear_model_status_cache()
+    status = get_model_status()
+    return jsonify(
+        {
+            "ok": True,
+            "message": "AI 模型部署检查完成。",
+            "needs_deploy": True,
+            "policy_type": status.policy_type,
+            "model_status": status.to_dict(),
+        }
+    )
 
 
 # ---------------------------------------------------------------------------

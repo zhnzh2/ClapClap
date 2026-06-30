@@ -175,6 +175,34 @@ class TestAiApi(unittest.TestCase):
         self.assertEqual(data["ai_seat"], "p2")
         battle_recorder.delete_battle(data["battle_id"])
 
+    def test_deploy_endpoint_reports_hard_model_status(self):
+        """困难模式进入对战前可先检查模型部署状态。"""
+        resp = self.client.post(
+            "/v1/api/ai/deploy",
+            json={"difficulty": "hard"},
+            headers=self.headers,
+        )
+        self.assertEqual(resp.status_code, 200)
+        data = resp.get_json()
+        self.assertTrue(data["ok"], data)
+        self.assertTrue(data["needs_deploy"])
+        self.assertIn("policy_type", data)
+        self.assertIsInstance(data.get("model_status"), dict)
+
+    def test_deploy_endpoint_skips_easy_and_normal(self):
+        """简单/普通模式不需要部署模型。"""
+        for difficulty in ("easy", "normal"):
+            resp = self.client.post(
+                "/v1/api/ai/deploy",
+                json={"difficulty": difficulty},
+                headers=self.headers,
+            )
+            self.assertEqual(resp.status_code, 200)
+            data = resp.get_json()
+            self.assertTrue(data["ok"], data)
+            self.assertFalse(data["needs_deploy"])
+            self.assertIsNone(data["model_status"])
+
     def test_step_round_increments(self):
         """每步后 round_num 递增。"""
         with patch("server.routes.ai_routes.select_move", return_value=Move.QI):

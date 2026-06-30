@@ -200,9 +200,9 @@ def _write_csv(rows: list[dict]) -> None:
                 tmp_path.unlink(missing_ok=True)
 
 
-def _append_csv_row(row: dict) -> None:
+def _append_csv_row(row: dict, *, existing_rows: list[dict] | None = None) -> None:
     with _csv_lock:
-        rows = _read_csv()
+        rows = existing_rows if existing_rows is not None else _read_csv()
         rows.append({k: row.get(k, "") for k in CSV_FIELDS})
         _write_csv(rows)
 
@@ -323,7 +323,7 @@ def register(username: str, password: str, intro: str = "",
                 "创建时间": created_at,
                 "已验证": verified,
                 "权限": role,
-            })
+            }, existing_rows=rows)
         except Exception:
             shutil.rmtree(_user_dir(uid), ignore_errors=True)
             raise

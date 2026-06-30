@@ -29,7 +29,14 @@ def _is_login_rate_limited(username: str) -> bool:
     cutoff = now - _LOGIN_WINDOW_SECONDS
     key = _rate_limit_key(username)
     attempts = [ts for ts in _LOGIN_ATTEMPTS.get(key, []) if ts >= cutoff]
-    _LOGIN_ATTEMPTS[key] = attempts
+    if attempts:
+        _LOGIN_ATTEMPTS[key] = attempts
+    else:
+        _LOGIN_ATTEMPTS.pop(key, None)
+    # 定期清理过期条目，避免长期运行内存缓慢增长
+    if len(_LOGIN_ATTEMPTS) > 2000:
+        _LOGIN_ATTEMPTS = {k: [ts for ts in v if ts >= cutoff] for k, v in _LOGIN_ATTEMPTS.items()}
+        _LOGIN_ATTEMPTS = {k: v for k, v in _LOGIN_ATTEMPTS.items() if v}
     return len(attempts) >= _LOGIN_MAX_ATTEMPTS
 
 

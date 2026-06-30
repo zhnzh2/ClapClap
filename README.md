@@ -1,172 +1,128 @@
 # ClapClap
 
-ClapClap 是一个原创手势对战网页游戏项目。目前项目已经整理为 v1 和 v2 两套并列规则版本：
+ClapClap 是一个原创手势对战网页游戏，当前线上版本按规则分为两条线：
 
-- v1: 1.0 双人对战版，包含本地模拟、双人房间、自动匹配、历史回放。
-- v2: 2.0 多人对战版，支持最多 6 人、速度层结算、目标选择、冲突协商、观战、多人房间和自动匹配。
+- `v1`: 1.0 双人版，包含本地模拟、AI 对战、双人房间、自动匹配和回放。
+- `v2`: 2.0 多人版，支持 2 到 6 人、速度层结算、目标选择、多人房间、观战和回放。
 
-线上入口设计为：
+线上入口：
 
+- `https://clapclap.club/`
 - `https://clapclap.club/v1`
 - `https://clapclap.club/v2`
-- 访问 `https://clapclap.club/` 时自动跳转到 `/v1`
 
-本地开发时对应：
+本地入口：
 
 - `http://127.0.0.1:5000/v1`
 - `http://127.0.0.1:5000/v2`
 
-## 当前状态
+## 当前功能
 
-项目当前是一个 Flask + Socket.IO + 原生 JavaScript 的完整网页应用，包含账号系统、用户主页、对战存档、回放、房间聊天、管理员用户管理、数据校验和测试套件。
-
-v1 和 v2 已经按版本拆分：
-
-- 后端规则代码分别位于 `app/v1/` 和 `app/v2/`
-- 页面模板分别位于 `server/templates/v1/` 和 `server/templates/v2/`
-- 样式分别位于 `server/static/css/v1/` 和 `server/static/css/v2/`
-- 页面脚本分别位于 `server/static/js/pages/v1/` 和 `server/static/js/pages/v2/`
-- 联机脚本分别位于 `server/static/js/online/v1/` 和 `server/static/js/online/v2/`
-- v1 API 使用 `/v1/api/...`
-- v2 API 使用 `/v2/api/...`
-- 登录页使用 `/v1/login` 和 `/v2/login`
-
-少量共享能力保留在公共目录，例如用户系统、存储、对战记录、登录页、规则页、共享前端工具等。
-
-## 功能概览
-
-### v1: 1.0 双人版
-
-v1 是双人规则版本，适合快速对战和规则练习。
-
-主要功能：
+### 1.0 双人版
 
 - 本地双人模拟
+- 网页端 AI 对战
+- AI 难度选择：简单、普通、困难
+- 困难模式模型部署检查和启发式降级
 - 在线双人房间
 - 自动匹配
-- 房间恢复
-- 实时状态同步
-- 回合历史和对局回放
+- 房间刷新恢复
 - 房间聊天
+- 对局记录和回放
+- 用户主页、战绩筛选、对局导出
 
-主要入口：
+常用入口：
 
 | URL | 说明 |
 | --- | --- |
-| `/v1` | v1 大厅 |
-| `/v1/local` | v1 本地模拟 |
-| `/v1/rooms` | v1 房间列表 |
-| `/v1/room/<room_id>` | v1 房间对战 |
-| `/v1/match` | v1 自动匹配 |
-| `/v1/rules` | v1 规则 |
-| `/v1/user/<uid>` | v1 用户主页 |
-| `/v1/record/<battle_id>` | v1 对局回放 |
+| `/v1` | 1.0 大厅 |
+| `/v1/ai` | 1.0 AI 对战 |
+| `/v1/local` | 1.0 本地双人模拟 |
+| `/v1/rooms` | 1.0 房间列表 |
+| `/v1/match` | 1.0 自动匹配 |
+| `/v1/rules` | 1.0 规则 |
+| `/v1/user/<uid>` | 用户主页 |
+| `/v1/record/<battle_id>` | 对局回放 |
 
-### v2: 2.0 多人版
+### 2.0 多人版
 
-v2 是多人规则版本，核心是多玩家同步出招和速度层结算。
-
-主要功能：
-
-- 2 到 6 人多人对战
 - 本地多人模拟
-- 多人房间创建、加入、观战
+- 2 到 6 人多人房间
 - 自动匹配
+- 观战
+- 多玩家同步决策
 - 速度层结算
 - 目标选择
 - 冲突协商
-- 回合总结
 - 多人战绩和回放
 
-主要入口：
+常用入口：
 
 | URL | 说明 |
 | --- | --- |
-| `/v2` | v2 大厅 |
-| `/v2/local` | v2 本地多人模拟 |
-| `/v2/rooms` | v2 多人房间列表 |
-| `/v2/room/<room_id>` | v2 多人房间对战 |
-| `/v2/match` | v2 自动匹配 |
-| `/v2/rules` | v2 规则 |
-| `/v2/user/<uid>` | v2 用户主页 |
-| `/v2/record/<battle_id>` | v2 对局回放 |
+| `/v2` | 2.0 大厅 |
+| `/v2/local` | 2.0 本地多人模拟 |
+| `/v2/rooms` | 2.0 房间列表 |
+| `/v2/match` | 2.0 自动匹配 |
+| `/v2/rules` | 2.0 规则 |
+| `/v2/user/<uid>` | 用户主页 |
+| `/v2/record/<battle_id>` | 对局回放 |
 
 ## 技术栈
 
-| 层 | 技术 | 说明 |
-| --- | --- | --- |
-| 后端 | Python, Flask | 页面路由和 REST API |
-| 实时通信 | Flask-SocketIO | 房间状态、聊天、v2 决策事件 |
-| 前端 | 原生 JavaScript | 页面交互和动态渲染 |
-| 模板 | Jinja2 | 服务端渲染 HTML |
-| 存储 | SQLite + 文件系统 | 房间、匹配、用户、对战记录 |
-| 测试 | pytest, node --check | 后端逻辑和前端语法检查 |
-| 部署 | gunicorn / Railway / Cloudflare | 生产运行和域名访问 |
+| 层 | 技术 |
+| --- | --- |
+| 后端 | Python, Flask |
+| 实时通信 | Flask-SocketIO |
+| 前端 | 原生 JavaScript, Jinja2 |
+| 存储 | SQLite, CSV, JSON 文件 |
+| 测试 | pytest, node --check |
+| 部署 | gunicorn, Railway |
+| AI 训练 | Gymnasium, Stable-Baselines3, sb3-contrib |
 
-## 项目结构
+生产依赖在 `requirements.txt`，训练依赖单独放在 `requirements-train.txt`。线上服务默认不安装训练依赖，也不在 Web 请求里训练模型。
+
+## 仓库结构
 
 ```text
 ClapClap/
 ├── app/
-│   ├── v1/                      # v1 规则、模型、房间、匹配、本地状态
-│   │   ├── constants.py
-│   │   ├── game.py
-│   │   ├── matchmaking.py
-│   │   ├── models.py
-│   │   ├── room_manager.py
-│   │   └── state_api.py
-│   ├── v2/                      # v2 多人规则、模型、房间、匹配、状态序列化
-│   │   ├── constants.py
-│   │   ├── game.py
-│   │   ├── matchmaking.py
-│   │   ├── models.py
-│   │   ├── room.py
-│   │   ├── room_manager.py
-│   │   └── state_api.py
-│   ├── battle_recorder.py       # 对战记录和回放数据
-│   ├── storage.py               # SQLite 持久化工具
+│   ├── ai/                      # 1.0 AI 策略、动作空间、模型运行时检查
+│   ├── v1/                      # 1.0 规则、状态、房间、匹配
+│   ├── v2/                      # 2.0 规则、状态、房间、匹配
+│   ├── ai_env.py                # 训练环境元数据校验
+│   ├── battle_recorder.py       # 对战记录、回放、训练样本导出
+│   ├── storage.py               # SQLite 数据目录和连接工具
 │   └── users.py                 # 用户、session、管理员、注销清理
 │
 ├── server/
-│   ├── app.py                   # Flask 应用入口
+│   ├── app.py                   # Flask / Socket.IO 应用入口
 │   ├── auth_middleware.py       # 登录鉴权
-│   ├── runtime.py               # 周期性清理
-│   ├── socket_events.py         # v1 Socket.IO 事件
-│   ├── socket_events_v2.py      # v2 Socket.IO 事件
-│   ├── routes/                  # 页面和 API 路由
+│   ├── backup.py                # 数据备份
+│   ├── runtime.py               # 全局运行状态和周期清理
+│   ├── socket_events.py         # 1.0 Socket.IO 事件
+│   ├── socket_events_v2.py      # 2.0 Socket.IO 事件
+│   ├── routes/                  # 页面路由和 API
 │   ├── services/                # 房间服务层
-│   ├── templates/
-│   │   ├── v1/                  # v1 页面模板
-│   │   ├── v2/                  # v2 页面模板
-│   │   ├── login.html           # 共享登录页
-│   │   └── rule.html            # 共享规则页壳
-│   └── static/
-│       ├── css/
-│       │   ├── v1/              # v1 样式
-│       │   ├── v2/              # v2 样式
-│       │   └── auth.css         # 共享登录/弹窗样式
-│       └── js/
-│           ├── core/            # API、session、storage、modal 等共享工具
-│           ├── pages/
-│           │   ├── v1/          # v1 页面脚本
-│           │   └── v2/          # v2 页面脚本
-│           └── online/
-│               ├── v1/          # v1 联机脚本
-│               └── v2/          # v2 联机脚本
+│   ├── templates/               # Jinja2 页面模板
+│   └── static/                  # CSS、前端 JS、Socket.IO 客户端
 │
+├── training/                    # 离线训练脚本和训练样本工具
 ├── tests/                       # pytest 测试
-├── scripts/                     # 检查、迁移、数据校验脚本
-├── data/                        # 本地数据目录
-├── rules/                       # 规则文档
-├── develop/                     # 设计和开发文档
-├── requirements.txt
-├── pytest.ini
+├── scripts/                     # 检查、评估、迁移、数据校验脚本
+├── rules/                       # 规则文档源文件和发布版 PDF
+├── Procfile                     # Railway / gunicorn 启动配置
+├── requirements.txt             # 生产依赖
+├── requirements-train.txt       # 离线训练依赖
+├── runtime.txt                  # Python 运行时版本
 └── README.md
 ```
 
+本地数据、开发报告、训练输出、模型开发缓存、LaTeX 中间文件和个人工具配置不会进入仓库。
+
 ## 快速开始
 
-### 1. 安装依赖
+### 安装生产依赖
 
 ```powershell
 python -m venv venv
@@ -174,7 +130,7 @@ python -m venv venv
 pip install -r requirements.txt
 ```
 
-macOS / Linux 可使用：
+macOS / Linux：
 
 ```bash
 python -m venv venv
@@ -182,31 +138,97 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 2. 启动服务
+### 启动本地服务
 
 ```powershell
 python server/app.py
 ```
 
-启动后访问：
+打开：
 
-- `http://127.0.0.1:5000/`
-- `http://127.0.0.1:5000/v1`
-- `http://127.0.0.1:5000/v2`
+```text
+http://127.0.0.1:5000/
+```
 
-首次启动会初始化本地数据目录，并确保管理员账号存在。
+首次启动会初始化 `data/`，并确保管理员账号存在。
 
-### 3. 默认管理员账号
-
-当前项目会确保存在管理员账号：
+默认管理员账号：
 
 | 用户名 | 密码 |
 | --- | --- |
 | `zhnzh` | `207101` |
 
-如用于正式部署，建议上线前修改默认密码或替换初始化逻辑。
+正式部署前建议修改默认密码或替换初始化逻辑。
 
-## 测试和检查
+## AI 对战和训练
+
+1.0 AI 对战入口是：
+
+```text
+/v1/ai
+```
+
+当前 AI 策略：
+
+- 简单：随机合法动作
+- 普通：启发式策略
+- 困难：进入对战前检查部署模型；模型不可用时自动降级为保守启发式
+
+AI 不重新实现规则。训练环境和推理都必须通过 `app/v1/game.py` 的规则引擎，不能复制一份规则逻辑。
+
+离线训练依赖：
+
+```powershell
+pip install -r requirements-train.txt
+```
+
+训练和评估相关入口：
+
+```powershell
+python scripts/evaluate_ai.py --matrix
+python -m training.human_ai_samples exports/a.zip exports/b.zip -o training/data/human_ai_samples.jsonl
+```
+
+## 欢迎贡献 AI 训练数据
+
+ClapClap 的 AI 需要真实玩家数据。最有价值的数据不是“AI 自己打自己”，而是人类在不同资源、不同血量、不同局势下如何应对 AI。
+
+你可以这样贡献：
+
+1. 在 `/v1/ai` 多打几局 AI 对战。
+2. 打开用户主页。
+3. 在对局记录里筛选 `AI 人机对战`。
+4. 点击打包下载。
+5. 导出的 ZIP 中会包含 `training/ai_battle_samples.jsonl`。
+6. 可以把 ZIP 或 JSONL 交给维护者，或在 PR 中说明数据来源和大致局数。
+
+本地合并多个导出文件：
+
+```powershell
+python -m training.human_ai_samples exports\a.zip exports\b.zip -o training\data\human_ai_samples.jsonl
+```
+
+贡献数据时请注意：
+
+- 不要提交真实密码、token、私钥或个人敏感信息。
+- 尽量保留完整对局，不要只挑赢局。
+- 简单、普通、困难都可以贡献。
+- 如果你发现 AI 某类局势特别弱，欢迎附上复现说明。
+
+这些数据后续可以用于：
+
+- 行为克隆
+- 回归评估
+- 起手库和局势分析
+- PPO/self-play 训练前后的质量对比
+
+## 测试
+
+运行 AI 相关测试：
+
+```powershell
+python -m pytest -q tests/test_ai_routes.py tests/test_ai_rules.py tests/test_ai_env.py
+```
 
 运行全部测试：
 
@@ -214,170 +236,74 @@ python server/app.py
 python -m pytest
 ```
 
-运行完整检查脚本：
+运行完整检查：
 
 ```powershell
 .\scripts\check.ps1
 ```
 
-`scripts/check.ps1` 会依次执行：
-
-- pytest 全量测试
-- `scripts/validate_data.py --strict --summary`
-- Python 编译检查
-- JavaScript 语法检查
-- 模板内联 JavaScript 语法检查
-
-也可以单独运行：
-
-```powershell
-python -m compileall app server scripts
-node --check server/static/js/pages/v1/v1_home_page.js
-python scripts/validate_data.py --strict --summary
-```
+`scripts/check.ps1` 会执行 pytest、数据校验、Python 编译检查、前端 JS 语法检查和模板内联 JS 检查。
 
 ## 数据目录
 
-默认数据放在 `data/` 下。
+默认数据目录是 `data/`。生产环境建议通过 `DATA_DIR` 指向持久卷。
 
 典型内容：
 
 ```text
 data/
-├── clapclap.db                  # SQLite 数据库
-├── users/                       # 用户和 session 数据
-├── battles/                     # 对战记录 JSON
-└── ...
+├── clapclap.db
+├── users/
+└── battles/
 ```
 
-主要数据类型：
+主要数据：
 
-- 用户数据由 `app/users.py` 管理
-- 房间和匹配状态由 SQLite 持久化
-- 对战记录由 `app/battle_recorder.py` 写入 JSON
-- 用户注销会清理相关房间和匹配状态，并标记历史对局
+- SQLite：房间、匹配等状态
+- CSV + 用户目录：用户和 session
+- JSON：对战记录、回放、训练样本导出
 
-生产环境建议通过 `DATA_DIR` 指向持久卷。
-
-## 主要环境变量
+## 环境变量
 
 | 变量 | 说明 |
 | --- | --- |
-| `DATA_DIR` | 数据目录。生产环境通常指向持久卷 |
-| `EXPORT_TOKEN` | 数据库导出接口令牌 |
+| `DATA_DIR` | 数据目录，生产环境通常指向 Railway Volume |
+| `EXPORT_TOKEN` | 数据导出接口令牌 |
 | `BACKUP_GITHUB_TOKEN` | 自动备份使用的 GitHub token |
 | `BACKUP_GITHUB_REPO` | 自动备份目标仓库 |
 | `BACKUP_INTERVAL_MINUTES` | 自动备份间隔，单位分钟 |
+| `CLAPCLAP_AI_MODEL_DIR` | 1.0 AI 部署模型目录，默认 `models/ai/v1/deploy` |
+| `CLAPCLAP_AI_INFERENCE_TIMEOUT_MS` | AI 推理超时，默认 100ms |
 
-如果未配置备份相关变量，备份功能会自动禁用。
+如果备份变量未配置，备份功能会自动禁用。
 
-## API 约定
+## 部署
 
-页面和业务 API 现在按版本分离：
-
-```text
-/v1/api/local/...
-/v1/api/rooms/...
-/v1/api/match/...
-
-/v2/api/local/...
-/v2/api/rooms/...
-/v2/api/match/...
-```
-
-共享账号 API 也提供版本化入口：
-
-```text
-/v1/api/auth/...
-/v1/api/user/...
-/v1/api/admin/...
-/v1/api/battles/...
-
-/v2/api/auth/...
-/v2/api/user/...
-/v2/api/admin/...
-/v2/api/battles/...
-```
-
-旧的 `/api/...` 仍保留为兼容别名，但前端应优先使用 `/v1/api/...` 或 `/v2/api/...`。
-
-认证使用 `X-Session-Token` 请求头。前端由 `server/static/js/core/api.js` 自动携带。
-
-## 前端缓存约定
-
-前端使用 localStorage 保存登录态、房间身份、匹配状态和 UI 设置。
-
-常见 key：
-
-- `clapclap_session`
-- `clapclap_server_boot_id`
-- `clapclap_match_state`
-- `clapclap_v2_match_state`
-- `clapclap_room_<room_id>`
-- `clapclap_v2_room_<room_id>`
-- `clapclap_ui_settings_v2`
-- `clapclap_v2_ui_settings`
-- `clapclap_v2_room_ui_settings`
-
-共享清理逻辑位于 `server/static/js/core/storage.js`。
-
-## 开发约定
-
-- 新增 v1 专属代码放入 `app/v1/`、`server/templates/v1/`、`server/static/.../v1/`
-- 新增 v2 专属代码放入 `app/v2/`、`server/templates/v2/`、`server/static/.../v2/`
-- 如果文件必须共享，放在公共目录，并避免写死 `/v1` 或 `/v2`
-- 同一目录中同时存在版本文件时，使用 `v1_...` 和 `v2_...` 命名
-- 页面跳转和 API 调用优先保持当前版本前缀
-- 根路径 `/` 只负责跳转到 `/v1`
-- 不要新增旧式 `/local`、`/rooms`、`/match` 等无版本页面入口
-- v1 和 v2 规则引擎互不导入，公共能力才放在 `app/` 根目录
-
-## 常用命令
-
-```powershell
-# 启动开发服务
-python server/app.py
-
-# 全量测试
-python -m pytest
-
-# 只跑 v2 规则测试
-python -m pytest tests/test_game_v2.py tests/test_room_v2.py
-
-# 数据校验
-python scripts/validate_data.py --strict --summary
-
-# 全量检查
-.\scripts\check.ps1
-```
-
-## 部署说明
-
-项目可部署到 Railway / gunicorn。
-
-典型启动命令：
+生产启动命令：
 
 ```bash
 gunicorn server.app:app
 ```
 
-如果需要 Socket.IO 的长连接能力，生产环境应确保部署平台支持 WebSocket。当前前端也保留 HTTP 轮询兜底。
+Railway 部署时建议：
 
-线上域名建议配置：
+- 挂载持久卷到 `/app/data`
+- 设置 `DATA_DIR=/app/data`
+- 如需导出接口，设置 `EXPORT_TOKEN`
+- 如需自动备份，设置 `BACKUP_GITHUB_TOKEN` 和 `BACKUP_GITHUB_REPO`
 
-```text
-clapclap.club/    -> /v1
-clapclap.club/v1  -> v1 大厅
-clapclap.club/v2  -> v2 大厅
-```
+Socket.IO 房间功能需要部署平台支持 WebSocket；前端保留 HTTP 轮询兜底。
 
-## 相关文档
+## 开发约定
 
-- `rules/`: 规则书源文件
-- `develop/`: 规则设计、流程图、发布计划等开发文档
-- `task.txt`: 当前任务和阶段记录
-- `tests/`: 行为测试和回归测试
-- `scripts/validate_data.py`: 数据兼容性校验
+- v1 规则代码放在 `app/v1/`
+- v2 规则代码放在 `app/v2/`
+- 共享能力放在 `app/`、`server/routes/`、`server/static/js/core/`
+- 前端 API 优先使用 `/v1/api/...` 或 `/v2/api/...`
+- 旧 `/api/...` 入口只作为兼容别名
+- 所有需要登录的业务 API 使用 `X-Session-Token`
+- AI、训练环境、前端展示都不能绕过规则引擎
+- 本地生成文件、训练输出、报告和缓存不要提交
 
 ## License
 
