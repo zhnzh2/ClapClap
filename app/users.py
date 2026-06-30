@@ -350,17 +350,36 @@ def login(username: str, password: str) -> dict:
     if not username or not password:
         return {"ok": False, "error": "用户名和密码不能为空。"}
 
+    # 先从 CSV 查找
     rows = _read_csv()
     uid = None
     stored_hash = None
     for row in rows:
-        if row["用户名"] == username:
+        csv_username = row.get("用户名", "")
+        if csv_username == username:
             uid = int(row["UID"])
             stored_hash = row["密码"]
             break
 
+    # CSV 没找到则遍历文件夹（兼容 CSV 列值为空的情况）
+    if uid is None and USERS_DIR.exists():
+        for user_dir in USERS_DIR.glob("User_*"):
+            try:
+                uid_candidate = int(user_dir.name.removeprefix("User_"))
+            except ValueError:
+                continue
+            folder_username = _read_file(user_dir / "username")
+            if folder_username == username:
+                uid = uid_candidate
+                stored_hash = _read_file(user_dir / "password")
+                break
+
     if uid is None:
         return {"ok": False, "error": "用户名或密码错误。"}
+
+    # CSV 密码为空时从文件夹读取（兼容历史数据）
+    if not stored_hash:
+        stored_hash = _read_file(_user_dir(uid) / "password")
 
     if not _verify_password_hash(password, uid, stored_hash or ""):
         return {"ok": False, "error": "用户名或密码错误。"}
@@ -379,6 +398,24 @@ def login(username: str, password: str) -> dict:
     created_at = _read_file(user_dir / "created_at")
     verified = _read_file(user_dir / "verified")
     role = _read_file(user_dir / "role")
+
+    # 如果 CSV 中缺少用户名或密码，修复 CSV 行
+    csv_needs_repair = False
+    for row in rows:
+        try:
+            if int(row["UID"]) == uid:
+                if not row.get("用户名", ""):
+                    csv_needs_repair = True
+                if not row.get("密码", ""):
+                    csv_needs_repair = True
+                break
+        except (ValueError, KeyError):
+            continue
+    if csv_needs_repair:
+        _update_csv_row(uid, **{
+            "用户名": username,
+            "密码": stored_hash,
+        })
 
     return {
         "ok": True,
@@ -748,7 +785,7 @@ def user_exists(uid: int) -> bool:
 
 
 def lookup_uid(username: str) -> int:
-    """根据用户名查找 UID，找不到返回 -1。"""
+    """根据用户名查找 UID，找不到返回 -1。先从 CSV 查，CSV 找不到则遍历文件夹。"""
     rows = _read_csv()
     for row in rows:
         if row["用户名"] == username:
@@ -756,29 +793,51 @@ def lookup_uid(username: str) -> int:
                 return int(row["UID"])
             except (ValueError, KeyError):
                 pass
+    # CSV 没找到，遍历文件夹（兼容 CSV 数据不完整的情况）
+    if USERS_DIR.exists():
+        for user_dir in USERS_DIR.glob("User_*"):
+            try:
+                uid_candidate = int(user_dir.name.removeprefix("User_"))
+            except ValueError:
+                continue
+            if _read_file(user_dir / "username") == username:
+                return uid_candidate
     return -1
 
 
 def get_user_by_uid(uid: int) -> dict | None:
-    """根据 UID 获取用户公开信息。"""
+    """根据 UID 获取用户公开信息。数据以文件夹为准，CSV 缺失时 fallback。"""
     if not user_exists(uid):
         return None
+    user_dir = _user_dir(uid)
     rows = _read_csv()
+    csv_username = ""
+    csv_created_at = ""
+    csv_verified = "0"
+    csv_role = "user"
     for row in rows:
         try:
             if int(row["UID"]) == uid:
-                user_dir = _user_dir(uid)
-                return _build_user_dict(
-                    uid=uid,
-                    username=row.get("用户名", ""),
-                    intro=_read_file(user_dir / "intro"),
-                    created_at=row.get("创建时间", ""),
-                    verified=row.get("已验证", "0"),
-                    role=row.get("权限", "user"),
-                )
+                csv_username = row.get("用户名", "")
+                csv_created_at = row.get("创建时间", "")
+                csv_verified = row.get("已验证", "0")
+                csv_role = row.get("权限", "user")
+                break
         except (ValueError, KeyError):
             continue
-    return None
+    # CSV 字段为空时从文件夹读取
+    username = csv_username or _read_file(user_dir / "username")
+    created_at = csv_created_at or _read_file(user_dir / "created_at")
+    verified = csv_verified if csv_verified else _read_file(user_dir / "verified")
+    role = csv_role if csv_role and csv_role != "user" else (_read_file(user_dir / "role") or "user")
+    return _build_user_dict(
+        uid=uid,
+        username=username,
+        intro=_read_file(user_dir / "intro"),
+        created_at=created_at,
+        verified=verified,
+        role=role,
+    )
 
 
 def get_user_battle_ids(uid: int) -> list[str]:

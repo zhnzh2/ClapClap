@@ -25,6 +25,7 @@ def _rate_limit_key(username: str) -> str:
 
 
 def _is_login_rate_limited(username: str) -> bool:
+    global _LOGIN_ATTEMPTS
     now = time.time()
     cutoff = now - _LOGIN_WINDOW_SECONDS
     key = _rate_limit_key(username)

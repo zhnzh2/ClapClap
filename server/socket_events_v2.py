@@ -180,6 +180,7 @@ def handle_disconnect_v2():
 @socketio.on("chat_message_v2")
 def handle_chat_message_v2(data):
     """v2 房间聊天消息。"""
+    global _CHAT_V2_RECENT
     room_id = data.get("room_id")
     message = (data.get("message") or "").strip()
     player_token = (data.get("player_token") or "").strip()
