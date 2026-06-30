@@ -140,8 +140,12 @@ class TestAiApi(unittest.TestCase):
         self.assertIn("ai_move_label", data)
         self.assertIn("difficulty", data)
         self.assertIn("battle_id", data)
+        self.assertIn("ai_inference_ms", data)
+        self.assertIn("api_elapsed_ms", data)
         self.assertEqual(data["battle_id"], data["state"]["battle_id"])
         self.assertIsInstance(data["battle_id"], str)
+        self.assertGreaterEqual(data["ai_inference_ms"], 0)
+        self.assertGreaterEqual(data["api_elapsed_ms"], 0)
         self.assertEqual(data["human_seat"], "p1")
         self.assertEqual(data["ai_seat"], "p2")
         self.assertEqual(data["difficulty"], "easy")
@@ -539,6 +543,8 @@ class TestAiApi(unittest.TestCase):
         self.assertEqual(latest_round.get("ai_policy_type"), "heuristic")
         self.assertEqual(latest_round.get("ai_move"), data["ai_move"])
         self.assertEqual(latest_round.get("human_move"), "QI")
+        self.assertIn("ai_inference_ms", latest_round)
+        self.assertGreaterEqual(latest_round["ai_inference_ms"], 0)
 
         # 清理
         battle_recorder.delete_battle(battle_id)
@@ -562,6 +568,31 @@ class TestAiApi(unittest.TestCase):
         self.assertEqual(participants["p2"]["uid"], -2)
 
         battle_recorder.delete_battle(battle_id)
+
+    def test_hard_battle_records_heuristic_fallback_without_model(self):
+        """困难模式无部署模型时，应记录启发式降级而不是假装使用模型。"""
+        resp = self.client.post(
+            "/api/ai/step",
+            json={"human_move": "QI", "difficulty": "hard"},
+            headers=self.headers,
+        )
+        data = resp.get_json()
+        self.assertTrue(data["ok"], data)
+
+        battle = battle_recorder.read_battle(data["battle_id"])
+        self.assertEqual(battle.get("ai_difficulty"), "hard")
+        self.assertEqual(battle.get("ai_policy_type"), "heuristic_fallback")
+        self.assertIsNone(battle.get("ai_model_version"))
+        model_status = battle.get("ai_model_status")
+        self.assertIsInstance(model_status, dict)
+        self.assertFalse(model_status.get("available"))
+        self.assertEqual(model_status.get("policy_type"), "heuristic_fallback")
+
+        latest_round = battle.get("rounds", [])[0]
+        self.assertEqual(latest_round.get("ai_policy_type"), "heuristic_fallback")
+        self.assertIsInstance(latest_round.get("ai_model_status"), dict)
+
+        battle_recorder.delete_battle(data["battle_id"])
 
 
 if __name__ == "__main__":

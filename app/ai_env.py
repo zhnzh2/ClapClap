@@ -11,13 +11,23 @@ from dataclasses import dataclass, field
 from typing import Callable, Literal
 
 from app.ai.engine import get_legal_action_mask, get_legal_moves_list
-from app.ai.space import get_index_by_move, get_move_by_index
+from app.ai.space import (
+    ACTION_SPACE_SIZE,
+    get_action_space_fingerprint,
+    get_index_by_move,
+    get_move_by_index,
+    get_moves_in_order,
+    validate_action_space,
+)
 from app.v1.constants import Move
 from app.v1.game import GameEngine
 from app.v1.models import GameState
 
 Seat = Literal[1, 2]
 OpponentPolicy = Callable[[GameState, Seat, random.Random], Move]
+OBSERVATION_VERSION = "clapclap-v1-public-state-v2"
+REWARD_CONFIG_VERSION = "terminal-v1"
+DEFAULT_HISTORY_WINDOW = 4
 
 
 def random_opponent_policy(state: GameState, controlled_player: Seat, rng: random.Random) -> Move:
@@ -34,10 +44,36 @@ class StepResult:
     info: dict = field(default_factory=dict)
 
 
+@dataclass(frozen=True)
+class EnvMetadata:
+    rule_version: str
+    action_space_size: int
+    action_space_fingerprint: str
+    action_names: list[str]
+    observation_version: str
+    reward_config_version: str
+    history_window: int
+    max_rounds: int
+
+    def to_dict(self) -> dict:
+        return {
+            "rule_version": self.rule_version,
+            "action_space_size": self.action_space_size,
+            "action_space_fingerprint": self.action_space_fingerprint,
+            "action_names": list(self.action_names),
+            "observation_version": self.observation_version,
+            "reward_config_version": self.reward_config_version,
+            "history_window": self.history_window,
+            "max_rounds": self.max_rounds,
+        }
+
+
 class ClapClapEnv:
     """One-agent 1.0 environment where the opponent is supplied by a policy."""
 
-    observation_version = "clapclap-v1-public-state-v1"
+    rule_version = "1.0"
+    observation_version = OBSERVATION_VERSION
+    reward_config_version = REWARD_CONFIG_VERSION
 
     def __init__(
         self,
@@ -45,16 +81,20 @@ class ClapClapEnv:
         ai_player: Seat = 1,
         opponent_policy: OpponentPolicy = random_opponent_policy,
         max_rounds: int = 200,
+        history_window: int = DEFAULT_HISTORY_WINDOW,
         seed: int | None = None,
     ) -> None:
         if ai_player not in (1, 2):
             raise ValueError(f"ai_player 必须为 1 或 2，收到: {ai_player}")
         if max_rounds <= 0:
             raise ValueError("max_rounds 必须大于 0。")
+        if history_window < 0:
+            raise ValueError("history_window 不能小于 0。")
 
         self.ai_player: Seat = ai_player
         self.opponent_policy = opponent_policy
         self.max_rounds = max_rounds
+        self.history_window = history_window
         self.rng = random.Random(seed)
         self.state = GameState()
 
@@ -75,15 +115,56 @@ class ClapClapEnv:
     def legal_action_mask(self) -> list[bool]:
         return get_legal_action_mask(self.state, self.ai_player)
 
+    def metadata(self) -> dict:
+        return EnvMetadata(
+            rule_version=self.rule_version,
+            action_space_size=ACTION_SPACE_SIZE,
+            action_space_fingerprint=get_action_space_fingerprint(),
+            action_names=[move.name for move in get_moves_in_order()],
+            observation_version=self.observation_version,
+            reward_config_version=self.reward_config_version,
+            history_window=self.history_window,
+            max_rounds=self.max_rounds,
+        ).to_dict()
+
+    def observation_space_schema(self) -> dict:
+        player_fields = {
+            "hp": "int",
+            "qi": "int",
+            "shield": "int",
+            "spark": "int",
+            "battery": "int",
+            "pickaxe": "int",
+            "flash_used": "int",
+        }
+        return {
+            "version": self.observation_version,
+            "ai_player": "1|2",
+            "round_num": "int",
+            "self": player_fields,
+            "opponent": player_fields,
+            "history": "list[round_log] newest-trimmed-by-history_window",
+            "legal_action_mask": f"list[bool] length={ACTION_SPACE_SIZE}",
+        }
+
     def encode_observation(self) -> dict:
         self_state = self.state.p1 if self.ai_player == 1 else self.state.p2
         opponent_state = self.state.p2 if self.ai_player == 1 else self.state.p1
+        if self.history_window == 0:
+            history = []
+        else:
+            history = [
+                item.to_dict()
+                for item in self.state.history[-self.history_window:]
+            ]
         return {
             "version": self.observation_version,
+            "metadata": self.metadata(),
             "ai_player": self.ai_player,
             "round_num": self.state.round_num,
             "self": self_state.to_dict(),
             "opponent": opponent_state.to_dict(),
+            "history": history,
             "legal_action_mask": self.legal_action_mask(),
         }
 
@@ -122,6 +203,7 @@ class ClapClapEnv:
                 "ai_move": move.name,
                 "opponent_move": opponent_move.name,
                 "winner": self.state.winner,
+                "reward_config_version": self.reward_config_version,
             },
         )
 
@@ -138,3 +220,16 @@ class ClapClapEnv:
 
 def action_index(move: Move) -> int:
     return get_index_by_move(move)
+
+
+def validate_model_metadata(metadata: dict) -> bool:
+    """Return whether saved model metadata matches the current 1.0 env contract."""
+    return (
+        metadata.get("rule_version") == ClapClapEnv.rule_version
+        and validate_action_space(
+            metadata.get("action_space_size"),
+            metadata.get("action_space_fingerprint"),
+        )
+        and metadata.get("observation_version") == ClapClapEnv.observation_version
+        and metadata.get("reward_config_version") == ClapClapEnv.reward_config_version
+    )

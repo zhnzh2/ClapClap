@@ -1,496 +1,482 @@
 ================================================================================
-ClapClap 1.0 AI 开发计划书（基于当前仓库现状）
+ClapClap 1.0 AI 后续发展计划（唯一任务文件）
+================================================================================
+
+更新时间：2026-06-30
+
+说明：
+
+本文件由旧版 task.txt 与 task_next.txt 整合而来。
+已经完成的工作不再作为待办任务重复列出，只保留一段能力现状摘要。
+后续开发以本文件为唯一 task 来源。
+
+
+一、当前已完成能力概览
+================================================================================
+
+1. 1.0 AI 可玩链路已打通
+   - /v1/ai 页面可以进行人机对战。
+   - /v1/api/ai/* 由后端生成 AI 动作，客户端不能伪造 AI 动作。
+   - AI 支持 easy / normal / hard 三个难度入口。
+   - 当前 hard 没有真实模型时安全回退到 heuristic hard。
+
+2. 1.0 AI 基础规则和接口已稳定
+   - 动作空间来自 app/v1/constants.py 的 Move 枚举。
+   - 动作空间大小为 17。
+   - app/ai/space.py 提供动作索引、顺序和指纹。
+   - app/ai/engine.py 是统一 select_move 入口。
+   - AI 合法动作判断来自 GameEngine.can_afford()。
+   - AI 不读取真人本回合动作，只基于回合开始状态副本决策。
+
+3. AI 对战状态、记录和统计已接通
+   - AI 对战状态已按用户隔离，不再使用单个全局 AI_STATE 串局。
+   - AI battle 记录包含 difficulty、policy_type、seat、action_space_fingerprint、observation_version。
+   - 每回合记录 human_move、ai_move、human_seat、ai_seat、ai_inference_ms。
+   - 用户战绩中 AI 对局已单独统计，不混入正式真人战绩。
+
+4. 自动评估系统已具备第一版生产力
+   - scripts/evaluate_ai.py 支持单组评估和默认矩阵评估。
+   - 支持 P1/P2 换边统计、胜率、失败率、双败率、截断率、动作频率、资源均值、推理耗时。
+   - 支持 JSON 报告、summary 表格和 JSONL 详细对局日志。
+   - 已生成基准报告 reports/ai_eval/baseline_20260630.json。
+   - 当前基准：normal vs easy 胜率约 95.2%，hard vs easy 约 98.4%，hard vs normal 100%，非法动作 0，截断 0。
+
+5. 训练和推理基础设施已完成骨架
+   - app/ai_env.py 已有轻量训练环境。
+   - observation_version = clapclap-v1-public-state-v2。
+   - reward_config_version = terminal-v1。
+   - 训练 observation 包含 metadata、合法动作 mask 和 history window。
+   - training/gym_env.py 提供可选 Gymnasium wrapper 和 action_masks()。
+   - requirements-train.txt 已把训练依赖与生产依赖分离。
+   - training/train_maskable_ppo.py 支持 dry-run 生成模型 manifest。
+   - app/ai/model_runtime.py 已有生产 manifest 校验、模型状态和 heuristic fallback 骨架。
+
+6. 当前验证状态
+   - 全量测试最近通过：330 passed。
+   - Python 编译检查通过。
+   - AI 页面 JS 语法检查通过。
+
+
+二、后续总体目标
+================================================================================
+
+下一阶段的目标不是继续完善“启发式 AI 可玩版”，而是进入真正的模型训练、模型评估、
+模型上线和长期迭代体系。
+
+最终希望达成：
+
+1. 能在本地或专用训练环境中训练出第一个 1.0 AI 模型。
+2. 模型文件带完整 metadata，并严格绑定规则版本、动作空间、观察空间和奖励配置。
+3. 模型必须通过自动评估矩阵后才能进入 deployable 集合。
+4. 生产环境只加载模型推理，不训练。
+5. 模型推理失败、超时、metadata 不匹配时，hard 自动回退 heuristic，玩家无感。
+6. 后续能管理历史模型池、自我博弈、模型晋级和真人数据分析。
+
+
+三、阶段 A：真正实现训练闭环
 ================================================================================
 
 目标：
 
-本计划只针对 ClapClap 1.0 规则下的 AI 开发与落地，不提前扩展到 2.0。
-最终目标不是“研究一个 AI”，而是把 1.0 AI 做成项目里真正可玩、可测、可持续迭代
-的一条完整链路。
-
-当前完成状态（2026-06-29）：
-
-1. 阶段 1-4 已完成：规则基线、AI 核心接口、启发式 AI、后端 API 已稳定化。
-2. 阶段 5 已完成：/v1/ai 页面接入 /v1/api/ai/*，可显示 AI 出招和终局回放入口。
-3. 阶段 6 已完成：AI 对局写入 battle 记录，回放兼容，用户战绩中 AI 对局单独统计。
-4. 阶段 7 已完成：补齐 AI 规则/API/环境测试，并新增 scripts/evaluate_ai.py 自动评估脚本。
-5. 阶段 8 已完成：新增 app/ai_env.py，提供轻量训练环境接口，不引入生产训练依赖。
-
-
-一、先确认当前仓库现状
-================================================================================
-
-这一步非常重要，因为当前仓库不是“AI 还没开始”，而是已经有一层基础骨架。
-后续开发要在已有骨架上继续推进，而不是推翻重来。
-
-当前已经存在的相关部分：
-
-1. 1.0 规则引擎已经稳定可用
-   - 核心结算：app/v1/game.py
-   - 状态模型：app/v1/models.py
-   - 动作定义：app/v1/constants.py
-   - 状态与合法动作输出：app/v1/state_api.py
-
-2. 1.0 AI 基础模块已经存在
-   - 动作空间注册：app/ai/space.py
-   - 统一 AI 入口：app/ai/engine.py
-   - 启发式策略：app/ai/strategies.py
-
-3. 1.0 AI 后端接口已经存在
-   - AI 路由：server/routes/ai_routes.py
-   - AI 独立运行时状态：server/runtime.py
-
-4. 1.0 AI 页面已经不是纯占位
-   - 页面模板：server/templates/v1/ai.html
-   - 页面脚本：server/static/js/pages/ai_page.js
-   - 页面入口：server/routes/page_routes.py 中的 /v1/ai
-
-5. AI 测试草稿已经存在
-   - 规则与策略测试：tests/test_ai_rules.py
-   - API 测试：tests/test_ai_routes.py
-
-结论：
-
-我们当前要做的，不是“从 0 设计 ClapClap AI”，而是：
-
-1. 先验证现有 AI 骨架是否真的能跑通。
-2. 再修正现有实现与规则事实之间的偏差。
-3. 再把 1.0 AI 做成稳定可玩版本。
-4. 最后再为后续训练和更强模型预留接口。
-
-
-二、本阶段的产品边界
-================================================================================
-
-本阶段只做这些：
-
-1. 规则版本固定为 1.0。
-2. 产品形态固定为人机本地对战。
-3. 第一版先支持“真人固定 P1，AI 固定 P2”。
-4. AI 只能基于回合开始时的公开状态决策。
-5. AI 不读取真人本回合动作。
-6. AI 不重新实现规则，只调用现有 GameEngine。
-7. 第一版主力 AI 采用启发式策略，不强依赖强化学习。
-
-本阶段不做这些：
-
-1. 不接 2.0。
-2. 不做联机房间里的 AI 替身。
-3. 不强行上大模型。
-4. 不先做复杂训练平台。
-5. 不为了“更聪明”去复制第二套规则结算逻辑。
-
-
-三、总体开发顺序
-================================================================================
-
-建议按下面 8 个阶段推进：
-
-阶段 1：规则基线核对
-阶段 2：AI 核心接口核对与修正
-阶段 3：启发式 AI 强化
-阶段 4：后端 API 稳定化
-阶段 5：/v1/ai 页面完善
-阶段 6：记录与回放接通
-阶段 7：测试与自动评估补全
-阶段 8：为后续训练留接口
-
-
-四、详细实施步骤
-================================================================================
-
-阶段 1：规则基线核对
---------------------------------------------------------------------------------
-
-目标：
-先确认 AI 依赖的所有规则事实和当前代码实现一致，避免后面策略、测试、训练全都建
-在错误前提上。
+把当前 dry-run 训练骨架升级成可以在本地训练出第一版模型文件的流程。
+这一阶段仍不接生产页面，只做离线训练和离线评估。
 
 要做的事：
 
-1. 核对动作空间
-   - 以 app/v1/constants.py 中的 Move 枚举为唯一权威。
-   - 确认当前动作总数、顺序、name、label 完整一致。
-   - 确认 app/ai/space.py 的动作注册顺序确实来自 Move 枚举。
+1. 安装训练依赖
+   - 使用 requirements-train.txt。
+   - 依赖包括 gymnasium、numpy、torch、stable-baselines3、sb3-contrib。
+   - 训练依赖不得加入生产 requirements.txt。
+   - 生产 Flask app 不允许 import 训练脚本。
 
-2. 核对合法动作来源
-   - 确认 AI 所有合法性判断最终都来自 GameEngine.can_afford()。
-   - 对照 app/v1/state_api.py:get_legal_moves() 与 app/ai/engine.py 的 mask 逻辑。
+2. 完善 training/gym_env.py
+   - 确认 observation vector 的字段顺序稳定。
+   - 确认 legal_action_mask 与 action_masks() 完全一致。
+   - 确认非法动作不会被模型训练过程选中。
+   - 增加 reset(options={"randomize_seat": True}) 的稳定测试。
+   - 增加多个 env 实例互不污染的测试。
 
-3. 核对状态字段语义
-   - PlayerState：hp、qi、shield、spark、battery、pickaxe、flash_used
-   - GameState：p1、p2、round_num、winner、history
-   - 特别确认 winner=0 是终局，不能被当成“未结束”。
-   - 特别确认 flash_used 表示已使用次数，不是剩余次数。
+3. 实现 MaskablePPO 训练循环
+   - 在 training/train_maskable_ppo.py 中接入 sb3_contrib MaskablePPO。
+   - 第一版对手池只使用 random legal-action AI。
+   - 每局随机 AI 控制 P1 或 P2。
+   - 支持 total_timesteps、seed、max_rounds、history_window、output_dir 参数。
+   - 支持训练日志落盘。
+   - 支持 checkpoint 保存。
 
-4. 核对 AI 可见信息边界
-   - AI 只看当前 GameState 副本。
-   - AI 不允许接收 human_move。
-   - 在接口和测试里都要明确这一点。
+4. 保存模型 artifact
+   - 保存模型权重。
+   - 保存 manifest.json。
+   - manifest 必须包含：
+     rule_version
+     action_space_size
+     action_space_fingerprint
+     action_names
+     observation_version
+     reward_config_version
+     history_window
+     max_rounds
+     model_version
+     inference_adapter
+     algorithm
+     seed
+     total_timesteps
+     opponent_pool
+     seat_randomization
+     created_at
+     evaluation result placeholder
 
-验收标准：
-
-1. 动作空间、合法动作、状态字段语义全部形成一份明确文档。
-2. 计划、代码、测试里不再出现旧路径 app/game.py、app/state_api.py 这类 1.0 旧引用。
-3. 所有终局判断统一使用 winner is not None。
-
-
-阶段 2：AI 核心接口核对与修正
---------------------------------------------------------------------------------
-
-目标：
-把现有 app/ai 模块打磨成可长期复用的统一决策层。
-
-要做的事：
-
-1. 检查 app/ai/space.py
-   - 确认动作空间大小、索引映射、指纹逻辑正确。
-   - 确认外部模块不会手写第二份动作表。
-
-2. 检查 app/ai/engine.py
-   - 确认 select_move(state, controlled_player, rng, config) 是统一入口。
-   - 确认接口不会修改传入 state。
-   - 确认 easy / normal / hard 三种难度都返回合法动作。
-
-3. 检查玩家视角转换
-   - 确认 P1 / P2 逻辑没有分叉成两套策略代码。
-   - 统一为 self / opponent / round_num / legal_action_mask。
-
-4. 检查复制隔离
-   - GameState.copy() 是否足够支撑 AI 模拟。
-   - 注意 history 当前是浅拷贝列表，需要确认是否满足启发式模拟场景。
-   - 若后续需要更深层模拟数据隔离，再补更稳妥的复制方案。
+5. 增加训练 smoke 测试
+   - 不要求 CI 跑真实大训练。
+   - 可以提供 --smoke-test 或 --total-timesteps 很小的训练入口。
+   - 如果训练依赖缺失，测试应跳过或验证友好错误。
+   - 不能让没有训练依赖的生产测试失败。
 
 验收标准：
 
-1. AI 统一入口不修改真实对局状态。
-2. AI 控制 P1 和 P2 都能正常工作。
-3. 任意策略都只能返回合法 Move。
+1. 本地安装训练依赖后，可以跑出一个模型权重文件。
+2. 模型目录至少包含 weights + manifest.json。
+3. manifest 能通过 validate_model_metadata()。
+4. 训练脚本不影响现有生产测试。
 
 
-阶段 3：启发式 AI 强化
---------------------------------------------------------------------------------
-
-目标：
-把“能出招”升级成“至少不像乱玩”的 1.0 主力 AI。
-
-要做的事：
-
-1. 保留 easy 难度
-   - easy 继续使用随机合法动作。
-   - 作用是跑链路、压测、对照评估。
-
-2. 打磨 normal 难度
-   - 继续使用一步模拟启发式。
-   - 逐项检查评分优先级是否符合 1.0 实战直觉。
-   - 重点覆盖：必杀、保命、避双败、控资源、闪次数、镐风险。
-
-3. 打磨 hard 难度
-   - 先用更保守的一步模拟版本。
-   - 不在这一阶段强行引入强化学习模型。
-
-4. 专门检查特殊动作价值
-   - SHAN 的代价是否被正确体现。
-   - GAO 在有爆镐风险时是否被合理压制。
-   - CHI / SHUANG_CHI 是否在关键局面有正确价值。
-   - LIE_YAN / SHINING 的替代资源逻辑必须完全依赖真实规则模拟。
-
-5. 增加可调参数
-   - 把评分常量整理成可读、可调的一组配置。
-   - 便于后续自动评估时快速调权重。
-
-验收标准：
-
-1. normal 和 hard 永远不出非法动作。
-2. normal 对 easy 应有稳定优势。
-3. hard 比 normal 更少出现明显送死行为。
-4. 启发式模拟不会污染原状态。
-
-
-阶段 4：后端 API 稳定化
---------------------------------------------------------------------------------
-
-目标：
-把现有 AI 接口从“已接上”打磨到“可以长期稳定支撑页面和测试”。
-
-要做的事：
-
-1. 检查路由前缀和版本策略
-   - 当前 AI 接口是 /api/ai/*，本地 1.0 接口是 /v1/api/local/*。
-   - 明确这是有意设计还是需要统一版本风格。
-   - 若不改路径，也要在文档中固定下来。
-
-2. 检查请求校验
-   - 非 JSON
-   - 缺少 human_move
-   - 非法动作名
-   - 当前状态下不合法动作
-   - 未知难度
-   - 非法 human_seat
-   - 游戏已结束后继续提交
-
-3. 检查 AI 状态隔离
-   - AI_STATE 必须和 CURRENT_STATE 分离。
-   - 锁粒度要明确。
-   - reset 后 battle_id 要清理干净。
-
-4. 检查防作弊流程
-   - 必须先复制回合开始状态给 AI。
-   - AI 先决策，再与 human_move 一起结算。
-   - 测试里验证 human_move 不影响 AI 同状态决策。
-
-5. 检查响应结构
-   - state
-   - ai_move
-   - ai_move_label
-   - difficulty
-   - 后续如果页面需要回放入口，可补 battle_id
-
-验收标准：
-
-1. API 错误处理完整且稳定。
-2. AI 对战不会串到本地双人模式状态。
-3. 前端无需传 AI 动作。
-
-
-阶段 5：/v1/ai 页面完善
---------------------------------------------------------------------------------
-
-目标：
-把当前已经存在的 AI 页面从“基本可交互”推进到“稳定、清晰、可持续调试”。
-
-要做的事：
-
-1. 复核页面交互链路
-   - 首次加载状态
-   - 选择动作
-   - 提交动作
-   - AI 思考反馈
-   - 回合结果展示
-   - 游戏结束提示
-   - 重置流程
-
-2. 检查页面与接口字段一致性
-   - legal_moves
-   - move_catalog
-   - history
-   - winner
-   - ai_move / ai_move_label
-
-3. 补页面可用性细节
-   - 非法动作禁用
-   - 键盘操作可靠
-   - 游戏结束后按钮状态正确
-   - 移动端基础可用
-   - 登录失效跳转逻辑正确
-
-4. 补调试友好性
-   - 明确展示当前难度
-   - 明确展示最近一回合 AI 出招
-   - 若后端返回 battle_id，可在结束时直接跳转回放
-
-验收标准：
-
-1. 用户进入 /v1/ai 后可以直接开始完整人机对战。
-2. 用户只选择自己的动作。
-3. AI 动作只由后端生成并在结算后公开。
-4. 页面行为和状态变化与真实规则一致。
-
-
-阶段 6：记录与回放接通
---------------------------------------------------------------------------------
-
-目标：
-AI 对局不仅能玩，还要能复盘、可验证、可用于后续分析。
-
-要做的事：
-
-1. 核对 battle 记录结构
-   - mode="ai"
-   - rule_version="1.0"
-   - opponent_type="ai"
-   - ai_policy_type
-   - ai_difficulty
-   - ai_model_version
-   - ai_seat
-
-2. 核对参与者信息
-   - 真人使用当前登录用户
-   - AI 使用固定系统身份，例如 uid=-2, username="ClapClap AI"
-
-3. 核对回放兼容性
-   - 旧回放页在遇到 AI 元信息时不应报错
-   - AI 对局应能在现有 1.0 回放页打开
-
-4. 决定统计口径
-   - AI 对局是否计入玩家正式战绩
-   - 如果不计入，后面要为“AI 对战记录”和“真人对战记录”分开展示做准备
-
-验收标准：
-
-1. AI 对局结束后可以被读取和回放。
-2. 旧记录体系不被破坏。
-3. AI 元信息被稳定保存。
-
-
-阶段 7：测试与自动评估补全
---------------------------------------------------------------------------------
-
-目标：
-先证明“规则没被破坏”，再证明“AI 至少比随机强”。
-
-要做的事：
-
-1. 清理并跑通 tests/test_ai_rules.py
-   - 动作空间
-   - 合法动作掩码
-   - 玩家视角转换
-   - 决策接口不改状态
-   - 启发式模拟隔离性
-   - winner=0 终局判断
-
-2. 清理并跑通 tests/test_ai_routes.py
-   - state / reset / step
-   - 错误处理
-   - AI 状态隔离
-   - battle 记录创建
-
-3. 增加最关键的策略测试
-   - AI 永远只选合法动作
-   - 明显必杀局面优先斩杀
-   - 明显必死局面优先保命
-   - pickaxe=1 时避免无意义 GAO
-
-4. 增加自动对战评估脚本
-   - easy vs easy
-   - normal vs easy
-   - hard vs normal
-   - P1 / P2 换边评估
-
-5. 输出核心指标
-   - 胜率
-   - 失败率
-   - 双败率
-   - 平均回合数
-   - 非法动作次数
-   - 常用动作频率
-
-验收标准：
-
-1. AI 相关测试全部可跑通。
-2. 现有 1.0 / 2.0 测试不回归。
-3. normal 对 easy 有稳定胜率优势。
-
-
-阶段 8：为后续训练留接口
---------------------------------------------------------------------------------
-
-目标：
-先不急着训练，但把后续训练所需的边界提前定清楚，避免以后返工。
-
-要做的事：
-
-1. 预留训练环境封装位置
-   - 例如 app/ai_env.py 或 training/clapclap_env.py
-
-2. 固定训练依赖与生产依赖分离原则
-   - 生产服务不训练
-   - 网站默认使用启发式或已导出的推理模型
-
-3. 固定模型元数据要求
-   - 规则版本
-   - 动作数量
-   - 动作顺序
-   - 动作空间指纹
-   - 观察空间版本
-   - 奖励配置
-
-4. 固定降级策略
-   - 未来模型加载失败或推理异常时，自动回退到启发式 AI
-
-验收标准：
-
-1. 当前 1.0 AI 主流程不依赖训练框架。
-2. 后续接强化学习时不需要推翻现有接口。
-
-
-五、推荐开发批次
+四、阶段 B：模型评估与晋级机制
 ================================================================================
 
-第一批：先把现有骨架跑通
+目标：
 
-1. 全面检查 app/ai、ai_routes、ai_page、测试文件。
-2. 跑 AI 相关测试，找出当前真实缺口。
-3. 修正路径、字段、终局判断、状态隔离等基础问题。
+训练出来的模型不能直接上线，必须先通过固定评估矩阵和晋级规则。
+这一阶段把“训练 reward”转化为“真实规则胜率”和“可上线质量门槛”。
 
-交付结果：
-明确“现在已经能跑到哪一步，还差哪几个阻塞点”。
+要做的事：
 
-第二批：做出稳定可玩的 1.0 AI
+1. 扩展 scripts/evaluate_ai.py 支持模型策略
+   - 当前评估只支持 easy / normal / hard。
+   - 新增 --model-dir 参数。
+   - 支持 candidate model vs easy。
+   - 支持 candidate model vs normal。
+   - 支持 candidate model vs hard heuristic fallback。
+   - 支持 candidate model vs historical model。
 
-1. 修正启发式策略。
-2. 修正 AI 页面。
-3. 修正 AI API 和 battle 记录链路。
+2. 固定第一版晋级门槛
+   - illegal_moves 必须为 0。
+   - truncated_rate 必须低于阈值。
+   - candidate vs easy 胜率不得低于 normal baseline。
+   - candidate vs normal 胜率必须达到约定阈值。
+   - P1/P2 胜率差不得过大。
+   - 动作分布不能极端坍缩。
+   - 双败率不能异常升高。
 
-交付结果：
-/v1/ai 可以稳定完成整局人机对战。
+3. 输出评估报告
+   - 每个候选模型输出 reports/ai_eval/<model_version>.json。
+   - 报告记录模型 metadata。
+   - 报告记录每组对战矩阵结果。
+   - 报告记录 seed 和评估命令。
+   - 支持 JSONL 详细日志用于复现异常。
 
-第三批：补测试与评估
+4. 增加 promote 脚本
+   - 新增 training/promote_model.py 或 scripts/promote_ai_model.py。
+   - 输入 dev/candidate 模型目录。
+   - 检查 manifest 和评估报告。
+   - 通过晋级门槛后复制到 models/ai/v1/deploy。
+   - 写入 deploy manifest。
+   - 不通过则拒绝 promote，并输出原因。
 
-1. 跑通 test_ai_rules.py。
-2. 跑通 test_ai_routes.py。
-3. 增加自动对战评估脚本。
+验收标准：
 
-交付结果：
-AI 改动不再靠感觉验证。
-
-第四批：再考虑训练
-
-1. 封装训练环境。
-2. 增加模型元数据校验。
-3. 设计模型推理降级逻辑。
-
-交付结果：
-为后续更强 AI 做准备，但不阻塞 1.0 版本上线。
+1. 任意候选模型都有可复现评估报告。
+2. 不达标模型不能进入 deploy 目录。
+3. deploy 目录中的模型一定带完整 manifest 和评估结果。
 
 
-六、当前最先要做的 6 件事
+五、阶段 C：生产推理 adapter
 ================================================================================
 
-如果现在立刻开始推进，建议按这个顺序做：
+目标：
 
-1. 跑 `tests/test_ai_rules.py` 和 `tests/test_ai_routes.py`，确认当前 AI 骨架真实状态。
-2. 修正计划和文档里所有过时路径，统一以 `app/v1/*`、`server/templates/v1/*` 为准。
-3. 核对 `app/ai/engine.py` 与 `app/v1/state_api.py` 的合法动作一致性。
-4. 核对 `app/ai/strategies.py` 的评分逻辑，重点看必杀、保命、闪、镐风险。
-5. 检查 `/api/ai/step` 响应是否需要补 `battle_id`，方便页面回放入口闭环。
-6. 补一轮“启发式 vs 随机”的自动对战评估，确认 normal 确实比 easy 强。
+让 hard 难度在存在合格 deploy 模型时真正调用模型推理；模型不可用时继续安全回退。
+
+要做的事：
+
+1. 实现 sb3_maskable_ppo_v1 adapter
+   - 在 app/ai/model_runtime.py 或 app/ai/model_adapters/ 下实现。
+   - 生产启动时加载一次模型。
+   - 加载前校验 manifest。
+   - 校验 rule_version。
+   - 校验 action_space_fingerprint。
+   - 校验 observation_version。
+   - 校验 reward_config_version。
+   - 校验 weights_path。
+
+2. 推理输入
+   - 从 GameState 编码 observation vector。
+   - 生成 legal_action_mask。
+   - 模型只接收 observation + mask。
+   - 模型不能直接访问真人本回合动作。
+
+3. 推理输出
+   - 输出 action_index。
+   - action_index 必须映射回 Move。
+   - 输出动作必须在 legal_action_mask 内。
+   - 若输出非法动作，立即 fallback heuristic，并记录 reason。
+
+4. 超时和异常降级
+   - 使用 CLAPCLAP_AI_INFERENCE_TIMEOUT_MS 配置。
+   - 推理异常时 fallback heuristic。
+   - 推理超时时 fallback heuristic。
+   - metadata mismatch 时 fallback heuristic。
+   - 权重缺失时 fallback heuristic。
+
+5. 性能监控
+   - 已有 ai_inference_ms / api_elapsed_ms 字段。
+   - 后续补充 model_load_ms。
+   - 补充 model_status API 或在 /api/modes/status 中显示模型状态。
+   - 记录 fallback reason。
+
+验收标准：
+
+1. deploy 模型存在且合法时，hard policy_type = model。
+2. deploy 模型缺失或异常时，hard policy_type = heuristic_fallback。
+3. 模型异常不会导致 /v1/api/ai/step 失败。
+4. battle metadata 能区分 model 与 fallback。
 
 
-七、第一阶段完成标准
+六、阶段 D：模型池与自我博弈
 ================================================================================
 
-当以下条件全部满足时，可以认为 ClapClap 1.0 AI 第一阶段完成：
+目标：
 
-1. `/v1/ai` 页面能完整进行人机对战。
-2. AI 永远只会选择合法动作。
-3. AI 合法性完全依赖现有 1.0 规则引擎。
-4. AI 不读取真人本回合动作。
-5. `winner=0` 被正确作为终局处理。
-6. `flash_used` 按“已使用次数”处理正确。
-7. 启发式 AI 明显强于随机 AI。
-8. AI 对局可以写入记录并被回放。
-9. AI 相关测试通过。
-10. 现有 1.0 / 2.0 其他测试没有被破坏。
+避免模型只会打随机 AI 或只会打当前启发式。建立长期模型池，降低遗忘和循环克制。
+
+要做的事：
+
+1. 建立模型目录规范
+   - models/ai/v1/candidates/<model_version>/
+   - models/ai/v1/deploy/
+   - models/ai/v1/archive/<model_version>/
+   - models/ai/v1/pool/<model_version>/
+
+2. 历史模型池
+   - 保存多个通过评估的历史模型。
+   - 训练时从 random、normal heuristic、hard heuristic、history models 中抽对手。
+   - 控制每类对手采样比例。
+
+3. 自我博弈第一版
+   - 不直接只打最新模型。
+   - 从历史池抽样。
+   - 保留旧模型防止遗忘。
+   - 定期对模型池跑矩阵评估。
+
+4. 晋级规则增强
+   - 对 easy 不退步。
+   - 对 normal 提高或保持。
+   - 对 hard heuristic 不明显弱。
+   - 对历史池总体成绩提高。
+   - 动作分布不坍缩。
+   - P1/P2 差异可控。
+
+验收标准：
+
+1. 新模型不会只凭训练 reward 覆盖旧模型。
+2. 任意 deploy 模型可以追溯训练参数、评估报告和上一版本。
+3. 可以回滚到历史模型。
 
 
-八、执行原则
+七、阶段 E：AI 产品体验增强
 ================================================================================
 
-整个开发过程中始终坚持：
+目标：
 
-1. 规则正确性优先于 AI 强度。
-2. 后端权威优先于前端表现。
-3. 现有规则引擎优先于新写一套推导逻辑。
-4. 可测试、可复盘优先于“看起来聪明”。
-5. 先做稳定可玩版，再做训练和更强模型。
+当前 AI 模式已经可玩。后续要让用户感受到“这是一个产品功能”，而不是开发调试页。
+
+要做的事：
+
+1. /v1/ai 页面增强
+   - 展示当前 AI 实际策略：random / heuristic / model / heuristic_fallback。
+   - hard fallback 时给开发态提示，但不打扰普通用户。
+   - 展示 AI 推理耗时或简化为“AI 思考中”。
+   - 页面可选择真人 P1 / P2。
+   - 开局后锁定座位和难度。
+
+2. 回放页增强
+   - 展示 AI 难度。
+   - 展示 AI policy_type。
+   - 展示 model_version。
+   - 展示 fallback reason。
+   - 展示 AI seat。
+
+3. 用户页增强
+   - AI 对局单独筛选。
+   - 真人对局和 AI 对局明确分区。
+   - 展示 AI 胜负统计趋势。
+
+4. 管理/调试入口
+   - 增加只读 AI 状态诊断。
+   - 显示 deploy model status。
+   - 显示 action_space_fingerprint。
+   - 显示 observation_version。
+
+验收标准：
+
+1. 普通用户能清楚知道自己在和什么难度 AI 对战。
+2. 开发者能快速判断 hard 是否正在使用模型还是 fallback。
+3. 回放和用户页能长期支持 AI 版本追踪。
+
+
+八、阶段 F：真人数据分析与行为模型
+================================================================================
+
+目标：
+
+当网站有足够真人对战数据后，用真实玩家行为改进 AI 对手模型和评估集。
+
+要做的事：
+
+1. 数据抽取
+   - 从 battle records 提取 1.0 真人对局。
+   - 排除 AI 对局。
+   - 提取每回合开始状态。
+   - 提取玩家合法动作集合。
+   - 提取玩家实际动作。
+   - 提取胜负结果。
+
+2. 行为统计
+   - 不同资源状态下玩家动作频率。
+   - 面对攻击威胁时玩家选择。
+   - 闪的使用时机。
+   - 镐的使用习惯。
+   - 你吃 / 双吃的使用频率。
+   - 不同水平玩家策略差异。
+
+3. 行为模型
+   - 第一版只做统计对手模型。
+   - 后续可做行为克隆。
+   - 行为模型可作为评估对手或训练对手。
+
+验收标准：
+
+1. 能生成真人动作频率报告。
+2. 能从真人数据构建一个非随机对手策略。
+3. 真人数据不会直接污染生产模型，必须经过评估。
+
+
+九、阶段 G：工程化与部署
+================================================================================
+
+目标：
+
+让 AI 模型上线、回滚、验证、排错都可控。
+
+要做的事：
+
+1. 文档
+   - docs/ai_1_0_training.md。
+   - docs/ai_1_0_deployment.md。
+   - docs/ai_1_0_evaluation.md。
+   - docs/ai_1_0_metadata.md。
+
+2. CI / 本地检查
+   - 单元测试。
+   - evaluate smoke。
+   - manifest 校验。
+   - deploy model 校验。
+
+3. 部署约定
+   - CLAPCLAP_AI_MODEL_DIR。
+   - CLAPCLAP_AI_INFERENCE_TIMEOUT_MS。
+   - 模型文件不进入生产依赖安装流程。
+   - Railway 或生产环境只读模型，不训练模型。
+
+4. 回滚机制
+   - deploy 目录保留当前模型。
+   - archive 保留历史模型。
+   - promote 脚本可回滚到指定版本。
+
+验收标准：
+
+1. 新机器可以按文档完成训练、评估、promote 和生产加载。
+2. 模型上线失败时可以快速回退。
+3. 生产环境不会因为训练依赖缺失而失败。
+
+
+十、推荐执行顺序
+================================================================================
+
+第一批：真实训练最小闭环
+
+1. 安装 requirements-train.txt。
+2. 完成 MaskablePPO 训练循环。
+3. 训练一个 tiny smoke model。
+4. 保存 weights + manifest。
+5. 用 evaluate_ai.py 跑模型评估。
+
+交付标准：
+
+1. 本地能训练出第一版模型文件。
+2. 模型能离线评估。
+3. 生产代码仍不依赖训练库。
+
+
+第二批：模型评估与 promote
+
+1. evaluate_ai.py 支持 --model-dir。
+2. 新增模型晋级阈值。
+3. 新增 promote 脚本。
+4. 生成 deploy model artifact。
+
+交付标准：
+
+1. 不合格模型不能 deploy。
+2. 合格模型可进入 models/ai/v1/deploy。
+
+
+第三批：生产推理 adapter
+
+1. 实现 sb3_maskable_ppo_v1 加载。
+2. 实现 masked inference。
+3. 实现超时和异常 fallback。
+4. hard 难度真实接入 model。
+
+交付标准：
+
+1. hard 可以真正使用 deploy 模型。
+2. 模型异常时自动 fallback。
+3. battle metadata 可完整追踪实际策略。
+
+
+第四批：长期增强
+
+1. 历史模型池。
+2. 自我博弈。
+3. 真人数据分析。
+4. AI 页面、回放页、用户页体验增强。
+
+交付标准：
+
+1. 模型可长期迭代。
+2. 模型可比较、可回滚、可追踪。
+3. AI 对战成为稳定产品功能。
+
+
+十一、当前下一步
+================================================================================
+
+最建议下一步：
+
+安装训练依赖并实现 MaskablePPO 最小训练循环。
+
+具体开始点：
+
+1. 运行：
+   pip install -r requirements-train.txt
+
+2. 完成：
+   training/train_maskable_ppo.py 中真实训练分支。
+
+3. 目标：
+   先训练一个 tiny smoke model，证明 Gym wrapper、action mask、manifest、weights 保存链路全部可用。
+
+注意：
+
+在真实训练跑通前，hard 继续保持 heuristic_fallback 是正确状态。
+不要为了“显示 model”而绕过 manifest、adapter 或权重校验。

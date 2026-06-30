@@ -15,10 +15,16 @@ ClapClap 1.0 AI 对战 API。
 from __future__ import annotations
 
 import random
+import time
 
 from flask import Blueprint, g, jsonify, request
 
 from app.ai.engine import select_move
+from app.ai.model_runtime import (
+    model_status_for_difficulty,
+    model_version_for_difficulty,
+    policy_type_for_difficulty,
+)
 from app.ai.space import ACTION_SPACE_SIZE, get_action_space_fingerprint
 from app.battle_recorder import (
     create_battle,
@@ -47,10 +53,6 @@ def _get_ai_state_payload(session: runtime.AISession) -> dict:
     payload["ai_seat"] = session.ai_seat
     payload["ai_policy_type"] = session.policy_type
     return payload
-
-
-def _policy_type_for_difficulty(difficulty: str) -> str:
-    return "random" if difficulty == "easy" else "heuristic"
 
 
 # ---------------------------------------------------------------------------
@@ -125,6 +127,8 @@ def ai_step():
             "battle_id": "20260629000000000"
         }
     """
+    request_started = time.perf_counter()
+
     # 1. 校验 JSON
     data = request.get_json(silent=True)
     if data is None:
@@ -199,12 +203,14 @@ def ai_step():
 
         # 7. AI 决策
         rng = random.Random()
+        inference_started = time.perf_counter()
         try:
             ai_move = select_move(
                 state_for_ai, ai_player, rng, {"difficulty": difficulty}
             )
         except ValueError as exc:
             return jsonify({"ok": False, "error": str(exc)}), 400
+        ai_inference_ms = round((time.perf_counter() - inference_started) * 1000, 4)
 
         # 8. 结算回合
         if human_player == 1:
@@ -217,7 +223,9 @@ def ai_step():
         # 9. 对战记录
         human_username = get_current_username()
         human_uid = g.current_user.get("uid", -1) if hasattr(g, "current_user") else -1
-        policy_type = _policy_type_for_difficulty(difficulty)
+        policy_type = policy_type_for_difficulty(difficulty)
+        model_version = model_version_for_difficulty(difficulty)
+        model_status = model_status_for_difficulty(difficulty)
 
         if session.battle_id is None:
             session.difficulty = difficulty
@@ -246,7 +254,8 @@ def ai_step():
                 "opponent_type": "ai",
                 "ai_policy_type": policy_type,
                 "ai_difficulty": difficulty,
-                "ai_model_version": None,
+                "ai_model_version": model_version,
+                "ai_model_status": model_status,
                 "ai_seat": f"p{ai_player}",
                 "human_seat": human_seat,
                 "action_space_size": ACTION_SPACE_SIZE,
@@ -264,7 +273,9 @@ def ai_step():
                 "ai_move": ai_move.name,
                 "ai_difficulty": session.difficulty,
                 "ai_policy_type": session.policy_type,
-                "ai_model_version": None,
+                "ai_model_version": model_version,
+                "ai_model_status": model_status,
+                "ai_inference_ms": ai_inference_ms,
             })
             record_round(session.battle_id, round_data)
 
@@ -283,9 +294,11 @@ def ai_step():
             "state": payload,
             "ai_move": ai_move.name,
             "ai_move_label": ai_move.value,
-            "difficulty": difficulty,
-            "human_seat": human_seat,
-            "ai_seat": f"p{ai_player}",
-            "battle_id": battle_id,
-        }
+        "difficulty": difficulty,
+        "human_seat": human_seat,
+        "ai_seat": f"p{ai_player}",
+        "battle_id": battle_id,
+        "ai_inference_ms": ai_inference_ms,
+        "api_elapsed_ms": round((time.perf_counter() - request_started) * 1000, 4),
+    }
     )

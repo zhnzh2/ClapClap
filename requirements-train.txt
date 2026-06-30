@@ -1,0 +1,7 @@
+# Training-only dependencies for ClapClap 1.0 AI.
+# Do not install these in the production web service by default.
+gymnasium>=0.29,<1.0
+numpy>=1.26,<3
+torch>=2.2
+stable-baselines3>=2.3,<3
+sb3-contrib>=2.3,<3

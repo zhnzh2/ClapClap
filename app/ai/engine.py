@@ -155,6 +155,11 @@ def select_move(
         })
 
     if difficulty == "hard":
+        from app.ai.model_runtime import select_model_move
+        model_move = select_model_move(state, controlled_player, rng)
+        if model_move is not None:
+            return model_move
+
         from app.ai.strategies import heuristic_select_move
         return heuristic_select_move(state, controlled_player, rng, {
             "conservative": True,
