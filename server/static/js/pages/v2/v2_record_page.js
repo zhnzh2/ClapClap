@@ -12,7 +12,7 @@
     var chatExpanded = false;
     var jsonExpanded = false;
 
-    var $loading, $error, $errorText, $errorBack, $page;
+    var $loading, $error, $errorText, $page;
 
     // 玩家颜色方案（对应 p0~p5）
     var PLAYER_COLORS = [
@@ -28,7 +28,6 @@
         $loading = document.getElementById("record-loading");
         $error = document.getElementById("record-error");
         $errorText = document.getElementById("record-error-text");
-        $errorBack = document.getElementById("record-error-back");
         $page = document.getElementById("record-page");
 
         if (!battleId) {
@@ -39,7 +38,6 @@
         if (!initAccountButton()) return;
         initAdminButton();
         initBackButton();
-        initErrorBackButton();
         loadBattle();
     });
 
@@ -83,14 +81,6 @@
                 } else {
                     window.location.href = "/v2";
                 }
-            });
-        }
-    }
-
-    function initErrorBackButton() {
-        if ($errorBack) {
-            $errorBack.addEventListener("click", function () {
-                window.location.href = "/v2";
             });
         }
     }

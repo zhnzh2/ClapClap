@@ -10,6 +10,9 @@
 <body>
 <div class="container">
     <div class="page-top-shell">
+        <a class="site-logo-link" href="/v2" title="返回 2.0 主页">
+            <img class="site-logo-img" src="{{ url_for('static', filename='Clapclap_logo.png') }}" alt="ClapClap" />
+        </a>
         <div class="header-actions">
             <a class="header-account-btn" href="/v2/rules">规则界面</a>
             <button class="header-account-btn" id="header-admin-btn" style="display:none;">管理</button>
@@ -29,7 +32,6 @@
         <div class="page-mode-toolbar-label">模式操作</div>
         <div class="top-actions page-mode-toolbar-group">
             <button class="action-btn secondary" id="open-v2-settings-btn" type="button">设置</button>
-            <a class="action-btn secondary" href="/v2">返回大厅</a>
             <button class="action-btn danger" id="leave-room-btn">退出房间</button>
         </div>
     </div>

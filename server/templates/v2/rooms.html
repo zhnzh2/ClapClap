@@ -10,6 +10,9 @@
 <body>
 <div class="container">
     <div class="page-top-shell">
+        <a class="site-logo-link" href="/v2" title="返回 2.0 主页">
+            <img class="site-logo-img" src="{{ url_for('static', filename='Clapclap_logo.png') }}" alt="ClapClap" />
+        </a>
         <div class="header-actions">
             <a class="header-account-btn" href="/v2/rules">规则界面</a>
             <button class="header-account-btn" id="header-admin-btn" style="display:none;">查看用户</button>
@@ -19,14 +22,6 @@
         <div class="page-title-block">
             <h1>2.0 多人房间模式</h1>
             <p>多人在线对战 · 最多 6 人 · 速度层结算</p>
-        </div>
-    </div>
-
-    <!-- ── 顶部栏 ── -->
-    <div class="page-mode-toolbar">
-        <div class="page-mode-toolbar-label">模式操作</div>
-        <div class="top-actions page-mode-toolbar-group">
-            <a class="btn-ghost" href="/v2">< 返回大厅</a>
         </div>
     </div>
 

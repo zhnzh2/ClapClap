@@ -21,48 +21,6 @@
             flex-direction: column;
         }
 
-        body.ai-page-body .page-top-shell {
-            min-height: 86px;
-            margin-bottom: 58px;
-            padding: 10px 0 8px;
-        }
-
-        body.ai-page-body .page-top-shell .page-version-chip {
-            top: 6px;
-        }
-
-        body.ai-page-body .page-top-shell .header-actions {
-            position: fixed;
-            top: 12px;
-            right: var(--top-action-right);
-            z-index: 100;
-        }
-
-        body.ai-page-body .page-title-block {
-            padding-top: 8px;
-        }
-
-        body.ai-page-body .page-title-block h1 {
-            font-size: 26px;
-            margin-bottom: 4px;
-            letter-spacing: 0;
-        }
-
-        body.ai-page-body .page-title-block p {
-            font-size: 13px;
-        }
-
-        body.ai-page-body .page-mode-toolbar {
-            position: fixed;
-            top: 86px;
-            right: var(--top-action-right);
-            z-index: 90;
-            width: min(560px, calc(100vw - 36px));
-            min-height: 0;
-            justify-content: flex-end;
-            pointer-events: none;
-        }
-
         body.ai-page-body .page-mode-toolbar-group {
             pointer-events: auto;
         }
@@ -469,29 +427,6 @@
                 min-height: calc(100vh - 20px);
             }
 
-            body.ai-page-body .page-top-shell {
-                min-height: 0;
-                margin-bottom: 8px;
-                padding-top: 48px;
-            }
-
-            body.ai-page-body .page-top-shell .header-actions {
-                position: static;
-                justify-content: center;
-                margin-bottom: 10px;
-            }
-
-            body.ai-page-body .page-mode-toolbar {
-                position: static;
-                width: 100%;
-                margin-bottom: 8px;
-                pointer-events: auto;
-            }
-
-            body.ai-page-body .page-title-block h1 {
-                font-size: 22px;
-            }
-
             .ai-main-grid,
             .ai-option-row,
             .ai-option-row.seat-row,
@@ -508,6 +443,9 @@
 <body class="ai-page-body">
 <div class="container ai-shell">
     <div class="page-top-shell">
+        <a class="site-logo-link" href="/v1" title="返回 1.0 主页">
+            <img class="site-logo-img" src="{{ url_for('static', filename='Clapclap_logo.png') }}" alt="ClapClap" />
+        </a>
         <a class="page-version-chip" href="/v1/local" title="切换到 1.0 本地双人版">本地</a>
         <div class="header-actions">
             <a class="header-account-btn" href="/v1/rules">规则界面</a>
@@ -528,7 +466,6 @@
             <button class="action-btn secondary ai-battle-only" id="ai-settings-btn">设置</button>
             <button class="action-btn ai-battle-only" id="ai-refresh-btn">刷新</button>
             <button class="action-btn danger ai-battle-only" id="ai-reset-btn">退出本局</button>
-            <a class="action-btn secondary" href="/v1">返回大厅</a>
         </div>
     </div>
 

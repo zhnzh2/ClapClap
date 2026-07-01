@@ -10,6 +10,9 @@
 <body>
 <div class="container">
     <div class="page-top-shell">
+        <a class="site-logo-link" href="/v1" title="返回 1.0 主页">
+            <img class="site-logo-img" src="{{ url_for('static', filename='Clapclap_logo.png') }}" alt="ClapClap" />
+        </a>
         <a class="page-version-chip" href="/v2" title="切换到 2.0 多人版">2.0</a>
         <div class="header-actions">
             <a class="header-account-btn" href="/v1/rules">规则界面</a>
@@ -30,7 +33,6 @@
             <button class="action-btn secondary" id="help-open-btn">帮助</button>
             <button class="action-btn" id="refresh-btn">刷新状态</button>
             <button class="action-btn danger" id="reset-btn">重新开始</button>
-            <a class="action-btn secondary" href="/v1">返回大厅</a>
         </div>
     </div>
 

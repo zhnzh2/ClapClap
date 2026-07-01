@@ -15,7 +15,11 @@
     --green-hover: #15803d;
     --input-bg: #f9fafb;
     --input-focus: #eff6ff;
-    --top-action-right: calc(18px - (100vw - 100%));
+    --top-action-right: 18px;
+    --site-logo-left: 72px;
+    --site-logo-top: 34px;
+    --site-logo-width: 264px;
+    --site-logo-height: 72px;
 }
 
 * {
@@ -391,10 +395,12 @@ body {
     border-bottom: 1px solid rgba(229, 231, 235, 0.92);
 }
 
-.page-top-shell .page-version-chip {
-    position: absolute;
-    top: 12px;
-    left: 0;
+.page-top-shell .page-version-chip,
+.version-switch-btn {
+    position: fixed;
+    top: 36px;
+    left: calc(var(--site-logo-left) + var(--site-logo-width) + 24px);
+    z-index: 30;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -407,6 +413,31 @@ body {
     font-size: 13px;
     font-weight: bold;
     text-decoration: none;
+}
+
+.site-logo-link {
+    position: fixed;
+    top: var(--site-logo-top);
+    left: var(--site-logo-left);
+    z-index: 20;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--site-logo-width);
+    height: var(--site-logo-height);
+    text-decoration: none;
+}
+
+.site-logo-img {
+    display: block;
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+}
+
+.page-top-shell .page-version-chip:hover,
+.version-switch-btn:hover {
+    background: #fde68a;
 }
 
 .page-title-block {
@@ -427,6 +458,7 @@ body {
     font-size: 16px;
 }
 
+.header-actions,
 .page-top-shell .header-actions {
     position: fixed;
     top: 18px;
@@ -443,10 +475,12 @@ body {
     backdrop-filter: blur(14px);
 }
 
+.header-actions .header-account-btn,
 .page-top-shell .header-actions .header-account-btn {
     position: static;
     top: auto;
     right: auto;
+    width: 92px;
     min-height: 40px;
     padding: 0 16px;
     border-radius: 12px;
@@ -457,16 +491,19 @@ body {
     white-space: nowrap;
 }
 
+.header-actions .header-account-btn:hover,
 .page-top-shell .header-actions .header-account-btn:hover {
     background: #eff6ff;
 }
 
+.header-actions .header-account-btn.danger,
 .page-top-shell .header-actions .header-account-btn.danger {
     background: var(--danger);
     color: #ffffff;
     border-color: var(--danger);
 }
 
+.header-actions .header-account-btn.danger:hover,
 .page-top-shell .header-actions .header-account-btn.danger:hover {
     background: var(--danger-hover);
 }
@@ -476,7 +513,8 @@ body {
     top: 86px;
     right: var(--top-action-right);
     z-index: 90;
-    width: min(760px, calc(100vw - 36px));
+    width: max-content;
+    max-width: calc(100vw - 36px);
     min-height: 48px;
     display: flex;
     align-items: center;
@@ -499,6 +537,20 @@ body {
     flex-wrap: wrap;
     justify-content: flex-end;
     pointer-events: auto;
+    max-width: 100%;
+}
+
+.page-mode-toolbar-group > a,
+.page-mode-toolbar-group > button {
+    min-width: 92px;
+    min-height: 40px;
+    padding: 0 14px;
+    border-radius: 12px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    white-space: nowrap;
+    text-decoration: none;
 }
 
 .page-mode-toolbar-label {
@@ -555,11 +607,20 @@ body {
         padding-top: 0;
     }
 
-    .page-top-shell .page-version-chip {
+    .site-logo-link {
+        position: static;
+        width: 220px;
+        height: 60px;
+        margin-bottom: 10px;
+    }
+
+    .page-top-shell .page-version-chip,
+    .version-switch-btn {
         position: static;
         margin: 0 auto 14px 0;
     }
 
+    .header-actions,
     .page-top-shell .header-actions {
         position: static;
         width: fit-content;
@@ -591,13 +652,16 @@ body {
 }
 
 @media (max-width: 560px) {
+    .header-actions,
     .page-top-shell .header-actions {
         width: 100%;
         gap: 8px;
         justify-content: stretch;
     }
 
+    .header-actions .header-account-btn,
     .page-top-shell .header-actions .header-account-btn {
+        width: auto;
         flex: 1 1 calc(50% - 4px);
         min-width: 0;
     }

@@ -10,6 +10,9 @@
 <body>
 <div class="container">
     <div class="page-top-shell">
+        <a class="site-logo-link" href="/v2" title="返回 2.0 主页">
+            <img class="site-logo-img" src="{{ url_for('static', filename='Clapclap_logo.png') }}" alt="ClapClap" />
+        </a>
         <a class="page-version-chip" href="/v1/local" title="切换到 1.0 双人版">1.0</a>
         <div class="header-actions">
             <a class="header-account-btn" href="/v2/rules">规则界面</a>
@@ -29,7 +32,6 @@
         <div class="top-actions page-mode-toolbar-group">
             <button class="action-btn secondary" id="help-open-btn">帮助</button>
             <button class="action-btn" id="reset-btn" style="display:none;">重新开始</button>
-            <a class="action-btn secondary" href="/v2">返回大厅</a>
         </div>
     </div>
 

@@ -622,7 +622,7 @@ window.initRoomDetailPage = function () {
             }
 
             titleEl.textContent = finishTitle;
-            subtitleEl.textContent = "本局已经结束。你可以选择重新开始一局，或返回大厅。";
+            subtitleEl.textContent = "本局已经结束。你可以选择重新开始一局，或点击左上角 logo 回到大厅。";
 
             const chipTexts = [
                 `P1：${room.p1_name || "暂无"}`,
@@ -1685,19 +1685,6 @@ window.initRoomDetailPage = function () {
 
         window.addEventListener("load", () => {
             try {
-                const backHomeBtn = document.getElementById("back-home-btn");
-                if (backHomeBtn) {
-                    backHomeBtn.addEventListener("click", () => {
-                        openConfirmModal(
-                            "确认返回主页",
-                            "返回主页后你将暂时离开当前页面，但房间会保留，你之后仍可继续返回该房间。",
-                            () => {
-                                goHomeKeepRoom();
-                            }
-                        );
-                    });
-                }
-
                 const leaveRoomBtn = document.getElementById("leave-room-btn");
                 if (leaveRoomBtn) {
                     leaveRoomBtn.addEventListener("click", () => {

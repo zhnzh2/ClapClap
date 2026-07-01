@@ -32,7 +32,10 @@
     </style>
 </head>
 <body>
-    <div class="page-top-shell" style="max-width:1280px;margin:0 auto 18px auto;padding-left:28px;padding-right:28px;">
+    <div class="page-top-shell">
+        <a class="site-logo-link" href="/v1" title="返回 1.0 主页">
+            <img class="site-logo-img" src="{{ url_for('static', filename='Clapclap_logo.png') }}" alt="ClapClap" />
+        </a>
         <div class="header-actions">
             <a class="header-account-btn" href="/v1/rules">规则界面</a>
             <button class="header-account-btn" id="header-admin-btn" style="display:none;">查看用户</button>
@@ -53,7 +56,6 @@
     <!-- 错误 -->
     <div class="record-error" id="record-error" style="display:none;">
         <div class="record-error-text" id="record-error-text"></div>
-        <button class="record-error-back" onclick="window.location.href='/v1'">返回大厅</button>
     </div>
 
     <!-- 回放主体 -->

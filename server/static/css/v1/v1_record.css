@@ -22,17 +22,6 @@
     max-width: 480px;
 }
 
-.record-error-back {
-    padding: 10px 24px;
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    background: var(--card);
-    color: var(--text);
-    font-size: 14px;
-    font-weight: 600;
-    cursor: pointer;
-}
-
 /* ---- 顶部信息栏 ---- */
 
 .record-page {
