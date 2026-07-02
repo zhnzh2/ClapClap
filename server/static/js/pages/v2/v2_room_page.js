@@ -19,6 +19,11 @@ var v2HeartbeatTimer = null;
 var v2LatestRoom = null;
 var v2UiSettings = null;
 
+// ── 提交锁：防止重复点击/键盘触发多次请求 ──
+var __v2_submitting_move = false;
+var __v2_cancelling_move = false;
+var __v2_submitting_decision = false;
+
 var V2_DEFAULT_UI_SETTINGS = {
     showChat: true,
     showHistory: false,
@@ -74,7 +79,7 @@ function initV2RoomPage() {
 
 function _connectSocket() {
     if (window.__socket_io_available === false || typeof io !== "function") {
-        setMessage("Socket.IO 不可用，使用 HTTP 轮询。", "waiting");
+        setMessage("Socket.IO 不可用，使用 HTTP 轮询同步。", "waiting");
         startPolling();
         return;
     }
@@ -86,13 +91,13 @@ function _connectSocket() {
     }
 
     if (!v2Socket) {
-        setMessage("Socket.IO 连接失败，使用 HTTP 轮询。", "waiting");
+        setMessage("Socket.IO 连接失败，使用 HTTP 轮询同步。", "waiting");
         startPolling();
         return;
     }
 
     v2Socket.on("connect", function () {
-        setMessage("已连接。", "info");
+        setMessage("", "muted");
         if (v2PollTimer) stopPolling();
 
         v2Socket.emit("join_room_v2", {
@@ -104,7 +109,7 @@ function _connectSocket() {
     });
 
     v2Socket.on("disconnect", function () {
-        setMessage("连接断开，尝试重连...", "waiting");
+        setMessage("连接断开，使用轮询同步...", "waiting");
         stopHeartbeat();
         startPolling();
     });
@@ -244,14 +249,32 @@ async function fetchRoomState() {
             window.renderRoom(result.data.room);
             _applyV2UiSettings();
             _updateIdentityFromRoom(result.data.room);
+
+            // 检测无效身份：发送了 token 但后端不识别（被移除、token 过期等）
+            if (v2MyPlayerToken && !result.data.room.my_role && result.data.room.my_seat_index == null) {
+                setMessage("你的身份已失效，请重新加入房间。", "error");
+                stopPolling();
+                if (window.V2RoomIdentity) window.V2RoomIdentity.remove(v2RoomId);
+                v2MyPlayerToken = null;
+                v2MySeatIndex = null;
+                v2MyPlayerId = null;
+                v2MyRole = null;
+                setTimeout(function () { window.location.href = "/v2/rooms"; }, 3000);
+                return;
+            }
+
             setMessage("", "muted");
         } else if (result.data && result.data.error_code === "ROOM_NOT_FOUND") {
             setMessage("房间不存在或已失效。", "error");
             stopPolling();
+            if (window.V2RoomIdentity) window.V2RoomIdentity.remove(v2RoomId);
             setTimeout(function () { window.location.href = "/v2/rooms"; }, 3000);
+        } else if (result.data && !result.ok) {
+            // 其他后端错误
+            setMessage(result.data.error || "获取房间状态失败。", "error");
         }
     } catch (e) {
-        setMessage("获取房间状态失败。", "error");
+        setMessage("网络错误，正在重试...", "error");
     }
 }
 
@@ -286,9 +309,16 @@ async function startGame() {
 async function submitMove() {
     var moveName = window.__v2_selected_move;
     if (!moveName || !v2MyPlayerToken) return;
+    if (__v2_submitting_move) return;
+
+    __v2_submitting_move = true;
+    var submitBtn = document.getElementById("submit-move-btn");
+    if (submitBtn) submitBtn.disabled = true;
+    setMessage("正在提交动作...", "waiting");
+    var result = null;
 
     try {
-        var result = await ApiUtils.apiPost("/v2/api/rooms/" + v2RoomId + "/step", {
+        result = await ApiUtils.apiPost("/v2/api/rooms/" + v2RoomId + "/step", {
             player_token: v2MyPlayerToken,
             move_name: moveName,
         });
@@ -296,23 +326,41 @@ async function submitMove() {
         if (result.ok) {
             window.__v2_selected_move = null;
             setMessage("动作已提交！" + (result.data.message || ""), "success");
-            // 如果后端直接完成了结算，刷新状态
-            if (result.data.resolved) {
-                fetchRoomState();
+            if (result.data.room) {
+                v2LatestRoom = result.data.room;
+                window.renderRoom(result.data.room);
+                _applyV2UiSettings();
+                _updateIdentityFromRoom(result.data.room);
+            } else {
+                await fetchRoomState();
             }
         } else {
             setMessage(result.error || "提交失败。", "error");
         }
     } catch (e) {
         setMessage("提交失败：" + e, "error");
+    } finally {
+        __v2_submitting_move = false;
+        // 注意：按钮 disabled 状态由下一次 renderRoom 根据 game state 重新决定
+        // 这里先不恢复，避免与渲染循环冲突；如果请求失败，下一次轮询/render 会恢复正确状态
+        if (submitBtn && !(result && result.ok)) {
+            submitBtn.disabled = false;
+        }
     }
 }
 
 async function cancelSubmittedMove() {
     if (!v2MyPlayerToken) return;
+    if (__v2_cancelling_move) return;
+
+    __v2_cancelling_move = true;
+    var cancelBtn = document.getElementById("cancel-move-btn");
+    if (cancelBtn) cancelBtn.disabled = true;
+    setMessage("正在撤回动作...", "waiting");
+    var result = null;
 
     try {
-        var result = await ApiUtils.apiPost("/v2/api/rooms/" + v2RoomId + "/cancel-step", {
+        result = await ApiUtils.apiPost("/v2/api/rooms/" + v2RoomId + "/cancel-step", {
             player_token: v2MyPlayerToken,
         });
 
@@ -323,14 +371,21 @@ async function cancelSubmittedMove() {
                 v2LatestRoom = result.data.room;
                 window.renderRoom(result.data.room);
                 _applyV2UiSettings();
+                _updateIdentityFromRoom(result.data.room);
             } else {
-                fetchRoomState();
+                await fetchRoomState();
             }
         } else {
             setMessage(result.error || "撤回失败。", "error");
         }
     } catch (e) {
         setMessage("撤回失败：" + e, "error");
+    } finally {
+        __v2_cancelling_move = false;
+        // 失败时才恢复按钮；成功时由 renderRoom 决定按钮状态
+        if (cancelBtn && !(result && result.ok)) {
+            cancelBtn.disabled = false;
+        }
     }
 }
 
@@ -364,6 +419,11 @@ async function voteRematch(vote) {
 // 决策提交
 async function _submitDecision(selected) {
     if (!v2MyPlayerToken || selected.length === 0) return;
+    if (__v2_submitting_decision) return;
+
+    __v2_submitting_decision = true;
+    var decisionSubmitBtn = document.getElementById("decision-submit-btn");
+    if (decisionSubmitBtn) decisionSubmitBtn.disabled = true;
 
     var decisions = {};
     decisions[v2MyPlayerId] = selected;
@@ -375,6 +435,10 @@ async function _submitDecision(selected) {
             player_token: v2MyPlayerToken,
             decisions: decisions,
         });
+        // Socket emit 是同步的，短暂锁防止同一事件循环内的双击
+        setTimeout(function () {
+            __v2_submitting_decision = false;
+        }, 500);
         return;
     }
 
@@ -391,6 +455,9 @@ async function _submitDecision(selected) {
         }
     } catch (e) {
         setMessage("决策提交失败：" + e, "error");
+    } finally {
+        __v2_submitting_decision = false;
+        if (decisionSubmitBtn) decisionSubmitBtn.disabled = false;
     }
 }
 
@@ -438,15 +505,22 @@ function _bindBattleEvents() {
     // 全局键盘
     document.addEventListener("keydown", function (e) {
         if (e.target && e.target.closest("input, textarea, select")) return;
+
+        // Enter 提交动作 — 走 submitting 锁
         if (e.key === "Enter" && !document.getElementById("decision-modal-mask").classList.contains("show")) {
+            if (__v2_submitting_move) return;
             var submitBtn = document.getElementById("submit-move-btn");
             if (submitBtn && !submitBtn.disabled) submitBtn.click();
         }
+
+        // Backspace 撤回 — 走 cancelling 锁
         if (e.key === "Backspace") {
             e.preventDefault();
+            if (__v2_cancelling_move) return;
             document.getElementById("cancel-move-btn").click();
         }
-        // 1-8 快捷键选动作
+
+        // 动作快捷键
         var keyMap = { "1": "CHI", "2": "SHUANG_CHI", "3": "SHAN", "4": "GAO",
                        "q": "QI", "w": "SHIELD", "e": "SHI_ZI", "r": "BA_GUA",
                        "a": "GI", "s": "PO", "d": "LENG_FENG", "f": "RU_LAI", "g": "HEI_DONG",
@@ -454,9 +528,14 @@ function _bindBattleEvents() {
         var moveName = keyMap[e.key.toLowerCase()];
         if (moveName) {
             e.preventDefault();
+            // 结算中不允许选择/提交动作
+            var game = v2LatestRoom && v2LatestRoom.game;
+            if (game && game.phase !== "waiting_moves") return;
             var myPlayer = v2CurrentPlayer();
             if (myPlayer && myPlayer.move_submitted) return;
+            // 同键再次按下 → 提交，也要走锁
             if (window.__v2_selected_move === moveName) {
+                if (__v2_submitting_move) return;
                 var submitBtn2 = document.getElementById("submit-move-btn");
                 if (submitBtn2 && !submitBtn2.disabled) submitBtn2.click();
                 return;
@@ -631,9 +710,13 @@ function _updateIdentityFromRoom(room) {
         if (v2MyPlayerToken && window.V2RoomIdentity) {
             window.V2RoomIdentity.saveSpectator(v2RoomId, v2MyPlayerToken);
         }
-    } else if (room.my_seat_index != null && v2MyPlayerToken) {
-        window.V2RoomIdentity.save(v2RoomId, v2MyPlayerToken, room.my_seat_index);
+    } else if (room.my_role === "player" || room.my_role === "dead_spectator") {
+        // 参战者（含死亡观战者）：保存 player_token 和 seat_index
+        if (room.my_seat_index != null && v2MyPlayerToken) {
+            window.V2RoomIdentity.save(v2RoomId, v2MyPlayerToken, room.my_seat_index);
+        }
     }
+    // my_role 为 null 时不保存（身份无效）
 }
 
 function _setupAccountButton() {
@@ -734,6 +817,9 @@ function setMessage(text, type) {
 window.__v2_selected_move = null;
 
 window.__v2_selectMove = function (moveName) {
+    // 结算阶段不允许选择动作
+    var game = v2LatestRoom && v2LatestRoom.game;
+    if (game && game.phase !== "waiting_moves") return;
     if (v2LatestRoom && v2LatestRoom.game && v2MyPlayerId) {
         var legalMoves = (v2LatestRoom.game.legal_moves && v2LatestRoom.game.legal_moves[v2MyPlayerId]) || [];
         if (legalMoves.indexOf(moveName) === -1) return;

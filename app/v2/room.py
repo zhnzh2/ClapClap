@@ -502,6 +502,9 @@ class RoomV2:
         if player is None:
             return False, "找不到你的对局状态。"
 
+        if not player.is_alive():
+            return False, "你已淘汰，不能撤回动作。"
+
         if not player.move_submitted:
             return False, "你当前没有已提交的动作。"
 

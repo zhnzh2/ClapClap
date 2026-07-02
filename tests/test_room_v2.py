@@ -340,6 +340,506 @@ class TestRoomV2SubmitMove:
             room.submit_move(tok2, "QI")
 
 
+class TestRoomV2CancelMove:
+    """撤回动作测试 —— 阶段 B。"""
+
+    # ── 模型层单元测试 ──
+
+    def test_cancel_submitted_move_basic(self):
+        """提交动作 → 撤回 → pending_move 清空、move_submitted 为 False。"""
+        room, _, tok1 = create_room_v2("alice")
+        _, tok2 = room.add_player("bob")
+        room.start_game()
+
+        room.submit_move(tok1, "QI")
+        p1 = room.game_state.get_player("p1")
+        assert p1.move_submitted
+        assert p1.pending_move == "QI"
+
+        success, msg = room.cancel_submitted_move(tok1)
+        assert success
+        assert "已撤回" in msg
+        assert not p1.move_submitted
+        assert p1.pending_move is None
+
+    def test_cancel_then_submit_again(self):
+        """撤回后可以再次提交动作。"""
+        room, _, tok1 = create_room_v2("alice")
+        _, tok2 = room.add_player("bob")
+        room.start_game()
+
+        room.submit_move(tok1, "QI")
+        room.cancel_submitted_move(tok1)
+        # 再次提交不应报错
+        room.submit_move(tok1, "PO")
+        assert room.game_state.get_player("p1").pending_move == "PO"
+
+    def test_cancel_when_not_submitted(self):
+        """未提交时撤回应返回 False 和错误消息。"""
+        room, _, tok1 = create_room_v2("alice")
+        room.add_player("bob")
+        room.start_game()
+
+        success, msg = room.cancel_submitted_move(tok1)
+        assert not success
+        assert "没有已提交" in msg or "未提交" in msg
+
+    def test_cancel_after_settlement_begins(self):
+        """进入结算后（phase 不是 waiting_moves）撤回应返回 False。"""
+        room, _, tok1 = create_room_v2("alice")
+        _, tok2 = room.add_player("bob")
+        room.start_game()
+
+        room.submit_move(tok1, "QI")
+        room.submit_move(tok2, "QI")
+
+        # 模拟进入结算阶段
+        room.game_state.phase = "speed_layer"
+
+        success, msg = room.cancel_submitted_move(tok1)
+        assert not success
+        assert "已经进入结算" in msg or "不能撤回" in msg
+
+    def test_dead_player_cannot_cancel(self):
+        """死亡玩家不能撤回动作。"""
+        room, _, tok1 = create_room_v2("alice")
+        _, tok2 = room.add_player("bob")
+        room.start_game()
+
+        room.submit_move(tok2, "QI")
+        room.game_state.get_player("p2").mark_dead(1, "normal")
+
+        success, msg = room.cancel_submitted_move(tok2)
+        assert not success
+
+    def test_cancel_one_player_does_not_affect_others(self):
+        """P1 撤回不影响 P2 已提交状态。"""
+        room, _, tok1 = create_room_v2("alice")
+        _, tok2 = room.add_player("bob")
+        room.start_game()
+
+        room.submit_move(tok1, "QI")
+        room.submit_move(tok2, "PO")
+
+        # P1 撤回
+        room.cancel_submitted_move(tok1)
+
+        # P2 仍然已提交
+        p2 = room.game_state.get_player("p2")
+        assert p2.move_submitted
+        assert p2.pending_move == "PO"
+
+        # all_moves_submitted 应回到 False
+        assert not room.all_moves_submitted()
+
+    def test_cancel_then_resubmit_all_triggers_settlement(self):
+        """P1 撤回后再提交，全部提交后 all_moves_submitted 回到 True。"""
+        room, _, tok1 = create_room_v2("alice")
+        _, tok2 = room.add_player("bob")
+        _, tok3 = room.add_player("charlie")
+        room.start_game()
+
+        room.submit_move(tok1, "QI")
+        room.submit_move(tok2, "QI")
+        room.submit_move(tok3, "QI")
+        assert room.all_moves_submitted()
+
+        # P1 撤回 → 不再全部提交
+        room.cancel_submitted_move(tok1)
+        assert not room.all_moves_submitted()
+
+        # P1 重新提交 → 恢复全部提交
+        room.submit_move(tok1, "QI")
+        assert room.all_moves_submitted()
+
+    def test_cancel_invalid_token(self):
+        """非法 token 撤回应返回 False。"""
+        room, _, tok1 = create_room_v2("alice")
+        room.add_player("bob")
+        room.start_game()
+
+        success, msg = room.cancel_submitted_move("bad-token")
+        assert not success
+        assert "身份无效" in msg
+
+    def test_cancel_spectator(self):
+        """观战者不能撤回动作。"""
+        room, _, _ = create_room_v2("alice")
+        room.add_player("bob")
+        room.start_game()
+
+        spec_token = room.add_spectator("viewer")
+        success, msg = room.cancel_submitted_move(spec_token)
+        assert not success
+        assert "身份无效" in msg
+
+
+class TestRoomV2CancelMoveAPI:
+    """撤回动作 HTTP API 集成测试。"""
+
+    def setup_method(self):
+        with ROOMS_V2_LOCK:
+            ROOMS_V2.clear()
+
+    def test_cancel_step_api_success(self):
+        """cancel-step API 成功返回 ok=True 和正确的 room payload。"""
+        from server.app import app
+        from app import users
+        import uuid
+
+        uid = str(uuid.uuid4().hex[:8])
+        with app.app_context():
+            users.register(f"csl_a_{uid}", "test", verified="1")
+            users.register(f"csl_b_{uid}", "test", verified="1")
+            token_a = users.login(f"csl_a_{uid}", "test")["session_token"]
+            token_b = users.login(f"csl_b_{uid}", "test")["session_token"]
+
+        client = app.test_client()
+
+        # 创建房间
+        resp = client.post("/v2/api/rooms", json={
+            "max_players": 2, "min_players": 2,
+            "start_condition": "host", "allow_spectate": True, "public": False,
+        }, headers={"X-Session-Token": token_a})
+        data = resp.get_json()
+        assert data["ok"]
+        room_id = data["room"]["room_id"]
+        pt_a = data["player_token"]
+
+        # 加入
+        resp = client.post(f"/v2/api/rooms/{room_id}/join",
+                           json={"as_spectator": False},
+                           headers={"X-Session-Token": token_b})
+        pt_b = resp.get_json()["player_token"]
+
+        # 准备 + 开始
+        client.post(f"/v2/api/rooms/{room_id}/ready",
+                    json={"player_token": pt_a, "ready": True})
+        client.post(f"/v2/api/rooms/{room_id}/ready",
+                    json={"player_token": pt_b, "ready": True})
+        client.post(f"/v2/api/rooms/{room_id}/start",
+                    json={"player_token": pt_a})
+
+        # 提交动作
+        resp = client.post(f"/v2/api/rooms/{room_id}/step",
+                           json={"player_token": pt_a, "move_name": "QI"})
+        assert resp.get_json()["ok"]
+
+        # 撤回动作
+        resp = client.post(f"/v2/api/rooms/{room_id}/cancel-step",
+                           json={"player_token": pt_a})
+        data = resp.get_json()
+        assert data["ok"]
+        assert "已撤回" in data["message"]
+        assert data["room"] is not None
+        # requester 视角下自己的 pending_move 应为空
+        own_player = _find_player_in_payload(data["room"]["game"]["players"], "p1")
+        assert own_player is not None
+        assert own_player["pending_move"] is None
+
+    def test_cancel_step_then_submit_again(self):
+        """撤回后可以再次提交动作。"""
+        from server.app import app
+        from app import users
+        import uuid
+
+        uid = str(uuid.uuid4().hex[:8])
+        with app.app_context():
+            users.register(f"csa_a_{uid}", "test", verified="1")
+            users.register(f"csa_b_{uid}", "test", verified="1")
+            token_a = users.login(f"csa_a_{uid}", "test")["session_token"]
+            token_b = users.login(f"csa_b_{uid}", "test")["session_token"]
+
+        client = app.test_client()
+
+        resp = client.post("/v2/api/rooms", json={
+            "max_players": 2, "min_players": 2,
+            "start_condition": "host", "allow_spectate": True, "public": False,
+        }, headers={"X-Session-Token": token_a})
+        room_id = resp.get_json()["room"]["room_id"]
+        pt_a = resp.get_json()["player_token"]
+
+        resp = client.post(f"/v2/api/rooms/{room_id}/join",
+                           json={"as_spectator": False},
+                           headers={"X-Session-Token": token_b})
+        pt_b = resp.get_json()["player_token"]
+
+        client.post(f"/v2/api/rooms/{room_id}/ready",
+                    json={"player_token": pt_a, "ready": True})
+        client.post(f"/v2/api/rooms/{room_id}/ready",
+                    json={"player_token": pt_b, "ready": True})
+        client.post(f"/v2/api/rooms/{room_id}/start",
+                    json={"player_token": pt_a})
+
+        # 提交 → 撤回 → 再提交（使用合法动作 SHIELD）
+        client.post(f"/v2/api/rooms/{room_id}/step",
+                    json={"player_token": pt_a, "move_name": "QI"})
+        resp = client.post(f"/v2/api/rooms/{room_id}/cancel-step",
+                           json={"player_token": pt_a})
+        assert resp.get_json()["ok"]
+
+        resp = client.post(f"/v2/api/rooms/{room_id}/step",
+                           json={"player_token": pt_a, "move_name": "SHIELD"})
+        assert resp.get_json()["ok"]
+
+    def test_cancel_step_settlement_blocked(self):
+        """进入结算后 cancel-step 返回错误。"""
+        from server.app import app
+        from app import users
+        import uuid
+
+        uid = str(uuid.uuid4().hex[:8])
+        with app.app_context():
+            users.register(f"csb_a_{uid}", "test", verified="1")
+            users.register(f"csb_b_{uid}", "test", verified="1")
+            token_a = users.login(f"csb_a_{uid}", "test")["session_token"]
+            token_b = users.login(f"csb_b_{uid}", "test")["session_token"]
+
+        client = app.test_client()
+
+        resp = client.post("/v2/api/rooms", json={
+            "max_players": 2, "min_players": 2,
+            "start_condition": "host", "allow_spectate": True, "public": False,
+        }, headers={"X-Session-Token": token_a})
+        room_id = resp.get_json()["room"]["room_id"]
+        pt_a = resp.get_json()["player_token"]
+
+        resp = client.post(f"/v2/api/rooms/{room_id}/join",
+                           json={"as_spectator": False},
+                           headers={"X-Session-Token": token_b})
+        pt_b = resp.get_json()["player_token"]
+
+        client.post(f"/v2/api/rooms/{room_id}/ready",
+                    json={"player_token": pt_a, "ready": True})
+        client.post(f"/v2/api/rooms/{room_id}/ready",
+                    json={"player_token": pt_b, "ready": True})
+        client.post(f"/v2/api/rooms/{room_id}/start",
+                    json={"player_token": pt_a})
+
+        # 双方提交 → 触发结算
+        client.post(f"/v2/api/rooms/{room_id}/step",
+                    json={"player_token": pt_a, "move_name": "QI"})
+        client.post(f"/v2/api/rooms/{room_id}/step",
+                    json={"player_token": pt_b, "move_name": "QI"})
+
+        # 进入结算后尝试撤回
+        resp = client.post(f"/v2/api/rooms/{room_id}/cancel-step",
+                           json={"player_token": pt_a})
+        data = resp.get_json()
+        assert not data["ok"]
+        assert resp.status_code == 400
+        assert "已经进入结算" in data["error"] or "不能撤回" in data["error"]
+
+    def test_cancel_step_invalid_token(self):
+        """非法 player_token 返回 400。"""
+        from server.app import app
+        from app import users
+        import uuid
+
+        uid = str(uuid.uuid4().hex[:8])
+        with app.app_context():
+            users.register(f"cst_a_{uid}", "test", verified="1")
+            token_a = users.login(f"cst_a_{uid}", "test")["session_token"]
+
+        client = app.test_client()
+
+        resp = client.post("/v2/api/rooms", json={
+            "max_players": 2, "min_players": 2,
+            "start_condition": "host", "allow_spectate": True, "public": False,
+        }, headers={"X-Session-Token": token_a})
+        room_id = resp.get_json()["room"]["room_id"]
+        pt_a = resp.get_json()["player_token"]
+
+        # 加入另一个玩家然后开始
+        from app import users as u2
+        import uuid as uu
+        uid2 = str(uu.uuid4().hex[:8])
+        with app.app_context():
+            u2.register(f"cst_b_{uid2}", "test", verified="1")
+            token_b = u2.login(f"cst_b_{uid2}", "test")["session_token"]
+
+        resp = client.post(f"/v2/api/rooms/{room_id}/join",
+                           json={"as_spectator": False},
+                           headers={"X-Session-Token": token_b})
+        pt_b = resp.get_json()["player_token"]
+
+        client.post(f"/v2/api/rooms/{room_id}/ready",
+                    json={"player_token": pt_a, "ready": True})
+        client.post(f"/v2/api/rooms/{room_id}/ready",
+                    json={"player_token": pt_b, "ready": True})
+        client.post(f"/v2/api/rooms/{room_id}/start",
+                    json={"player_token": pt_a})
+
+        # 空 token
+        resp = client.post(f"/v2/api/rooms/{room_id}/cancel-step",
+                           json={"player_token": ""})
+        assert resp.status_code == 400
+
+        # 错误 token
+        resp = client.post(f"/v2/api/rooms/{room_id}/cancel-step",
+                           json={"player_token": "bad-token-xxxx"})
+        data = resp.get_json()
+        assert not data["ok"]
+        assert resp.status_code == 400
+
+    def test_cancel_step_spectator_blocked(self):
+        """观战者提交 cancel-step 返回 400。"""
+        from server.app import app
+        from app import users
+        import uuid
+
+        uid = str(uuid.uuid4().hex[:8])
+        with app.app_context():
+            users.register(f"css_a_{uid}", "test", verified="1")
+            users.register(f"css_b_{uid}", "test", verified="1")
+            users.register(f"css_s_{uid}", "test", verified="1")
+            token_a = users.login(f"css_a_{uid}", "test")["session_token"]
+            token_b = users.login(f"css_b_{uid}", "test")["session_token"]
+            token_s = users.login(f"css_s_{uid}", "test")["session_token"]
+
+        client = app.test_client()
+
+        resp = client.post("/v2/api/rooms", json={
+            "max_players": 2, "min_players": 2,
+            "start_condition": "host", "allow_spectate": True, "public": False,
+        }, headers={"X-Session-Token": token_a})
+        room_id = resp.get_json()["room"]["room_id"]
+        pt_a = resp.get_json()["player_token"]
+
+        resp = client.post(f"/v2/api/rooms/{room_id}/join",
+                           json={"as_spectator": False},
+                           headers={"X-Session-Token": token_b})
+        pt_b = resp.get_json()["player_token"]
+
+        # 观战者加入
+        resp = client.post(f"/v2/api/rooms/{room_id}/join",
+                           json={"as_spectator": True},
+                           headers={"X-Session-Token": token_s})
+        spec_token = resp.get_json()["spectator_token"]
+
+        client.post(f"/v2/api/rooms/{room_id}/ready",
+                    json={"player_token": pt_a, "ready": True})
+        client.post(f"/v2/api/rooms/{room_id}/ready",
+                    json={"player_token": pt_b, "ready": True})
+        client.post(f"/v2/api/rooms/{room_id}/start",
+                    json={"player_token": pt_a})
+
+        # 观战者尝试撤回
+        resp = client.post(f"/v2/api/rooms/{room_id}/cancel-step",
+                           json={"player_token": spec_token})
+        data = resp.get_json()
+        assert not data["ok"]
+        assert resp.status_code == 400
+        assert "身份无效" in data["error"]
+
+    def test_cancel_step_api_payload_has_own_pending_move_cleared(self):
+        """cancel-step 成功返回的 room payload 中，requester 的 pending_move 为空。"""
+        from server.app import app
+        from app import users
+        import uuid
+
+        uid = str(uuid.uuid4().hex[:8])
+        with app.app_context():
+            users.register(f"cpp_a_{uid}", "test", verified="1")
+            users.register(f"cpp_b_{uid}", "test", verified="1")
+            token_a = users.login(f"cpp_a_{uid}", "test")["session_token"]
+            token_b = users.login(f"cpp_b_{uid}", "test")["session_token"]
+
+        client = app.test_client()
+
+        resp = client.post("/v2/api/rooms", json={
+            "max_players": 2, "min_players": 2,
+            "start_condition": "host", "allow_spectate": True, "public": False,
+        }, headers={"X-Session-Token": token_a})
+        room_id = resp.get_json()["room"]["room_id"]
+        pt_a = resp.get_json()["player_token"]
+
+        resp = client.post(f"/v2/api/rooms/{room_id}/join",
+                           json={"as_spectator": False},
+                           headers={"X-Session-Token": token_b})
+        pt_b = resp.get_json()["player_token"]
+
+        client.post(f"/v2/api/rooms/{room_id}/ready",
+                    json={"player_token": pt_a, "ready": True})
+        client.post(f"/v2/api/rooms/{room_id}/ready",
+                    json={"player_token": pt_b, "ready": True})
+        client.post(f"/v2/api/rooms/{room_id}/start",
+                    json={"player_token": pt_a})
+
+        # A 提交动作
+        client.post(f"/v2/api/rooms/{room_id}/step",
+                    json={"player_token": pt_a, "move_name": "QI"})
+
+        # A 撤回
+        resp = client.post(f"/v2/api/rooms/{room_id}/cancel-step",
+                           json={"player_token": pt_a})
+        data = resp.get_json()
+        assert data["ok"]
+
+        # 验证 room payload 中 p1 的 pending_move 已清空
+        players = data["room"]["game"]["players"]
+        p1 = _find_player_in_payload(players, "p1")
+        assert p1 is not None
+        assert p1["pending_move"] is None
+
+    def test_cancel_step_dead_player_blocked(self):
+        """死亡玩家不能通过 API 撤回动作。"""
+        from server.app import app
+        from app import users
+        import uuid
+
+        uid = str(uuid.uuid4().hex[:8])
+        with app.app_context():
+            users.register(f"cdd_a_{uid}", "test", verified="1")
+            users.register(f"cdd_b_{uid}", "test", verified="1")
+            token_a = users.login(f"cdd_a_{uid}", "test")["session_token"]
+            token_b = users.login(f"cdd_b_{uid}", "test")["session_token"]
+
+        client = app.test_client()
+
+        resp = client.post("/v2/api/rooms", json={
+            "max_players": 2, "min_players": 2,
+            "start_condition": "host", "allow_spectate": True, "public": False,
+        }, headers={"X-Session-Token": token_a})
+        room_id = resp.get_json()["room"]["room_id"]
+        pt_a = resp.get_json()["player_token"]
+
+        resp = client.post(f"/v2/api/rooms/{room_id}/join",
+                           json={"as_spectator": False},
+                           headers={"X-Session-Token": token_b})
+        pt_b = resp.get_json()["player_token"]
+
+        client.post(f"/v2/api/rooms/{room_id}/ready",
+                    json={"player_token": pt_a, "ready": True})
+        client.post(f"/v2/api/rooms/{room_id}/ready",
+                    json={"player_token": pt_b, "ready": True})
+        client.post(f"/v2/api/rooms/{room_id}/start",
+                    json={"player_token": pt_a})
+
+        # 将 P2 标记为死亡
+        room = get_room_v2(room_id)
+        room.game_state.get_player("p2").mark_dead(1, "normal")
+        room.game_state.get_player("p1").pending_move = "QI"
+        room.game_state.get_player("p1").move_submitted = True
+        persist_room_v2(room)
+
+        # 死亡玩家尝试撤回 → 应被拒绝
+        resp = client.post(f"/v2/api/rooms/{room_id}/cancel-step",
+                           json={"player_token": pt_b})
+        data = resp.get_json()
+        assert not data["ok"]
+        assert resp.status_code == 400
+        assert "已淘汰" in data["error"]
+
+
+def _find_player_in_payload(players, player_id):
+    """在 room payload 的 players 列表中按 player_id 查找。"""
+    for p in players:
+        if p.get("player_id") == player_id:
+            return p
+    return None
+
+
 class TestRoomV2Rematch:
     """重赛投票测试。"""
 

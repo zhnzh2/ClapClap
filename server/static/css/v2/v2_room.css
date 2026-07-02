@@ -374,6 +374,21 @@ body.v2-no-side-panel #battle-phase {
 .player-card.is-self { border-color: var(--blue); }
 .player-card.is-dead { opacity: 0.5; }
 .player-card.is-resolved { border-color: var(--green); }
+.player-card.needs-decision {
+    border-color: #f59e0b;
+    box-shadow: 0 0 8px rgba(245, 158, 11, 0.3);
+    animation: decision-pulse 1.5s ease-in-out infinite;
+}
+.player-card.is-self.needs-decision {
+    border-color: #f59e0b;
+    box-shadow: 0 0 12px rgba(245, 158, 11, 0.5);
+    background: rgba(245, 158, 11, 0.06);
+}
+
+@keyframes decision-pulse {
+    0%, 100% { box-shadow: 0 0 8px rgba(245, 158, 11, 0.3); }
+    50% { box-shadow: 0 0 16px rgba(245, 158, 11, 0.6); }
+}
 
 .player-card .card-name-row {
     display: flex;
@@ -706,6 +721,126 @@ body.v2-no-side-panel #battle-phase {
     color: var(--muted);
     font-size: 12px;
 }
+
+/* ── 可展开历史 ── */
+.history-entry {
+    cursor: pointer;
+    transition: background 0.15s;
+}
+.history-entry:hover { background: var(--blue-bg); }
+.history-entry.history-expanded { background: var(--blue-bg); }
+
+.history-entry .history-collapse-icon {
+    display: inline-block;
+    width: 14px;
+    font-size: 10px;
+    transition: transform 0.15s;
+}
+.history-entry.history-expanded .history-collapse-icon {
+    /* icon is changed via JS */
+}
+
+.history-entry .history-summary {
+    font-weight: normal;
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.history-detail {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+    font-size: 12px;
+    color: var(--muted);
+}
+
+.history-sub-title {
+    font-size: 12px;
+    font-weight: bold;
+    color: var(--text);
+    margin: 6px 0 3px;
+}
+
+.history-res-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11px;
+    margin-bottom: 8px;
+}
+.history-res-table th {
+    background: var(--panel);
+    padding: 3px 6px;
+    text-align: left;
+    color: var(--muted);
+}
+.history-res-table td {
+    padding: 3px 6px;
+    border-bottom: 1px solid var(--border);
+}
+
+.history-death {
+    color: #dc2626;
+    font-size: 11px;
+    padding-left: 8px;
+}
+
+/* ── 回合总结增强 ── */
+.summary-section {
+    margin-bottom: 12px;
+}
+.summary-section-title {
+    font-weight: bold;
+    font-size: 13px;
+    color: var(--text);
+    margin-bottom: 4px;
+}
+.summary-section-title.summary-collapsible {
+    cursor: pointer;
+    user-select: none;
+    transition: color 0.15s;
+}
+.summary-section-title.summary-collapsible:hover {
+    color: var(--blue);
+}
+.collapse-arrow {
+    font-size: 10px;
+    margin-left: 4px;
+}
+
+.summary-text {
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.5;
+}
+
+.summary-speed-layers {
+    margin-top: 6px;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.speed-layer-group {
+    margin-bottom: 8px;
+    padding: 6px 8px;
+    background: var(--panel);
+    border-radius: 6px;
+}
+.speed-layer-label {
+    font-size: 12px;
+    font-weight: bold;
+    color: var(--blue);
+    margin-bottom: 4px;
+}
+.speed-layer-event {
+    font-size: 12px;
+    color: var(--muted);
+    padding: 2px 0;
+    line-height: 1.4;
+}
+.ev-source { color: var(--text); font-weight: bold; }
+.ev-arrow { color: var(--muted); margin: 0 4px; }
+.ev-target { color: var(--text); }
+.ev-detail { margin-left: 6px; }
 
 /* ═══════════════════════════════════════════════════════
    决策弹窗

@@ -31,6 +31,7 @@ import secrets
 import shutil
 import tempfile
 import threading
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -194,7 +195,14 @@ def _write_csv(rows: list[dict]) -> None:
                     })
                 f.flush()
                 os.fsync(f.fileno())
-            os.replace(tmp_path, CSV_PATH)
+            for attempt in range(5):
+                try:
+                    os.replace(tmp_path, CSV_PATH)
+                    break
+                except PermissionError:
+                    if attempt == 4:
+                        raise
+                    time.sleep(0.05 * (attempt + 1))
         finally:
             if tmp_path.exists():
                 tmp_path.unlink(missing_ok=True)

@@ -36,6 +36,7 @@
         SHI_ZI: "十字", BA_GUA: "八卦",
         CHI: "你吃", SHUANG_CHI: "双吃", SHAN: "闪", GAO: "镐",
     };
+    window.MOVE_LABELS = MOVE_LABELS;
 
     var MOVE_SHORTCUTS = {
         CHI: "1", SHUANG_CHI: "2", SHAN: "3", GAO: "4",
@@ -50,6 +51,7 @@
         8: "gi攻击/抢镐", 9: "破/闪电", 10: "Fire",
         11: "gi无目标", 12: "气/盾/加镐",
     };
+    window.SPEED_LAYER_NAMES = SPEED_LAYER_NAMES;
 
     var PHASE_LABELS = {
         waiting_moves: "等待出招",
@@ -262,10 +264,12 @@
             document.getElementById("submit-move-btn").disabled = true;
             document.getElementById("cancel-move-btn").disabled = true;
         } else if (myPlayerId && game.phase !== "waiting_moves") {
-            // 结算中：显示动作区但禁用
+            // 结算中：显示动作区但禁用，给出清晰的阶段说明
             document.getElementById("move-selection-card").style.display = "";
-            document.getElementById("move-groups").innerHTML = '<div style="text-align:center;color:var(--muted);padding:20px;">结算中，请等待...</div>';
-            document.getElementById("move-selection-status").textContent = "";
+            var phaseMsg = PHASE_LABELS[game.phase] || game.phase;
+            document.getElementById("move-groups").innerHTML =
+                '<div style="text-align:center;color:var(--muted);padding:20px;">⚡ ' + phaseMsg + '中，请等待...</div>';
+            document.getElementById("move-selection-status").textContent = "本回合正在结算，不能修改动作。";
             document.getElementById("submit-move-btn").disabled = true;
             document.getElementById("cancel-move-btn").disabled = true;
         } else {
@@ -290,6 +294,13 @@
         var players = game.players || [];
         var html = "";
 
+        // 构建需要决策的玩家集合
+        var decisionPlayerIds = {};
+        var decisions = game.current_decision_requests || [];
+        for (var d = 0; d < decisions.length; d++) {
+            decisionPlayerIds[decisions[d].player_id] = true;
+        }
+
         for (var i = 0; i < players.length; i++) {
             var p = players[i];
             var seat = _findSeatByPlayerId(seats, p.player_id);
@@ -301,6 +312,7 @@
             if (isSelf) cardClasses.push("is-self");
             if (isDead) cardClasses.push("is-dead");
             if (p.resolution_status === "resolved") cardClasses.push("is-resolved");
+            if (isSelf && decisionPlayerIds[p.player_id]) cardClasses.push("needs-decision");
 
             var badges = [];
             if (seat && seat.is_host) badges.push('<span class="badge host">房主</span>');
@@ -308,15 +320,32 @@
             // 在线状态
             if (seat && seat.online) badges.push('<span class="badge online">在线</span>');
             else if (seat) badges.push('<span class="badge offline">离线</span>');
+            // 状态徽章：根据阶段区分
             if (isDead) {
                 badges.push('<span class="badge offline">死亡</span>');
                 if (p.final_rank) badges.push('<span class="badge host">第' + p.final_rank + '名</span>');
-            } else if (p.resolution_status === "resolved") {
-                badges.push('<span class="badge ready">已操作</span>');
+            } else if (game.phase === "waiting_moves") {
+                if (p.move_submitted) {
+                    badges.push('<span class="badge online">已出招</span>');
+                } else {
+                    badges.push('<span class="badge not-ready">等待出招</span>');
+                }
             } else {
-                badges.push('<span class="badge not-ready">未操作</span>');
+                // 结算阶段
+                if (p.resolution_status === "resolved") {
+                    badges.push('<span class="badge ready">已操作</span>');
+                } else {
+                    badges.push('<span class="badge not-ready">结算中</span>');
+                }
             }
-            if (p.move_submitted) badges.push('<span class="badge online">已出招</span>');
+            // 需要决策
+            if (!isDead && decisionPlayerIds[p.player_id]) {
+                badges.push('<span class="badge host">需要决策</span>');
+            }
+            // 已出招徽章（非 waiting_moves 阶段补充显示）
+            if (game.phase !== "waiting_moves" && p.move_submitted) {
+                badges.push('<span class="badge online">已出招</span>');
+            }
 
             // HP 颜色
             var hpClass = "card-hp";
@@ -339,7 +368,7 @@
             if (isSelf && p.target_intent && p.target_intent.length > 0) {
                 var targets = p.target_intent.map(function (tid) {
                     var tp = _findPlayer(players, tid);
-                    return tp ? (tp.username || tp.player_id) : tid;
+                    return _esc(tp ? (tp.username || tp.player_id) : tid);
                 });
                 targetHtml = '<div class="card-target">→ ' + targets.join(", ") + '</div>';
             }
@@ -414,14 +443,21 @@
             document.getElementById("move-groups").innerHTML =
                 '<div style="text-align:center;color:var(--muted);padding:20px;">你已死亡，无法操作。</div>';
             document.getElementById("move-selection-status").textContent = "";
+            document.getElementById("submit-move-btn").disabled = true;
+            document.getElementById("cancel-move-btn").disabled = true;
             return;
         }
 
+        var statusEl = document.getElementById("move-selection-status");
+
         if (player.move_submitted) {
-            document.getElementById("move-selection-status").textContent = "✓ 已提交：" +
-                (MOVE_LABELS[player.pending_move] || player.pending_move) + "，按 Backspace 可撤回。";
+            var submittedMoveName = MOVE_LABELS[player.pending_move] || player.pending_move;
+            statusEl.textContent = "✓ 已提交【" + submittedMoveName + "】，等待其他玩家...";
+        } else if (window.__v2_selected_move) {
+            var selectedName = MOVE_LABELS[window.__v2_selected_move] || window.__v2_selected_move;
+            statusEl.textContent = "已选择【" + selectedName + "】，再按同键或 Enter 提交";
         } else {
-            document.getElementById("move-selection-status").textContent = "请选择一个动作，再按同一快捷键或 Enter 提交。";
+            statusEl.textContent = "请选择一个动作，再按同键或 Enter 提交。";
         }
 
         var legalMoves = (game.legal_moves && game.legal_moves[myPlayerId]) || [];
@@ -535,7 +571,7 @@
 
         if (game.winner) {
             var wp = _findPlayer(players, game.winner);
-            html += '<div class="summary-winner">🏆 ' + (wp ? _esc(wp.username || wp.player_id) : game.winner) + ' 获胜！</div>';
+            html += '<div class="summary-winner">🏆 ' + (wp ? _esc(wp.username || wp.player_id) : _esc(game.winner)) + ' 获胜！</div>';
         }
 
         body.innerHTML = html;
@@ -612,26 +648,119 @@
         var html = "";
         for (var i = history.length - 1; i >= 0; i--) {
             var r = history[i];
-            html += '<div class="history-entry">' +
-                '<div class="history-round">第 ' + r.round_num + ' 回合</div>' +
-                '<div class="history-moves">';
-
             var moves = r.moves || {};
+            var moveParts = [];
             for (var pid in moves) {
-                html += _esc(pid) + ': ' + _esc(MOVE_LABELS[moves[pid]] || moves[pid]) + ' ';
+                moveParts.push(_esc(pid) + ': ' + _esc(MOVE_LABELS[moves[pid]] || moves[pid]));
+            }
+            var moveSummary = moveParts.join('、');
+
+            html += '<div class="history-entry" onclick="window.__v2_toggleHistoryEntry(this)">' +
+                '<div class="history-round">' +
+                '<span class="history-collapse-icon">▶</span> ' +
+                'R' + r.round_num +
+                ' <span class="history-summary">' + moveSummary + '</span>';
+
+            // 简短状态标签
+            if (r.deaths && r.deaths.length > 0) {
+                html += ' <span style="color:#dc2626;font-size:11px;">💀' + r.deaths.length + '</span>';
+            }
+            if (r.winner) {
+                html += ' <span style="font-size:11px;">🏆</span>';
+            }
+            html += '</div>';
+
+            // ── 展开详情 ──
+            html += '<div class="history-detail" style="display:none;">';
+
+            // 资源快照变化
+            var preSnap = r.pre_snapshots || {};
+            var postSnap = r.post_snapshots || {};
+            if (Object.keys(preSnap).length > 0) {
+                html += '<div class="history-sub-title">📊 资源</div>';
+                html += '<table class="history-res-table"><tr><th></th><th>HP</th><th>气</th><th>盾</th></tr>';
+                for (var pid2 in preSnap) {
+                    var pre = preSnap[pid2] || {};
+                    var post = postSnap[pid2] || {};
+                    html += '<tr><td>' + _esc(pid2) + '</td>' +
+                        '<td>' + (pre.hp || 0) + '→' + (post.hp || 0) + '</td>' +
+                        '<td>' + (pre.qi || 0) + '→' + (post.qi || 0) + '</td>' +
+                        '<td>' + (pre.shield || 0) + '→' + (post.shield || 0) + '</td></tr>';
+                }
+                html += '</table>';
             }
 
-            html += '</div>';
-            if (r.deaths && r.deaths.length > 0) {
-                html += '<div style="color:#dc2626;font-size:12px;">死亡: ';
-                for (var j = 0; j < r.deaths.length; j++) {
-                    html += _esc(r.deaths[j].player_id) + ' ';
-                }
-                html += '</div>';
+            // 闪
+            var flashed = r.flashed_players || [];
+            if (flashed.length > 0) {
+                html += '<div class="history-sub-title">✨ 闪: ' +
+                    flashed.map(function (f) { return _esc(f); }).join('、') + '</div>';
             }
-            html += '</div>';
+
+            // 三连
+            var chains = r.three_chain_groups || [];
+            if (chains.length > 0) {
+                html += '<div class="history-sub-title">🔗 三连</div>';
+            }
+
+            // 速度层事件数量
+            var events = r.speed_layer_events || [];
+            if (events.length > 0) {
+                // 按层分组统计
+                var layerCount = {};
+                for (var ei = 0; ei < events.length; ei++) {
+                    var l = events[ei].speed_layer || 0;
+                    layerCount[l] = (layerCount[l] || 0) + 1;
+                }
+                var layerKeys = Object.keys(layerCount).sort(function (a, b) { return parseInt(a) - parseInt(b); });
+                html += '<div class="history-sub-title">⚡ 事件: ' + events.length +
+                    ' (' + layerKeys.length + ' 层)</div>';
+            }
+
+            // 死亡
+            if (r.deaths && r.deaths.length > 0) {
+                html += '<div class="history-sub-title" style="color:#dc2626;">💀 死亡:</div>';
+                for (var j = 0; j < r.deaths.length; j++) {
+                    var d = r.deaths[j];
+                    html += '<div class="history-death">' + _esc(d.player_id || '?') +
+                        ' (' + _esc(d.cause || '?');
+                    if (d.speed_layer) html += ', 层' + d.speed_layer;
+                    html += ')</div>';
+                }
+            }
+
+            // 排名更新
+            var ranks = r.rank_updates || {};
+            if (Object.keys(ranks).length > 0) {
+                html += '<div class="history-sub-title">📋 排名:</div>';
+                for (var pid3 in ranks) {
+                    html += '<div>' + _esc(pid3) + ': 第' + _esc(ranks[pid3]) + '名</div>';
+                }
+            }
+
+            // 胜者
+            if (r.winner) {
+                html += '<div class="history-sub-title" style="color:#16a34a;">🏆 ' +
+                    _esc(r.winner) + ' 获胜</div>';
+            }
+
+            html += '</div>'; // history-detail
+            html += '</div>'; // history-entry
         }
         container.innerHTML = html;
+    };
+
+    // 切换历史条目展开/折叠
+    window.__v2_toggleHistoryEntry = function (entry) {
+        var detail = entry.querySelector(".history-detail");
+        var icon = entry.querySelector(".history-collapse-icon");
+        if (!detail) return;
+        var isVisible = detail.style.display !== "none";
+        detail.style.display = isVisible ? "none" : "block";
+        entry.classList.toggle("history-expanded", !isVisible);
+        if (icon) {
+            icon.textContent = isVisible ? "▶" : "▼";
+        }
     };
 
     // ═══════════════════════════════════════════════════════
