@@ -344,6 +344,7 @@ function handleKeyboard(event) {
 
     // Backspace：撤销焦点玩家选择 / 关闭弹窗
     if (key === "Backspace") {
+        event.preventDefault();
         if (!v2IsSetupPhase && v2FocusedPlayer) {
             v2SelectedMoves[v2FocusedPlayer] = null;
             if (v2LatestState) renderV2State(v2LatestState);
@@ -385,10 +386,32 @@ function handleKeyboard(event) {
         var legalMoves = v2LatestState.legal_moves || {};
         var playerLegal = legalMoves[v2FocusedPlayer] || [];
         if (playerLegal.indexOf(moveName) !== -1) {
+            event.preventDefault();
+            if (v2SelectedMoves[v2FocusedPlayer] === moveName) {
+                if (v2AllAlivePlayersSelected()) {
+                    submitMoves();
+                    return;
+                }
+                cycleFocusPlayer();
+                renderV2State(v2LatestState);
+                setMessage("已选择 " + (V2_MOVE_LABELS[moveName] || moveName) + "，继续为下一位玩家选择。");
+                return;
+            }
             v2SelectedMoves[v2FocusedPlayer] = moveName;
             renderV2State(v2LatestState);
+            setMessage("已为 " + getPlayerName(v2FocusedPlayer, v2LatestState.players || []) + " 选择 " + (V2_MOVE_LABELS[moveName] || moveName) + "。再次按该键或按 Enter 提交。");
         }
     }
+}
+
+function v2AllAlivePlayersSelected() {
+    if (!v2LatestState) return false;
+    var alivePlayers = (v2LatestState.players || []).filter(function(p) { return p.status === "alive"; });
+    if (alivePlayers.length === 0) return false;
+    for (var i = 0; i < alivePlayers.length; i++) {
+        if (!v2SelectedMoves[alivePlayers[i].player_id]) return false;
+    }
+    return true;
 }
 
 function cycleFocusPlayer() {

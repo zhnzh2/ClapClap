@@ -100,6 +100,10 @@ function handleKeyboardMoveSelection(keyText) {
 
     if (keyboardTarget === "p1") {
         const legal = latestState.legal_moves?.p1 || [];
+        if (selectedP1Move === matchedMove && selectedP2Move) {
+            stepGame();
+            return;
+        }
         if (legal.includes(matchedMove)) {
             selectedP1Move = matchedMove;
             if (!selectedP2Move) {
@@ -111,6 +115,10 @@ function handleKeyboardMoveSelection(keyText) {
         }
     } else {
         const legal = latestState.legal_moves?.p2 || [];
+        if (selectedP2Move === matchedMove && selectedP1Move) {
+            stepGame();
+            return;
+        }
         if (legal.includes(matchedMove)) {
             selectedP2Move = matchedMove;
             renderState(latestState);

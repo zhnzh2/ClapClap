@@ -229,7 +229,7 @@ function renderMoveSelectors(players, legalMoves, catalog) {
         html += '<div class="move-side' + (isFocused ? " focused" : "") + '" style="border-left:3px solid ' + color + ';">';
         html += '<h3>' + escHtml(p.username) + '<span class="active-turn-tip">' + (selectedMove ? '已选' : '未选') + '</span></h3>';
         html += '<div class="selector-selected">';
-        html += selectedMove ? ('<b>' + (V2_MOVE_LABELS[selectedMove] || selectedMove) + '</b>') : '<span class="muted">—</span>';
+        html += selectedMove ? ('<b>' + (V2_MOVE_LABELS[selectedMove] || selectedMove) + '</b><span class="muted"> · 再按同键或 Enter 提交</span>') : '<span class="muted">—</span>';
         html += '</div>';
 
         // 按类别输出
@@ -269,8 +269,12 @@ function renderMoveSelectors(players, legalMoves, catalog) {
         buttons[b].addEventListener("click", function() {
             var pid = this.getAttribute("data-player");
             var mv = this.getAttribute("data-move");
+            var wasSelected = v2SelectedMoves[pid] === mv;
             v2SelectedMoves[pid] = mv;
             if (v2LatestState) renderV2State(v2LatestState);
+            if (wasSelected && typeof v2AllAlivePlayersSelected === "function" && v2AllAlivePlayersSelected()) {
+                submitMoves();
+            }
         });
     }
 

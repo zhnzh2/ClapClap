@@ -37,6 +37,13 @@
         CHI: "你吃", SHUANG_CHI: "双吃", SHAN: "闪", GAO: "镐",
     };
 
+    var MOVE_SHORTCUTS = {
+        CHI: "1", SHUANG_CHI: "2", SHAN: "3", GAO: "4",
+        QI: "Q", SHIELD: "W", SHI_ZI: "E", BA_GUA: "R",
+        GI: "A", PO: "S", LENG_FENG: "D", RU_LAI: "F", HEI_DONG: "G",
+        FIRE: "Z", SHAN_DIAN: "X", LIE_YAN: "C", SHINING: "V",
+    };
+
     var SPEED_LAYER_NAMES = {
         1: "闪", 2: "三连", 3: "你吃/双吃", 4: "gi→黑洞",
         5: "黑洞", 6: "如来/Shining", 7: "冷锋/烈焰",
@@ -412,9 +419,9 @@
 
         if (player.move_submitted) {
             document.getElementById("move-selection-status").textContent = "✓ 已提交：" +
-                (MOVE_LABELS[player.pending_move] || player.pending_move);
+                (MOVE_LABELS[player.pending_move] || player.pending_move) + "，按 Backspace 可撤回。";
         } else {
-            document.getElementById("move-selection-status").textContent = "请选择一个动作";
+            document.getElementById("move-selection-status").textContent = "请选择一个动作，再按同一快捷键或 Enter 提交。";
         }
 
         var legalMoves = (game.legal_moves && game.legal_moves[myPlayerId]) || [];
@@ -433,6 +440,7 @@
             for (var j = 0; j < group.moves.length; j++) {
                 var m = group.moves[j];
                 var label = MOVE_LABELS[m] || m;
+                var hotkey = MOVE_SHORTCUTS[m] || "";
                 var isLegal = legalSet[m];
                 var isSelected = (selectedMove === m);
 
@@ -444,7 +452,9 @@
                     'data-move="' + m + '" ' +
                     (isLegal ? '' : 'disabled') + ' ' +
                     'onclick="window.__v2_selectMove(\'' + m + '\')">' +
-                    label + '</button>';
+                    (hotkey ? '<span class="move-hotkey">' + hotkey + '</span>' : '') +
+                    '<span class="move-label">' + label + '</span>' +
+                    '</button>';
             }
 
             groupsHtml += '</div></div>';
@@ -452,7 +462,7 @@
 
         document.getElementById("move-groups").innerHTML = groupsHtml;
         document.getElementById("submit-move-btn").disabled = player.move_submitted || !selectedMove;
-        document.getElementById("cancel-move-btn").disabled = player.move_submitted;
+        document.getElementById("cancel-move-btn").disabled = !player.move_submitted && !selectedMove;
     };
 
     // ═══════════════════════════════════════════════════════

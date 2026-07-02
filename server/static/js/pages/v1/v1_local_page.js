@@ -254,6 +254,7 @@ function initLocalPage() {
         const key = event.key;
 
         if (/^[1-4]$/.test(key) || /^[qwerasdfgzxcv]$/i.test(key)) {
+            event.preventDefault();
             handleKeyboardMoveSelection(key);
             return;
         }

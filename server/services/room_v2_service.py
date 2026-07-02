@@ -462,6 +462,40 @@ def submit_move_v2_service(
     }, 200
 
 
+def cancel_move_v2_service(room_id: str, player_token: str) -> tuple[dict, int]:
+    """撤回等待出招阶段已经提交的动作。"""
+    room = get_room_v2(room_id)
+    if room is None:
+        return {
+            "ok": False,
+            "error": "房间不存在。",
+            "error_code": "ROOM_NOT_FOUND",
+        }, 404
+
+    if room.status == "finished":
+        return {"ok": False, "error": "当前对局已结束。"}, 400
+
+    if room.status != "playing":
+        return {"ok": False, "error": "对局尚未开始。"}, 400
+
+    mark_seen_v2(room_id, player_token.strip())
+
+    success, message = room.cancel_submitted_move(player_token.strip())
+    if not success:
+        return {"ok": False, "error": message}, 400
+
+    persist_room_v2(room)
+
+    from server.socket_events_v2 import emit_room_v2_state
+    emit_room_v2_state(room_id)
+
+    return {
+        "ok": True,
+        "message": message,
+        "room": get_room_v2_payload(room, requester_token=player_token),
+    }, 200
+
+
 # ═══════════════════════════════════════════════════════════════
 # 退出房间
 # ═══════════════════════════════════════════════════════════════

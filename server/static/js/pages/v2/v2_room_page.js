@@ -308,6 +308,32 @@ async function submitMove() {
     }
 }
 
+async function cancelSubmittedMove() {
+    if (!v2MyPlayerToken) return;
+
+    try {
+        var result = await ApiUtils.apiPost("/v2/api/rooms/" + v2RoomId + "/cancel-step", {
+            player_token: v2MyPlayerToken,
+        });
+
+        if (result.ok) {
+            window.__v2_selected_move = null;
+            setMessage(result.data.message || "已撤回本回合提交动作。", "waiting");
+            if (result.data.room) {
+                v2LatestRoom = result.data.room;
+                window.renderRoom(result.data.room);
+                _applyV2UiSettings();
+            } else {
+                fetchRoomState();
+            }
+        } else {
+            setMessage(result.error || "撤回失败。", "error");
+        }
+    } catch (e) {
+        setMessage("撤回失败：" + e, "error");
+    }
+}
+
 async function leaveRoom() {
     if (!v2MyPlayerToken) { _goToRooms(); return; }
     try {
@@ -396,10 +422,13 @@ function _bindLobbyEvents() {
 function _bindBattleEvents() {
     document.getElementById("submit-move-btn").addEventListener("click", submitMove);
     document.getElementById("cancel-move-btn").addEventListener("click", function () {
-        window.__v2_selected_move = null;
-        if (v2LatestRoom && v2LatestRoom.game) {
-            window.renderMoveSelection(v2LatestRoom.game, v2MyPlayerId);
+        var myPlayer = v2CurrentPlayer();
+        if (myPlayer && myPlayer.move_submitted) {
+            cancelSubmittedMove();
+            return;
         }
+        window.__v2_selected_move = null;
+        if (v2LatestRoom && v2LatestRoom.game) window.renderMoveSelection(v2LatestRoom.game, v2MyPlayerId);
     });
 
     document.getElementById("rematch-vote-btn").addEventListener("click", function () {
@@ -408,11 +437,13 @@ function _bindBattleEvents() {
 
     // 全局键盘
     document.addEventListener("keydown", function (e) {
+        if (e.target && e.target.closest("input, textarea, select")) return;
         if (e.key === "Enter" && !document.getElementById("decision-modal-mask").classList.contains("show")) {
             var submitBtn = document.getElementById("submit-move-btn");
             if (submitBtn && !submitBtn.disabled) submitBtn.click();
         }
-        if (e.key === "Backspace" && !e.target.closest("input")) {
+        if (e.key === "Backspace") {
+            e.preventDefault();
             document.getElementById("cancel-move-btn").click();
         }
         // 1-8 快捷键选动作
@@ -422,9 +453,26 @@ function _bindBattleEvents() {
                        "z": "FIRE", "x": "SHAN_DIAN", "c": "LIE_YAN", "v": "SHINING" };
         var moveName = keyMap[e.key.toLowerCase()];
         if (moveName) {
+            e.preventDefault();
+            var myPlayer = v2CurrentPlayer();
+            if (myPlayer && myPlayer.move_submitted) return;
+            if (window.__v2_selected_move === moveName) {
+                var submitBtn2 = document.getElementById("submit-move-btn");
+                if (submitBtn2 && !submitBtn2.disabled) submitBtn2.click();
+                return;
+            }
             window.__v2_selectMove(moveName);
         }
     });
+}
+
+function v2CurrentPlayer() {
+    if (!v2LatestRoom || !v2LatestRoom.game || !v2MyPlayerId) return null;
+    var players = v2LatestRoom.game.players || [];
+    for (var i = 0; i < players.length; i++) {
+        if (players[i].player_id === v2MyPlayerId) return players[i];
+    }
+    return null;
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -686,6 +734,12 @@ function setMessage(text, type) {
 window.__v2_selected_move = null;
 
 window.__v2_selectMove = function (moveName) {
+    if (v2LatestRoom && v2LatestRoom.game && v2MyPlayerId) {
+        var legalMoves = (v2LatestRoom.game.legal_moves && v2LatestRoom.game.legal_moves[v2MyPlayerId]) || [];
+        if (legalMoves.indexOf(moveName) === -1) return;
+        var myPlayer = v2CurrentPlayer();
+        if (myPlayer && myPlayer.move_submitted) return;
+    }
     window.__v2_selected_move = moveName;
     if (v2LatestRoom && v2LatestRoom.game) {
         window.renderMoveSelection(v2LatestRoom.game, v2MyPlayerId);

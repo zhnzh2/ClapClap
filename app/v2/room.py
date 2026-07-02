@@ -483,6 +483,33 @@ class RoomV2:
         player.move_submitted = True
         self.updated_at = datetime.now(timezone.utc)
 
+    def cancel_submitted_move(self, player_token: str) -> tuple[bool, str]:
+        """撤回等待阶段已经提交但尚未结算的动作。"""
+        seat = self.get_seat_by_token(player_token)
+        if seat is None:
+            return False, "身份无效。"
+
+        if self.status != ROOM_PLAYING:
+            return False, "对局尚未开始。"
+
+        if self.game_state is None:
+            return False, "对局状态异常。"
+
+        if self.game_state.phase != "waiting_moves":
+            return False, "本回合已经进入结算，不能撤回动作。"
+
+        player = self.game_state.get_player(seat.player_id)
+        if player is None:
+            return False, "找不到你的对局状态。"
+
+        if not player.move_submitted:
+            return False, "你当前没有已提交的动作。"
+
+        player.pending_move = None
+        player.move_submitted = False
+        self.updated_at = datetime.now(timezone.utc)
+        return True, "已撤回本回合提交动作。"
+
     def all_moves_submitted(self) -> bool:
         """所有存活玩家是否都已提交本回合动作。"""
         if self.game_state is None:

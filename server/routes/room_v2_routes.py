@@ -14,6 +14,7 @@ from server.services.room_v2_service import (
     set_ready_service,
     start_game_service,
     submit_move_v2_service,
+    cancel_move_v2_service,
     leave_room_v2_service,
     rematch_vote_service,
     change_seat_service,
@@ -237,6 +238,21 @@ def api_submit_move_v2(room_id: str):
         player_token.strip(),
         move_name,
     )
+    return jsonify(result), status_code
+
+
+@room_v2_bp.post("/v2/api/rooms/<room_id>/cancel-step")
+def api_cancel_move_v2(room_id: str):
+    """撤回本回合已提交但尚未结算的动作。"""
+    data = request.get_json(silent=True)
+    if data is None:
+        return jsonify({"ok": False, "error": "请求体必须是 JSON。"}), 400
+
+    player_token = data.get("player_token")
+    if not isinstance(player_token, str) or not player_token.strip():
+        return jsonify({"ok": False, "error": "player_token 不能为空。"}), 400
+
+    result, status_code = cancel_move_v2_service(room_id, player_token.strip())
     return jsonify(result), status_code
 
 

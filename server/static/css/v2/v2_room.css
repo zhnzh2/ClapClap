@@ -487,6 +487,24 @@ body.v2-no-side-panel #battle-phase {
     transition: background 0.15s, border-color 0.15s;
     color: var(--text);
     user-select: none;
+    position: relative;
+    min-height: 42px;
+}
+
+.move-btn .move-label {
+    display: block;
+    line-height: 1.2;
+}
+
+.move-hotkey {
+    position: absolute;
+    top: 4px;
+    right: 6px;
+    font-size: 10px;
+    line-height: 1;
+    color: rgba(31, 41, 55, 0.45);
+    font-weight: 700;
+    pointer-events: none;
 }
 
 .move-btn:hover:not(.disabled):not(.selected) {
