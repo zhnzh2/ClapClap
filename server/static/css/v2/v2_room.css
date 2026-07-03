@@ -1120,6 +1120,63 @@ body.v2-compact-cards .resource-item .res-value {
 }
 
 /* ═══════════════════════════════════════════════════════
+   面板折叠（阶段 H）
+   ═══════════════════════════════════════════════════════ */
+
+.right-panel-toggle-btn {
+    font-size: 12px;
+    padding: 4px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--card);
+    color: var(--muted);
+    cursor: pointer;
+    transition: all 0.12s;
+}
+.right-panel-toggle-btn:hover { background: var(--bg-hover, #f3f4f6); color: var(--text); }
+.right-panel-toggle-btn.active { background: var(--blue); color: #fff; border-color: var(--blue); }
+
+.collapse-toggle-btn {
+    font-size: 11px;
+    padding: 2px 8px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    margin-left: auto;
+    transition: all 0.12s;
+    flex-shrink: 0;
+}
+.collapse-toggle-btn:hover { background: var(--bg-hover, #f3f4f6); color: var(--text); }
+
+/* 折叠后只留标题栏 */
+.card-section-collapsed .chat-list,
+.card-section-collapsed .chat-input-row,
+.card-section-collapsed .quick-chat-row,
+.card-section-collapsed .history-list { display: none; }
+
+.card-section-collapsed { padding-bottom: 8px; }
+
+/* ═══════════════════════════════════════════════════════
+   紧凑模式（阶段 H）
+   ═══════════════════════════════════════════════════════ */
+
+body.v2-compact-mode .card { padding: 12px 14px; }
+body.v2-compact-mode .card h2 { font-size: 14px; margin-bottom: 8px; }
+body.v2-compact-mode .action-btn { padding: 6px 10px; font-size: 13px; }
+body.v2-compact-mode .move-btn { padding: 5px 8px; min-height: 52px; }
+body.v2-compact-mode .move-grid { gap: 4px; }
+body.v2-compact-mode .move-group-title { margin: 6px 0 3px 0; font-size: 11px; }
+body.v2-compact-mode .move-hotkey { font-size: 9px; padding: 1px 3px; }
+body.v2-compact-mode .move-btn-wrap { gap: 2px; }
+body.v2-compact-mode .player-cards-grid { gap: 8px; }
+body.v2-compact-mode .container { gap: 8px; padding: 12px 10px; }
+body.v2-compact-mode .resource-item { padding: 3px 6px; }
+body.v2-compact-mode .resource-value { font-size: 13px; }
+body.v2-compact-mode .resource-label { font-size: 9px; }
+
+/* ═══════════════════════════════════════════════════════
    响应式
    ═══════════════════════════════════════════════════════ */
 
@@ -1148,6 +1205,81 @@ body.v2-compact-cards .resource-item .res-value {
     .player-cards-grid { grid-template-columns: 1fr; }
     .lobby-seats-grid { grid-template-columns: 1fr 1fr; }
     .move-grid { grid-template-columns: repeat(4, 1fr); }
+    .chat-input-row { flex-wrap: wrap; }
+    .chat-input-row input { min-width: 0; flex: 1 1 100px; }
+}
+
+@media (max-width: 500px) {
+    .container {
+        padding: 6px 4px;
+        gap: 6px;
+    }
+    .card { padding: 10px 10px; }
+    .card h2 { font-size: 14px; margin-bottom: 8px; }
+    .action-btn { padding: 6px 10px; font-size: 13px; }
+    .header-actions { gap: 4px; }
+    .header-actions .action-btn,
+    .header-actions .header-account-btn { padding: 4px 8px; font-size: 11px; }
+    .page-top-shell { padding: 8px 6px; }
+    .page-top-shell h1 { font-size: 16px; }
+    .page-mode-toolbar { padding: 6px 8px; }
+    .player-cards-grid { grid-template-columns: 1fr; gap: 6px; }
+    .lobby-seats-grid { grid-template-columns: 1fr; gap: 6px; }
+    .move-grid { grid-template-columns: repeat(2, 1fr); gap: 4px; }
+    .move-btn { padding: 6px 6px; min-height: 44px; }
+    .move-btn .move-label { font-size: 12px; }
+    .move-btn .move-name { font-size: 10px; }
+    .move-hotkey { font-size: 9px; padding: 1px 3px; }
+    .info-row { grid-template-columns: 1fr; gap: 4px; }
+    .info-item { padding: 6px 8px; }
+    .right-panel { gap: 6px; }
+    /* 聊天输入移动端优化 */
+    .chat-input-row { gap: 4px; }
+    .chat-input-row input { font-size: 16px; flex: 1 1 0; min-width: 0; }
+    .chat-input-row .action-btn { flex-shrink: 0; padding: 6px 10px; }
+    .quick-chat-row { gap: 4px; }
+    .quick-chat-btn { font-size: 11px; padding: 4px 6px; }
+    /* 顶部操作栏 */
+    .top-actions { gap: 4px; }
+    .top-actions .action-btn { padding: 5px 8px; font-size: 12px; }
+    /* 状态栏 */
+    .status-top-row { flex-wrap: wrap; gap: 4px; font-size: 12px; }
+    /* 大厅操作 */
+    .lobby-actions { flex-wrap: wrap; gap: 6px; }
+    .lobby-actions .action-btn { font-size: 12px; padding: 6px 10px; }
+    /* 提交行 */
+    .submit-row { flex-wrap: wrap; gap: 6px; }
+    .move-actions { flex-wrap: wrap; gap: 6px; }
+    /* 设置弹窗 */
+    .settings-modal { max-width: 95vw; }
+}
+
+/* ── 决策弹窗移动端 ── */
+.decision-modal {
+    max-height: 80vh;
+    overflow-y: auto;
+    max-width: 95vw;
+    width: 420px;
+}
+.decision-modal .modal-actions {
+    position: sticky;
+    bottom: 0;
+    background: var(--card);
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
+    z-index: 1;
+}
+.decision-options {
+    max-height: 50vh;
+    overflow-y: auto;
+}
+
+/* ── 回合总结弹窗 ── */
+.round-summary-modal {
+    max-height: 85vh;
+    overflow-y: auto;
+    max-width: 95vw;
+    width: 500px;
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -1208,4 +1340,219 @@ body.v2-compact-cards .resource-item .res-value {
 .chat-sender-spectator {
     font-weight: 600;
     color: #7c3aed;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   用户页 — 分区卡片（阶段 F）
+   ═══════════════════════════════════════════════════════════════ */
+
+.battle-zones,
+.battle-zones-v1 {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 16px;
+}
+
+.battle-zone-card {
+    background: var(--bg-card, #fff);
+    border: 1px solid var(--border-color, #e2e8f0);
+    border-radius: 10px;
+    overflow: hidden;
+    transition: box-shadow 0.15s;
+}
+
+.battle-zone-card:hover {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.battle-zone-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 16px;
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.12s;
+}
+
+.battle-zone-header:hover {
+    background: var(--bg-hover, #f8fafc);
+}
+
+.battle-zone-arrow {
+    font-size: 11px;
+    color: var(--muted);
+    width: 14px;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+.battle-zone-icon {
+    font-size: 18px;
+    flex-shrink: 0;
+}
+
+.battle-zone-label {
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--text-primary);
+    flex-shrink: 0;
+}
+
+.battle-zone-summary-text {
+    font-size: 12px;
+    color: var(--muted);
+    margin-left: auto;
+    text-align: right;
+}
+
+.battle-zone-recent {
+    display: flex;
+    gap: 10px;
+    padding: 0 16px 10px 44px;
+    flex-wrap: wrap;
+}
+
+.zone-recent-item {
+    font-size: 12px;
+    color: var(--muted);
+    white-space: nowrap;
+}
+
+.zone-recent-result {
+    font-weight: 600;
+}
+
+.zone-recent-win .zone-recent-result { color: #16a34a; }
+.zone-recent-loss .zone-recent-result { color: #dc2626; }
+.zone-recent-draw .zone-recent-result { color: #6b7280; }
+.zone-recent-ongoing .zone-recent-result { color: #2563eb; }
+
+.battle-zone-body {
+    border-top: 1px solid var(--border-color, #e2e8f0);
+    padding: 0;
+}
+
+.battle-zone-body .battle-list {
+    padding: 12px 16px;
+}
+
+/* ── 复制 ID 按钮 ─────────────────────────────────────────── */
+
+.battle-copy-btn {
+    font-size: 12px;
+    padding: 3px 10px;
+    border: 1px solid var(--border-color, #d1d5db);
+    border-radius: 6px;
+    background: var(--bg-card, #fff);
+    color: var(--text-secondary, #4b5563);
+    cursor: pointer;
+    transition: all 0.15s;
+    margin-left: 10px;
+    white-space: nowrap;
+}
+
+.battle-copy-btn:hover {
+    background: var(--bg-hover, #f3f4f6);
+    border-color: var(--accent, #3b82f6);
+    color: var(--accent, #3b82f6);
+}
+
+/* ── AI 元数据条 ──────────────────────────────────────────── */
+
+.ai-meta-bar {
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 6px;
+    padding: 5px 10px;
+    background: #fef3c7;
+    border-radius: 6px;
+    border: 1px solid #fcd34d;
+    display: inline-block;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   本地模式 — AI 相关样式（阶段 G）
+   ═══════════════════════════════════════════════════════════════ */
+
+/* AI 标记 */
+.ai-badge {
+    display: inline-block;
+    font-size: 11px;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: #dbeafe;
+    color: #1e40af;
+    margin-left: 4px;
+    font-weight: 600;
+}
+
+/* 准备阶段类型切换按钮 */
+.setup-player-type {
+    display: flex;
+    gap: 4px;
+    margin-top: 8px;
+}
+
+.setup-type-btn {
+    flex: 1;
+    font-size: 11px;
+    padding: 4px 8px;
+    border: 1px solid var(--border-color, #d1d5db);
+    border-radius: 6px;
+    background: var(--bg-card, #fff);
+    color: var(--text-secondary, #6b7280);
+    cursor: pointer;
+    transition: all 0.12s;
+}
+
+.setup-type-btn:hover {
+    background: var(--bg-hover, #f3f4f6);
+}
+
+.setup-type-btn.active {
+    background: var(--accent, #3b82f6);
+    color: #fff;
+    border-color: var(--accent, #3b82f6);
+}
+
+.setup-ai-difficulty {
+    margin-top: 6px;
+}
+
+.setup-ai-difficulty select {
+    width: 100%;
+    font-size: 11px;
+    padding: 3px 6px;
+    border: 1px solid var(--border-color, #d1d5db);
+    border-radius: 4px;
+    background: var(--bg-card, #fff);
+}
+
+/* AI 动作占位区 */
+.move-side.ai-player {
+    opacity: 0.85;
+    background: #fafafa;
+}
+
+.move-side.ai-player .move-btn {
+    display: none;
+}
+
+.ai-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 16px 8px;
+    text-align: center;
+}
+
+.ai-difficulty-tag {
+    font-size: 10px;
+    color: var(--muted);
+    background: #f3f4f6;
+    padding: 2px 8px;
+    border-radius: 4px;
 }

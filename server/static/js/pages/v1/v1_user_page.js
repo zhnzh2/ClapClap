@@ -18,12 +18,14 @@
         mode: "all",
         result: "all",
         difficulty: "all",
+        days: "all",
         opponent: "",
         dateFrom: "",
         dateTo: "",
         groupBy: "time",
         q: ""
     };
+    var zoneStates = {};
     var selectedBattleIds = {};
 
     // DOM 缓存
@@ -469,6 +471,12 @@
             + '<div class="battle-stats" id="battle-stats" style="display:none;"></div>'
             + '<div class="battle-tools">'
             + '<div class="battle-filter-grid">'
+            + '<label class="battle-filter-field">时间'
+            + '<select id="battle-filter-days">'
+            + '<option value="all">全部时间</option>'
+            + '<option value="7">最近 7 天</option>'
+            + '<option value="30">最近 30 天</option>'
+            + '</select></label>'
             + '<label class="battle-filter-field">类型'
             + '<select id="battle-filter-mode">'
             + '<option value="all">全部</option>'
@@ -538,6 +546,9 @@
         params.set("mode", battleFilters.mode || "all");
         params.set("result", battleFilters.result || "all");
         params.set("difficulty", battleFilters.difficulty || "all");
+        if (battleFilters.days && battleFilters.days !== "all") {
+            params.set("days", battleFilters.days);
+        }
         if (battleFilters.opponent) params.set("opponent", battleFilters.opponent);
         if (battleFilters.dateFrom) params.set("date_from", battleFilters.dateFrom);
         if (battleFilters.dateTo) params.set("date_to", battleFilters.dateTo);
@@ -552,6 +563,7 @@
             mode: (document.getElementById("battle-filter-mode") || {}).value || "all",
             result: (document.getElementById("battle-filter-result") || {}).value || "all",
             difficulty: (document.getElementById("battle-filter-difficulty") || {}).value || "all",
+            days: (document.getElementById("battle-filter-days") || {}).value || "all",
             opponent: ((document.getElementById("battle-filter-opponent") || {}).value || "").trim(),
             dateFrom: (document.getElementById("battle-filter-date-from") || {}).value || "",
             dateTo: (document.getElementById("battle-filter-date-to") || {}).value || "",
@@ -564,6 +576,7 @@
         var mode = document.getElementById("battle-filter-mode");
         var result = document.getElementById("battle-filter-result");
         var difficulty = document.getElementById("battle-filter-difficulty");
+        var days = document.getElementById("battle-filter-days");
         var opponent = document.getElementById("battle-filter-opponent");
         var dateFrom = document.getElementById("battle-filter-date-from");
         var dateTo = document.getElementById("battle-filter-date-to");
@@ -572,6 +585,7 @@
         if (mode) mode.value = battleFilters.mode;
         if (result) result.value = battleFilters.result;
         if (difficulty) difficulty.value = battleFilters.difficulty;
+        if (days) days.value = battleFilters.days || "all";
         if (opponent) opponent.value = battleFilters.opponent || "";
         if (dateFrom) dateFrom.value = battleFilters.dateFrom || "";
         if (dateTo) dateTo.value = battleFilters.dateTo || "";
@@ -649,6 +663,7 @@
                 if (!append) listEl.innerHTML = "";
                 if (!append) {
                     renderBattleStats(res.data.stats || null);
+                    renderZoneCardsV1(res.data.zone_summary || null);
                     renderBattleFilterSummary(res.data.total || 0, res.data.filtered_stats || null);
                 }
                 var lastGroup = append ? getLastRenderedBattleGroup(listEl) : null;
@@ -818,6 +833,58 @@
         var headers = listEl.querySelectorAll(".battle-group-header");
         if (!headers.length) return null;
         return headers[headers.length - 1].getAttribute("data-group-label");
+    }
+
+    function renderZoneCardsV1(zoneSummary) {
+        var listEl = document.getElementById("battle-list");
+        if (!listEl || !zoneSummary) return;
+
+        var zoneOrder = ["v2_human", "v1_human", "v1_ai"];
+        var hasAny = false;
+        var html = '<div class="battle-zones-v1">';
+
+        zoneOrder.forEach(function (zoneKey) {
+            var zone = zoneSummary[zoneKey];
+            if (!zone || zone.total === 0) return;
+            hasAny = true;
+
+            var icon = zoneKey === "v2_human" ? "🎯" : (zoneKey === "v1_human" ? "⚔️" : "🤖");
+            var summaryText = zoneKey === "v2_human"
+                ? (zone.total + " 场 · 🏆 " + zone.wins + " 次")
+                : (zone.total + " 场 · 胜 " + zone.wins + " / 负 " + (zone.losses || 0));
+
+            var modeMap = { v2_human: "v2", v1_human: "v1", v1_ai: "ai" };
+            html += '<div class="battle-zone-card" style="cursor:pointer;" data-zone-mode="' + modeMap[zoneKey] + '">'
+                + '<div class="battle-zone-header">'
+                + '<span class="battle-zone-icon">' + icon + '</span>'
+                + '<span class="battle-zone-label">' + escHtml(zone.label) + '</span>'
+                + '<span class="battle-zone-summary-text">' + escHtml(summaryText) + '</span>'
+                + '</div>'
+                + '</div>';
+        });
+
+        html += '</div>';
+
+        if (hasAny) {
+            // 插入到列表顶部
+            var tempDiv = document.createElement("div");
+            tempDiv.innerHTML = html;
+
+            // 绑定点击：设置筛选并重新加载
+            var cards = tempDiv.querySelectorAll(".battle-zone-card");
+            cards.forEach(function (card) {
+                card.addEventListener("click", function () {
+                    var mode = this.getAttribute("data-zone-mode");
+                    battleFilters.mode = mode || "all";
+                    setBattleFilterDomValues();
+                    selectedBattleIds = {};
+                    battlesOffset = 0;
+                    loadBattles(false);
+                });
+            });
+
+            listEl.insertBefore(tempDiv.firstChild, listEl.firstChild);
+        }
     }
 
     function battleGroupLabel(b) {

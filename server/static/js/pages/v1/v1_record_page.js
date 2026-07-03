@@ -121,8 +121,10 @@
     // ── 顶部信息栏 ────────────────────────────────────────────────
 
     function renderHeader() {
-        var p1Name = (battle.participants && battle.participants.p1) ? battle.participants.p1.username : "P1";
-        var p2Name = (battle.participants && battle.participants.p2) ? battle.participants.p2.username : "P2";
+        var p1Info = (battle.participants && battle.participants.p1) ? battle.participants.p1 : {};
+        var p2Info = (battle.participants && battle.participants.p2) ? battle.participants.p2 : {};
+        var p1Name = (p1Info.status === "deleted") ? "已注销用户" : (p1Info.username || "P1");
+        var p2Name = (p2Info.status === "deleted") ? "已注销用户" : (p2Info.username || "P2");
 
         var playersEl = document.getElementById("record-players");
         if (playersEl) {
@@ -162,7 +164,40 @@
         }
 
         metaEl.innerHTML = '<span class="record-time">' + escHtml(timeStr) + '</span>'
-            + '<span class="record-result-badge ' + resultClass + '">' + escHtml(resultLabel) + '</span>';
+            + '<span class="record-result-badge ' + resultClass + '">' + escHtml(resultLabel) + '</span>'
+            + '<button class="battle-copy-btn" id="copy-battle-id-btn" title="复制对局 ID">📋 复制 ID</button>';
+
+        // 绑定复制按钮
+        var copyBtn = document.getElementById("copy-battle-id-btn");
+        if (copyBtn) {
+            copyBtn.addEventListener("click", function (e) {
+                e.stopPropagation();
+                if (navigator.clipboard) {
+                    navigator.clipboard.writeText(battleId).then(function () {
+                        copyBtn.textContent = "✓ 已复制";
+                        setTimeout(function () { copyBtn.textContent = "📋 复制 ID"; }, 2000);
+                    });
+                }
+            });
+        }
+
+        // AI 元数据
+        if (battle.opponent_type === "ai" || battle.mode === "ai") {
+            var aiBar = document.createElement("div");
+            aiBar.className = "ai-meta-bar";
+            var aiParts = ["🤖 AI 对局"];
+            var diff = battle.ai_difficulty;
+            if (diff) aiParts.push("难度：" + (diff === "easy" ? "简单" : (diff === "hard" ? "困难" : "普通")));
+            var pt = battle.ai_policy_type;
+            if (pt) aiParts.push("策略：" + pt);
+            var mv = battle.ai_model_version;
+            if (mv) aiParts.push("模型：" + String(mv));
+            var fr = battle.ai_fallback_reason;
+            if (fr) aiParts.push("降级原因：" + String(fr));
+            if (battle.ai_seat) aiParts.push("AI 座位：" + String(battle.ai_seat));
+            aiBar.textContent = aiParts.join(" · ");
+            metaEl.appendChild(aiBar);
+        }
     }
 
     // ── 左侧回合列表 ──────────────────────────────────────────────

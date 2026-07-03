@@ -4,7 +4,7 @@ import io
 import json
 import time
 import zipfile
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from flask import Blueprint, g, jsonify, redirect, render_template, request, send_file
 
@@ -143,6 +143,10 @@ def _battle_result_for_uid(data: dict, uid: int) -> str:
 
 
 def _battle_filters_from_request() -> dict:
+    days_raw = (request.args.get("days") or "").strip()
+    days = None
+    if days_raw.isdigit():
+        days = int(days_raw)
     return {
         "mode": (request.args.get("mode") or "all").strip().lower(),
         "result": (request.args.get("result") or "all").strip().lower(),
@@ -150,6 +154,7 @@ def _battle_filters_from_request() -> dict:
         "opponent": (request.args.get("opponent") or "").strip().lower(),
         "date_from": (request.args.get("date_from") or "").strip(),
         "date_to": (request.args.get("date_to") or "").strip(),
+        "days": days,
         "q": (request.args.get("q") or "").strip().lower(),
     }
 
@@ -167,12 +172,23 @@ def _parse_iso_date(value: str, *, end_of_day: bool = False) -> datetime | None:
         return None
 
 
+def _participant_display_name(info: dict) -> str:
+    """返回参与者显示名，已注销用户显示为'已注销用户'。"""
+    if info.get("status") == "deleted":
+        return "已注销用户"
+    username = info.get("username")
+    return str(username) if username else "?"
+
+
 def _battle_start_dt(data: dict) -> datetime | None:
     raw = data.get("start_time") or ""
     try:
-        return datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+        dt = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
     except ValueError:
         return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt
 
 
 def _battle_opponent_names(data: dict, uid: int) -> list[str]:
@@ -180,9 +196,7 @@ def _battle_opponent_names(data: dict, uid: int) -> list[str]:
     names: list[str] = []
     for info in participants.values():
         if info.get("uid") != uid:
-            name = info.get("username")
-            if name:
-                names.append(str(name))
+            names.append(_participant_display_name(info))
     return names
 
 
@@ -198,8 +212,14 @@ def _battle_matches_filters(data: dict, uid: int, filters: dict) -> bool:
     result_filter = filters.get("result") or "all"
     difficulty_filter = filters.get("difficulty") or "all"
     opponent_filter = filters.get("opponent") or ""
-    date_from = _parse_iso_date(filters.get("date_from") or "")
-    date_to = _parse_iso_date(filters.get("date_to") or "", end_of_day=True)
+    # days 参数优先于 date_from：days=N 等价于 date_from = 今天 - N 天
+    days = filters.get("days")
+    if isinstance(days, int) and days > 0:
+        date_from = datetime.now(timezone.utc) - timedelta(days=days)
+        date_to = None
+    else:
+        date_from = _parse_iso_date(filters.get("date_from") or "")
+        date_to = _parse_iso_date(filters.get("date_to") or "", end_of_day=True)
     keyword = filters.get("q") or ""
 
     bucket = _battle_mode_bucket(data)
@@ -294,7 +314,7 @@ def _summarize_user_battle(uid: int, bid: str, data: dict) -> dict | None:
             is_winner = _v2_is_winner(data, my_player_id)
 
         participant_names = [
-            p.get("username", "?") for p in participants.values()
+            _participant_display_name(p) for p in participants.values()
         ]
 
         return {
@@ -336,8 +356,8 @@ def _summarize_user_battle(uid: int, bid: str, data: dict) -> dict | None:
         "ai_difficulty": data.get("ai_difficulty"),
         "ai_policy_type": data.get("ai_policy_type"),
         "ai_model_version": data.get("ai_model_version"),
-        "p1_name": p1.get("username", "?"),
-        "p2_name": p2.get("username", "?"),
+        "p1_name": _participant_display_name(p1),
+        "p2_name": _participant_display_name(p2),
         "opponent": opponent or "?",
         "opponents": [opponent] if opponent else [],
         "date_bucket": _battle_date_bucket(data),
@@ -486,6 +506,81 @@ def _build_user_battle_stats(uid: int, battle_ids: list[str]) -> dict:
             bucket["average_rank"] = round(player_count_rank_sums.get(key, 0) / bucket["ranked_count"], 2)
 
     return stats
+
+
+def _build_zone_summary(uid: int, battle_ids: list[str]) -> dict:
+    """构建用户页分区摘要：v2_human / v1_human / v1_ai。"""
+    zones: dict[str, dict] = {
+        "v2_human": {"label": "2.0 多人对局", "total": 0, "wins": 0, "recent": []},
+        "v1_human": {"label": "1.0 真人对局", "total": 0, "wins": 0, "losses": 0, "draws": 0, "recent": []},
+        "v1_ai": {"label": "1.0 AI 人机对战", "total": 0, "wins": 0, "losses": 0, "draws": 0, "recent": []},
+    }
+
+    for bid in battle_ids:
+        data = read_battle(bid)
+        if data is None:
+            continue
+
+        rule_version = str(data.get("rule_version", "1.0"))
+        participants = data.get("participants", {}) or {}
+        mode = data.get("mode")
+
+        if rule_version.startswith("2."):
+            zone = zones["v2_human"]
+            zone["total"] += 1
+            player_id = _get_participant_player_id(participants, uid)
+            if player_id and _v2_is_winner(data, player_id) and data.get("end_time") is not None:
+                zone["wins"] += 1
+        elif mode == "ai" or data.get("opponent_type") == "ai":
+            zone = zones["v1_ai"]
+            zone["total"] += 1
+            result = _battle_result_for_uid(data, uid)
+            if result == "win":
+                zone["wins"] += 1
+            elif result == "loss":
+                zone["losses"] += 1
+            elif result == "draw":
+                zone["draws"] += 1
+        else:
+            zone = zones["v1_human"]
+            zone["total"] += 1
+            result = _battle_result_for_uid(data, uid)
+            if result == "win":
+                zone["wins"] += 1
+            elif result == "loss":
+                zone["losses"] += 1
+            elif result == "draw":
+                zone["draws"] += 1
+
+    # 为每个分区取最近 3 场
+    for zone_key in zones:
+        recent_ids = []
+        for bid in battle_ids:
+            if len(recent_ids) >= 3:
+                break
+            data = read_battle(bid)
+            if data is None:
+                continue
+            rule_version = str(data.get("rule_version", "1.0"))
+            mode = data.get("mode")
+            is_ai = mode == "ai" or data.get("opponent_type") == "ai"
+            if zone_key == "v2_human" and rule_version.startswith("2."):
+                recent_ids.append(bid)
+            elif zone_key == "v1_human" and not rule_version.startswith("2.") and not is_ai:
+                recent_ids.append(bid)
+            elif zone_key == "v1_ai" and not rule_version.startswith("2.") and is_ai:
+                recent_ids.append(bid)
+        # 展开为轻量摘要（仅 id + 时间 + 结果）
+        zone_recent: list[dict] = []
+        for recent_id in recent_ids:
+            d = read_battle(recent_id)
+            if d:
+                summary = _summarize_user_battle(uid, recent_id, d)
+                if summary:
+                    zone_recent.append(summary)
+        zones[zone_key]["recent"] = zone_recent
+
+    return zones
 
 
 @auth_bp.post("/v1/api/auth/register")
@@ -812,11 +907,13 @@ def api_user_battles(uid: int):
             battles.append(summary)
 
     next_offset = offset + len(battle_ids)
+    zone_summary = _build_zone_summary(uid, filtered_battle_ids)
     return jsonify({
         "ok": True,
         "battles": battles,
         "stats": stats,
         "filtered_stats": filtered_stats,
+        "zone_summary": zone_summary,
         "filters": filters,
         "total": total,
         "has_more": next_offset < total,

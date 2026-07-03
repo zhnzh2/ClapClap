@@ -18,8 +18,10 @@
         mode: "all",
         result: "all",
         difficulty: "all",
+        days: "all",
         q: ""
     };
+    var zoneStates = {};  // { zoneKey: { expanded: bool, battles: [], offset: 0, hasMore: false, loading: false } }
 
     // DOM 缓存
     var $loading = null;
@@ -458,20 +460,25 @@
         if (!$content) return;
 
         battlesOffset = 0;
+        zoneStates = {};
 
         $content.innerHTML = '<div class="user-panel">'
             + '<h2 class="user-panel-title">历史对局</h2>'
             + '<div class="battle-stats" id="battle-stats" style="display:none;"></div>'
             + '<div class="battle-tools">'
             + '<div class="battle-filter-grid">'
+            + '<label class="battle-filter-field">时间'
+            + '<select id="battle-filter-days">'
+            + '<option value="all">全部时间</option>'
+            + '<option value="7">最近 7 天</option>'
+            + '<option value="30">最近 30 天</option>'
+            + '</select></label>'
             + '<label class="battle-filter-field">类型'
             + '<select id="battle-filter-mode">'
             + '<option value="all">全部</option>'
-            + '<option value="ai">AI 人机</option>'
-            + '<option value="v1">1.0 真人</option>'
             + '<option value="v2">2.0 多人</option>'
-            + '<option value="local">本地对战</option>'
-            + '<option value="room">房间对战</option>'
+            + '<option value="v1">1.0 真人</option>'
+            + '<option value="ai">1.0 AI</option>'
             + '</select></label>'
             + '<label class="battle-filter-field">结果'
             + '<select id="battle-filter-result">'
@@ -482,15 +489,8 @@
             + '<option value="ongoing">进行中</option>'
             + '<option value="completed">已结束</option>'
             + '</select></label>'
-            + '<label class="battle-filter-field">AI 难度'
-            + '<select id="battle-filter-difficulty">'
-            + '<option value="all">全部</option>'
-            + '<option value="easy">简单</option>'
-            + '<option value="normal">普通</option>'
-            + '<option value="hard">困难</option>'
-            + '</select></label>'
             + '<label class="battle-filter-field keyword">关键词'
-            + '<input id="battle-filter-q" type="search" maxlength="40" placeholder="对局 ID / 玩家名 / 策略" />'
+            + '<input id="battle-filter-q" type="search" maxlength="40" placeholder="对局 ID / 玩家名" />'
             + '</label>'
             + '</div>'
             + '<div class="battle-tool-actions">'
@@ -498,49 +498,342 @@
             + '<button class="battle-tool-btn" id="battle-reset-filters">重置</button>'
             + '<button class="battle-tool-btn download" id="battle-download-zip">打包下载</button>'
             + '</div>'
-            + '<div class="battle-filter-summary" id="battle-filter-summary">可按类型、胜负、AI 难度筛选历史记录。</div>'
+            + '<div class="battle-filter-summary" id="battle-filter-summary">可按时间、类型、胜负筛选历史记录。</div>'
             + '</div>'
-            + '<div class="battle-list" id="battle-list">'
+            + '<div class="battle-zones" id="battle-zones">'
             + '<div class="battle-list-loading">加载中...</div>'
             + '</div>'
             + '</div>';
 
         bindBattleFilterControls();
-        loadBattles(false);
+        loadBattlesOverview();
     }
 
-    function battleQueryString(offset) {
+    // ── 首次加载：获取 zone_summary + stats ─────────────────────────
+
+    function loadBattlesOverview() {
+        var zonesEl = document.getElementById("battle-zones");
+        if (!zonesEl) return;
+
+        window.ApiUtils.apiGet(
+            "/v2/api/user/" + uid + "/battles?" + battleQueryString(0)
+        )
+            .then(function (res) {
+                if (!res.ok) {
+                    zonesEl.innerHTML = '<div class="battle-list-error">' + escHtml(res.error || "加载失败") + '</div>';
+                    return;
+                }
+
+                var stats = res.data.stats || null;
+                var zoneSummary = res.data.zone_summary || null;
+                var filteredStats = res.data.filtered_stats || null;
+                var total = res.data.total || 0;
+
+                renderBattleStats(stats);
+                renderBattleFilterSummary(total, filteredStats);
+                renderZoneCards(zoneSummary);
+            })
+            .catch(function () {
+                if (zonesEl) {
+                    zonesEl.innerHTML = '<div class="battle-list-error">网络错误。</div>';
+                }
+            });
+    }
+
+    // ── 分区卡片 ────────────────────────────────────────────────────
+
+    function renderZoneCards(zoneSummary) {
+        var zonesEl = document.getElementById("battle-zones");
+        if (!zonesEl) return;
+
+        if (!zoneSummary) {
+            zonesEl.innerHTML = '<div class="battle-list-empty">暂无对局记录。</div>';
+            return;
+        }
+
+        var zoneOrder = ["v2_human", "v1_human", "v1_ai"];
+        var hasAny = false;
+
+        var html = "";
+        zoneOrder.forEach(function (zoneKey) {
+            var zone = zoneSummary[zoneKey];
+            if (!zone || zone.total === 0) return;
+            hasAny = true;
+
+            var icon = zoneKey === "v2_human" ? "🎯" : (zoneKey === "v1_human" ? "⚔️" : "🤖");
+            var summaryText = zoneKey === "v2_human"
+                ? (zone.total + " 场 · 冠军 " + zone.wins + " 次")
+                : (zone.total + " 场 · 胜 " + zone.wins + " / 负 " + (zone.losses || 0));
+
+            // 最近对局预览
+            var recentHtml = "";
+            var recent = zone.recent || [];
+            if (recent.length > 0) {
+                recentHtml = '<div class="battle-zone-recent">';
+                recent.forEach(function (b) {
+                    var timeStr = "";
+                    try {
+                        var d = new Date(b.start_time);
+                        if (!isNaN(d.getTime())) timeStr = d.toLocaleDateString("zh-CN");
+                    } catch (e) {}
+                    var resultLabel = b.result === "win" ? "胜" : (b.result === "loss" ? "负" : (b.result === "draw" ? "平" : "?"));
+                    var resultCls = "zone-recent-" + (b.result || "unknown");
+                    recentHtml += '<span class="zone-recent-item ' + resultCls + '">'
+                        + escHtml(timeStr) + ' <span class="zone-recent-result">' + resultLabel + '</span>'
+                        + '</span>';
+                });
+                recentHtml += '</div>';
+            }
+
+            html += '<div class="battle-zone-card" id="zone-' + zoneKey + '">'
+                + '<div class="battle-zone-header" data-zone="' + zoneKey + '">'
+                + '<span class="battle-zone-arrow">▶</span>'
+                + '<span class="battle-zone-icon">' + icon + '</span>'
+                + '<span class="battle-zone-label">' + escHtml(zone.label) + '</span>'
+                + '<span class="battle-zone-summary-text">' + escHtml(summaryText) + '</span>'
+                + '</div>'
+                + recentHtml
+                + '<div class="battle-zone-body" id="zone-body-' + zoneKey + '" style="display:none;">'
+                + '</div>'
+                + '</div>';
+        });
+
+        if (!hasAny) {
+            zonesEl.innerHTML = '<div class="battle-list-empty">暂无对局记录。</div>';
+            return;
+        }
+
+        zonesEl.innerHTML = html;
+
+        // 绑定分区折叠事件
+        zoneOrder.forEach(function (zoneKey) {
+            var header = document.querySelector('[data-zone="' + zoneKey + '"]');
+            if (!header) return;
+            header.addEventListener("click", function () {
+                toggleZone(zoneKey);
+            });
+        });
+    }
+
+    function toggleZone(zoneKey) {
+        var body = document.getElementById("zone-body-" + zoneKey);
+        var arrow = document.querySelector('[data-zone="' + zoneKey + '"] .battle-zone-arrow');
+        if (!body || !arrow) return;
+
+        if (!zoneStates[zoneKey]) {
+            zoneStates[zoneKey] = { expanded: false, battles: [], offset: 0, hasMore: false, loading: false };
+        }
+
+        var state = zoneStates[zoneKey];
+
+        if (state.expanded) {
+            // 折叠
+            body.style.display = "none";
+            arrow.textContent = "▶";
+            state.expanded = false;
+        } else {
+            // 展开
+            body.style.display = "block";
+            arrow.textContent = "▼";
+            state.expanded = true;
+
+            // 首次展开时加载数据
+            if (state.battles.length === 0 && !state.loading) {
+                loadZoneBattles(zoneKey);
+            }
+        }
+    }
+
+    function loadZoneBattles(zoneKey) {
+        var state = zoneStates[zoneKey];
+        if (!state) return;
+        if (state.loading) return;
+        state.loading = true;
+
+        var body = document.getElementById("zone-body-" + zoneKey);
+        if (!body) return;
+        body.innerHTML = '<div class="battle-list-loading">加载中...</div>';
+
+        // 映射 zone key 到 mode 参数
+        var modeMap = { v2_human: "v2", v1_human: "v1", v1_ai: "ai" };
+        var mode = modeMap[zoneKey] || "all";
+
         var params = new URLSearchParams();
         params.set("limit", String(battlesPageSize));
-        params.set("offset", String(offset));
-        params.set("mode", battleFilters.mode || "all");
+        params.set("offset", String(state.offset));
+        params.set("mode", mode);
         params.set("result", battleFilters.result || "all");
-        params.set("difficulty", battleFilters.difficulty || "all");
+        if (battleFilters.days && battleFilters.days !== "all") {
+            params.set("days", battleFilters.days);
+        }
         if (battleFilters.q) {
             params.set("q", battleFilters.q);
         }
-        return params.toString();
+
+        window.ApiUtils.apiGet("/v2/api/user/" + uid + "/battles?" + params.toString())
+            .then(function (res) {
+                state.loading = false;
+                if (!res.ok) {
+                    body.innerHTML = '<div class="battle-list-error">' + escHtml(res.error || "加载失败") + '</div>';
+                    return;
+                }
+
+                var battles = res.data.battles || [];
+                state.battles = state.battles.concat(battles);
+                state.offset = res.data.next_offset || (state.offset + battles.length);
+                state.hasMore = res.data.has_more || false;
+
+                renderZoneBattleList(zoneKey);
+            })
+            .catch(function () {
+                state.loading = false;
+                body.innerHTML = '<div class="battle-list-error">网络错误。</div>';
+            });
     }
 
-    function readBattleFiltersFromDom() {
-        battleFilters = {
-            mode: (document.getElementById("battle-filter-mode") || {}).value || "all",
-            result: (document.getElementById("battle-filter-result") || {}).value || "all",
-            difficulty: (document.getElementById("battle-filter-difficulty") || {}).value || "all",
-            q: ((document.getElementById("battle-filter-q") || {}).value || "").trim()
-        };
+    function renderZoneBattleList(zoneKey) {
+        var state = zoneStates[zoneKey];
+        var body = document.getElementById("zone-body-" + zoneKey);
+        if (!body || !state) return;
+
+        if (state.battles.length === 0) {
+            body.innerHTML = '<div class="battle-list-empty">暂无此类对局。</div>';
+            return;
+        }
+
+        var html = '<div class="battle-list">';
+        state.battles.forEach(function (b) {
+            html += createBattleItemHtml(b);
+        });
+        html += '</div>';
+
+        // 加载更多按钮
+        if (state.hasMore) {
+            html += '<button class="battle-load-more" id="zone-more-' + zoneKey + '">加载更多</button>';
+        }
+
+        body.innerHTML = html;
+
+        // 绑定加载更多
+        var moreBtn = document.getElementById("zone-more-" + zoneKey);
+        if (moreBtn) {
+            moreBtn.addEventListener("click", function () {
+                moreBtn.disabled = true;
+                moreBtn.textContent = "加载中...";
+                loadZoneBattles(zoneKey);
+            });
+        }
+
+        // 绑定点击跳转
+        var items = body.querySelectorAll(".battle-item");
+        items.forEach(function (item) {
+            item.addEventListener("click", function () {
+                var battleId = this.getAttribute("data-battle-id");
+                if (battleId) {
+                    var isV2 = this.classList.contains("battle-item-v2");
+                    window.location.href = (isV2 ? "/v2/record/" : "/v1/record/") + encodeURIComponent(battleId);
+                }
+            });
+            item.style.cursor = "pointer";
+        });
     }
 
-    function setBattleFilterDomValues() {
-        var mode = document.getElementById("battle-filter-mode");
-        var result = document.getElementById("battle-filter-result");
-        var difficulty = document.getElementById("battle-filter-difficulty");
-        var q = document.getElementById("battle-filter-q");
-        if (mode) mode.value = battleFilters.mode;
-        if (result) result.value = battleFilters.result;
-        if (difficulty) difficulty.value = battleFilters.difficulty;
-        if (q) q.value = battleFilters.q || "";
+    function createBattleItemHtml(b) {
+        var isV2 = b.rule_version && String(b.rule_version).startsWith("2.");
+        if (isV2) {
+            return createV2BattleItemHtml(b);
+        }
+        return createV1BattleItemHtml(b);
     }
+
+    function createV1BattleItemHtml(b) {
+        var result = b.result || "unknown";
+        var p1Name = b.p1_name || "P1";
+        var p2Name = b.p2_name || "P2";
+        var isAiBattle = b.mode === "ai" || b.opponent_type === "ai";
+
+        var resultLabels = { win: "胜", loss: "负", draw: "平", unknown: "?", ongoing: "进行中" };
+        var resultLabel = resultLabels[result] || "?";
+
+        var timeStr = "";
+        try {
+            var d = new Date(b.start_time);
+            if (!isNaN(d.getTime())) timeStr = d.toLocaleString("zh-CN");
+        } catch (e) { timeStr = b.start_time || ""; }
+
+        var roundsText = (b.round_count || 0) + " 回合";
+        var modeText = isAiBattle ? ' · AI ' + (b.ai_difficulty ? difficultyText(b.ai_difficulty) : '') : '';
+
+        return '<div class="battle-item" data-battle-id="' + escHtml(b.battle_id) + '">'
+            + '<div class="battle-result-badge battle-result-' + result + '">' + escHtml(resultLabel) + '</div>'
+            + '<div class="battle-info">'
+            + '<div class="battle-info-row">'
+            + '<span class="battle-opponent">' + escHtml(p1Name) + ' vs ' + escHtml(p2Name) + '</span>'
+            + '<span class="battle-rounds">' + roundsText + '</span>'
+            + '</div>'
+            + '<div class="battle-info-row">'
+            + '<span class="battle-time">' + escHtml(timeStr) + '</span>'
+            + (modeText ? '<span class="battle-time">' + escHtml(modeText) + '</span>' : '')
+            + '</div>'
+            + '</div>'
+            + '<span class="battle-result-text result-' + result + '">' + escHtml(resultLabel) + '</span>'
+            + '</div>';
+    }
+
+    function createV2BattleItemHtml(b) {
+        var playerCount = b.player_count || 0;
+        var modeLabel = b.mode_label || "对局";
+        var myRank = b.my_rank;
+        var isWinner = b.is_winner;
+        var participantNames = b.participant_names || [];
+        var namesPreview = participantNames.slice(0, 4).join("、");
+        if (participantNames.length > 4) namesPreview += " 等" + participantNames.length + "人";
+
+        var rankBadge = "";
+        var rankClass = "";
+        if (myRank === 1 && isWinner) {
+            rankBadge = "🏆 冠军";
+            rankClass = "win";
+        } else if (myRank != null) {
+            rankBadge = "第" + myRank + "名";
+            rankClass = myRank <= 2 ? "win" : (myRank >= playerCount ? "loss" : "draw");
+        } else if (!b.end_time) {
+            rankBadge = "进行中";
+            rankClass = "ongoing";
+        } else {
+            rankBadge = "?";
+            rankClass = "unknown";
+        }
+
+        var timeStr = "";
+        try {
+            var d = new Date(b.start_time);
+            if (!isNaN(d.getTime())) timeStr = d.toLocaleString("zh-CN");
+        } catch (e) { timeStr = b.start_time || ""; }
+
+        var roundsText = (b.round_count || 0) + " 回合";
+        var modeBadge = modeLabel === "房间对战"
+            ? '<span class="v2-mode-badge room">' + escHtml(modeLabel) + '</span>'
+            : '<span class="v2-mode-badge local">' + escHtml(modeLabel) + '</span>';
+
+        return '<div class="battle-item battle-item-v2" data-battle-id="' + escHtml(b.battle_id) + '">'
+            + '<div class="battle-result-badge battle-result-' + rankClass + '">' + escHtml(rankBadge) + '</div>'
+            + '<div class="battle-info">'
+            + '<div class="battle-info-row">'
+            + modeBadge
+            + '<span class="battle-opponent">多人对局 · ' + playerCount + '人</span>'
+            + '<span class="battle-rounds">' + roundsText + '</span>'
+            + '</div>'
+            + '<div class="battle-info-row">'
+            + '<span class="battle-time">' + escHtml(timeStr) + '</span>'
+            + '<span class="battle-participants-v2">' + escHtml(namesPreview) + '</span>'
+            + '</div>'
+            + '</div>'
+            + '<span class="battle-result-text result-' + rankClass + '">' + escHtml(rankBadge) + '</span>'
+            + '</div>';
+    }
+
+    // ── 筛选控件绑定 ────────────────────────────────────────────────
 
     function bindBattleFilterControls() {
         setBattleFilterDomValues();
@@ -553,16 +846,16 @@
         if (applyBtn) {
             applyBtn.addEventListener("click", function () {
                 readBattleFiltersFromDom();
-                battlesOffset = 0;
-                loadBattles(false);
+                zoneStates = {};
+                renderBattlesPanel();
             });
         }
         if (resetBtn) {
             resetBtn.addEventListener("click", function () {
-                battleFilters = { mode: "all", result: "all", difficulty: "all", q: "" };
+                battleFilters = { mode: "all", result: "all", difficulty: "all", days: "all", q: "" };
                 setBattleFilterDomValues();
-                battlesOffset = 0;
-                loadBattles(false);
+                zoneStates = {};
+                renderBattlesPanel();
             });
         }
         if (downloadBtn) {
@@ -572,62 +865,11 @@
             qInput.addEventListener("keydown", function (event) {
                 if (event.key === "Enter") {
                     readBattleFiltersFromDom();
-                    battlesOffset = 0;
-                    loadBattles(false);
+                    zoneStates = {};
+                    renderBattlesPanel();
                 }
             });
         }
-    }
-
-    function loadBattles(append) {
-        var listEl = document.getElementById("battle-list");
-        if (!listEl) return;
-
-        window.ApiUtils.apiGet(
-            "/v2/api/user/" + uid + "/battles?" + battleQueryString(battlesOffset)
-        )
-            .then(function (res) {
-                if (!res.ok) {
-                    listEl.innerHTML = '<div class="battle-list-error">' + escHtml(res.error || "加载失败") + '</div>';
-                    return;
-                }
-
-                var battles = res.data.battles || [];
-                if (!append && battles.length === 0) {
-                    listEl.innerHTML = '<div class="battle-list-empty">暂无对局记录。</div>';
-                    return;
-                }
-
-                if (!append) listEl.innerHTML = "";
-                if (!append) {
-                    renderBattleStats(res.data.stats || null);
-                    renderBattleFilterSummary(res.data.total || 0, res.data.filtered_stats || null);
-                }
-                battles.forEach(function (b) {
-                    listEl.appendChild(createBattleItem(b));
-                });
-                battlesOffset = res.data.next_offset || (battlesOffset + battles.length);
-
-                var oldButton = document.getElementById("battle-load-more");
-                if (oldButton) oldButton.remove();
-                if (res.data.has_more) {
-                    var moreButton = document.createElement("button");
-                    moreButton.id = "battle-load-more";
-                    moreButton.className = "battle-load-more";
-                    moreButton.textContent = "加载更多";
-                    moreButton.addEventListener("click", function () {
-                        moreButton.disabled = true;
-                        moreButton.textContent = "加载中...";
-                        loadBattles(true);
-                    });
-                    listEl.appendChild(moreButton);
-                }
-            })
-            .catch(function () {
-                if (listEl) {
-                    listEl.innerHTML = '<div class="battle-list-error">网络错误。</div>';
-                }
-            });
     }
 
     function renderBattleFilterSummary(total, filteredStats) {
@@ -638,9 +880,11 @@
         var v1Count = filteredStats && filteredStats.v1 ? (filteredStats.v1.total || 0) : 0;
         var v2Count = filteredStats && filteredStats.v2 ? (filteredStats.v2.total || 0) : 0;
         var active = [];
+        if (battleFilters.days && battleFilters.days !== "all") {
+            active.push("最近 " + battleFilters.days + " 天");
+        }
         if (battleFilters.mode !== "all") active.push("类型：" + battleFilters.mode);
         if (battleFilters.result !== "all") active.push("结果：" + battleFilters.result);
-        if (battleFilters.difficulty !== "all") active.push("AI 难度：" + difficultyText(battleFilters.difficulty));
         if (battleFilters.q) active.push("关键词：" + battleFilters.q);
 
         el.textContent = "筛选结果 " + total + " 场"
@@ -661,6 +905,9 @@
         params.set("mode", battleFilters.mode || "all");
         params.set("result", battleFilters.result || "all");
         params.set("difficulty", battleFilters.difficulty || "all");
+        if (battleFilters.days && battleFilters.days !== "all") {
+            params.set("days", battleFilters.days);
+        }
         if (battleFilters.q) params.set("q", battleFilters.q);
 
         var headers = {};
@@ -755,131 +1002,6 @@
             + '<div class="battle-stat-pills">' + countHtml + '</div>'
             + '</div>';
         el.style.display = "";
-    }
-
-    function createBattleItem(b) {
-        var isV2 = b.rule_version && String(b.rule_version).startsWith("2.");
-        if (isV2) {
-            return createV2BattleItem(b);
-        }
-
-        var result = b.result || "unknown";
-        var p1Name = b.p1_name || "P1";
-        var p2Name = b.p2_name || "P2";
-        var isAiBattle = b.mode === "ai" || b.opponent_type === "ai";
-
-        // 结果标签映射
-        var resultLabels = {
-            win: "胜",
-            loss: "负",
-            draw: "平",
-            unknown: "?",
-            ongoing: "进行中"
-        };
-        var resultLabel = resultLabels[result] || "?";
-
-        // 格式化时间
-        var timeStr = "";
-        try {
-            var d = new Date(b.start_time);
-            if (!isNaN(d.getTime())) {
-                timeStr = d.toLocaleString("zh-CN");
-            }
-        } catch (e) {
-            timeStr = b.start_time || "";
-        }
-
-        var roundsText = (b.round_count || 0) + " 回合";
-        var modeText = isAiBattle
-            ? ' · AI ' + (b.ai_difficulty ? difficultyText(b.ai_difficulty) : '')
-            : '';
-
-        var div = document.createElement("div");
-        div.className = "battle-item";
-        div.innerHTML = '<div class="battle-result-badge battle-result-' + result + '">' + escHtml(resultLabel) + '</div>'
-            + '<div class="battle-info">'
-            + '<div class="battle-info-row">'
-            + '<span class="battle-opponent">' + escHtml(p1Name) + ' vs ' + escHtml(p2Name) + '</span>'
-            + '<span class="battle-rounds">' + roundsText + '</span>'
-            + '</div>'
-            + '<div class="battle-info-row">'
-            + '<span class="battle-time">' + escHtml(timeStr) + '</span>'
-            + (modeText ? '<span class="battle-time">' + escHtml(modeText) + '</span>' : '')
-            + '</div>'
-            + '</div>'
-            + '<span class="battle-result-text result-' + result + '">' + escHtml(resultLabel) + '</span>';
-
-        // 点击跳转到回放页面
-        div.addEventListener("click", function () {
-            window.location.href = "/v1/record/" + encodeURIComponent(b.battle_id);
-        });
-
-        return div;
-    }
-
-    function createV2BattleItem(b) {
-        var playerCount = b.player_count || 0;
-        var modeLabel = b.mode_label || "对局";
-        var myRank = b.my_rank;
-        var isWinner = b.is_winner;
-        var participantNames = b.participant_names || [];
-        var namesPreview = participantNames.slice(0, 4).join("、");
-        if (participantNames.length > 4) namesPreview += " 等" + participantNames.length + "人";
-
-        // 名次标签
-        var rankBadge = "";
-        var rankClass = "";
-        if (myRank === 1 && isWinner) {
-            rankBadge = "🏆 冠军";
-            rankClass = "win";
-        } else if (myRank != null) {
-            rankBadge = "第" + myRank + "名";
-            rankClass = myRank <= 2 ? "win" : (myRank >= playerCount ? "loss" : "draw");
-        } else if (!b.end_time) {
-            rankBadge = "进行中";
-            rankClass = "ongoing";
-        } else {
-            rankBadge = "?";
-            rankClass = "unknown";
-        }
-
-        // 格式化时间
-        var timeStr = "";
-        try {
-            var d = new Date(b.start_time);
-            if (!isNaN(d.getTime())) {
-                timeStr = d.toLocaleString("zh-CN");
-            }
-        } catch (e) {
-            timeStr = b.start_time || "";
-        }
-
-        var roundsText = (b.round_count || 0) + " 回合";
-        var modeBadge = modeLabel === "房间对战"
-            ? '<span class="v2-mode-badge room">' + escHtml(modeLabel) + '</span>'
-            : '<span class="v2-mode-badge local">' + escHtml(modeLabel) + '</span>';
-
-        var div = document.createElement("div");
-        div.className = "battle-item battle-item-v2";
-        div.innerHTML = '<div class="battle-result-badge battle-result-' + rankClass + '">' + escHtml(rankBadge) + '</div>'
-            + '<div class="battle-info">'
-            + '<div class="battle-info-row">'
-            + modeBadge
-            + '<span class="battle-opponent">多人对局 · ' + playerCount + '人</span>'
-            + '<span class="battle-rounds">' + roundsText + '</span>'
-            + '</div>'
-            + '<div class="battle-info-row">'
-            + '<span class="battle-time">' + escHtml(timeStr) + '</span>'
-            + '<span class="battle-participants-v2">' + escHtml(namesPreview) + '</span>'
-            + '</div>'
-            + '</div>'
-            + '<span class="battle-result-text result-' + rankClass + '">' + escHtml(rankBadge) + '</span>';
-
-        div.addEventListener("click", function () {
-            window.location.href = "/v2/record/" + encodeURIComponent(b.battle_id);
-        });
-
-        return div;
     }
 
     // ==================================================================

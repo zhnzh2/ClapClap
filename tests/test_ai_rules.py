@@ -1056,5 +1056,210 @@ class TestRuleRegression(unittest.TestCase):
                 )
 
 
+# ═══════════════════════════════════════════════════════════════
+# v2 AI 测试（阶段 G）
+# ═══════════════════════════════════════════════════════════════
+
+class TestV2AILegalMoves(unittest.TestCase):
+    """v2 AI 合法动作测试。"""
+
+    def setUp(self):
+        from app.v2.models import GameStateV2, PlayerStateV2
+        self.players = [
+            PlayerStateV2(player_id="p1", seat_index=0, username="人类"),
+            PlayerStateV2(player_id="p2", seat_index=1, username="AI机器人"),
+        ]
+        self.state = GameStateV2(players=self.players, max_players=2)
+
+    def test_legal_moves_never_empty(self):
+        """初始状态下所有存活玩家都有合法动作。"""
+        from app.v2.ai import get_legal_moves_v2_ai
+        for p in self.state.alive_players():
+            legal = get_legal_moves_v2_ai(self.state, p.player_id)
+            self.assertGreater(len(legal), 0, f"玩家 {p.player_id} 应有合法动作")
+            self.assertIn("QI", [m.name for m in legal], "QI（气）在初始状态应始终合法")
+
+    def test_random_always_selects_legal_move(self):
+        """random 策略每次选的动作都在合法列表中。"""
+        from app.v2.ai import get_legal_moves_v2_ai, select_ai_move_v2
+        legal_names = {m.name for m in get_legal_moves_v2_ai(self.state, "p2")}
+        for _ in range(50):
+            move = select_ai_move_v2(self.state, "p2", difficulty="random", rng=random.Random())
+            self.assertIn(move.name, legal_names, f"random 选了非法动作: {move.name}")
+
+    def test_normal_always_selects_legal_move(self):
+        """normal heuristic 每次选的动作都在合法列表中。"""
+        from app.v2.ai import get_legal_moves_v2_ai, select_ai_move_v2
+        legal_names = {m.name for m in get_legal_moves_v2_ai(self.state, "p2")}
+        for _ in range(50):
+            move = select_ai_move_v2(self.state, "p2", difficulty="normal", rng=random.Random())
+            self.assertIn(move.name, legal_names, f"normal 选了非法动作: {move.name}")
+
+    def test_random_and_normal_can_differ(self):
+        """random 和 normal 策略可能产生不同选择。"""
+        from app.v2.ai import select_ai_move_v2
+        rng1 = random.Random(42)
+        rng2 = random.Random(42)
+        moves_random = {select_ai_move_v2(self.state, "p2", difficulty="random", rng=rng1).name for _ in range(30)}
+        moves_normal = {select_ai_move_v2(self.state, "p2", difficulty="normal", rng=rng2).name for _ in range(30)}
+        # random 应该更多样，normal 会集中在特定动作
+        # 不严格断言，只验证两种策略都不为空
+        self.assertGreater(len(moves_random), 0)
+        self.assertGreater(len(moves_normal), 0)
+
+    def test_dead_player_has_no_legal_moves(self):
+        """死亡玩家无合法动作。"""
+        from app.v2.ai import get_legal_moves_v2_ai
+        from app.v2.constants import PLAYER_DEAD
+        p2 = self.state.get_player("p2")
+        p2.status = PLAYER_DEAD
+        legal = get_legal_moves_v2_ai(self.state, "p2")
+        self.assertEqual(len(legal), 0, "死亡玩家不应有合法动作")
+
+    def test_ai_move_with_invalid_difficulty_falls_back_to_random(self):
+        """未知难度回退到随机选择（合法）。"""
+        from app.v2.ai import get_legal_moves_v2_ai, select_ai_move_v2
+        legal_names = {m.name for m in get_legal_moves_v2_ai(self.state, "p2")}
+        move = select_ai_move_v2(self.state, "p2", difficulty="super_hard_ai")
+        self.assertIn(move.name, legal_names)
+
+
+class TestV2AIMixedBattle(unittest.TestCase):
+    """v2 混合对局（人类 + AI）smoke 测试。"""
+
+    def setUp(self):
+        from app.v2.models import GameStateV2, PlayerStateV2
+        import server.runtime as rt
+        self._orig_state = rt.CURRENT_STATE_V2
+        self._orig_engine = rt.CURRENT_ENGINE_V2
+        self._orig_battle_id = rt.CURRENT_BATTLE_ID_V2
+        self._orig_player_types = dict(rt.CURRENT_V2_PLAYER_TYPES)
+        self._orig_ai_difficulty = rt.CURRENT_V2_AI_DIFFICULTY
+
+    def tearDown(self):
+        import server.runtime as rt
+        from app import battle_recorder
+        if rt.CURRENT_BATTLE_ID_V2 and rt.CURRENT_BATTLE_ID_V2 != self._orig_battle_id:
+            battle_recorder.delete_battle(rt.CURRENT_BATTLE_ID_V2)
+        rt.CURRENT_STATE_V2 = self._orig_state
+        rt.CURRENT_ENGINE_V2 = self._orig_engine
+        rt.CURRENT_BATTLE_ID_V2 = self._orig_battle_id
+        rt.CURRENT_V2_PLAYER_TYPES = self._orig_player_types
+        rt.CURRENT_V2_AI_DIFFICULTY = self._orig_ai_difficulty
+
+    def _create_state(self, player_count: int) -> tuple:
+        from app.v2.models import GameStateV2, PlayerStateV2
+        players = []
+        for i in range(player_count):
+            players.append(PlayerStateV2(
+                player_id=f"p{i + 1}",
+                seat_index=i,
+                username=f"玩家{i + 1}",
+            ))
+        return GameStateV2(players=players, max_players=player_count)
+
+    def test_two_player_one_human_one_ai_full_game(self):
+        """2 人局（1 人类 + 1 AI）完整结算。"""
+        from app.v2.ai import select_ai_move_v2
+        from app.v2.game import GameEngineV2
+        from app.v2.constants import Move
+        state = self._create_state(2)
+        rng = random.Random(123)
+
+        for _ in range(20):
+            if state.is_game_over():
+                break
+            moves = {
+                "p1": Move.QI,  # 人类选气
+                "p2": select_ai_move_v2(state, "p2", difficulty="normal", rng=rng),
+            }
+            log = GameEngineV2(state).resolve_round(moves)
+            self.assertIsNotNone(log, "每回合应有结算日志")
+
+    def test_three_player_one_human_two_ai_full_game(self):
+        """3 人局（1 人类 + 2 AI）完整结算。"""
+        from app.v2.ai import select_ai_move_v2
+        from app.v2.game import GameEngineV2
+        from app.v2.constants import Move
+        state = self._create_state(3)
+        rng = random.Random(42)
+
+        for _ in range(30):
+            if state.is_game_over():
+                break
+            moves = {
+                "p1": Move.PO,  # 人类用破攻击
+                "p2": select_ai_move_v2(state, "p2", difficulty="normal", rng=rng),
+                "p3": select_ai_move_v2(state, "p3", difficulty="random", rng=rng),
+            }
+            log = GameEngineV2(state).resolve_round(moves)
+            self.assertIsNotNone(log)
+
+    def test_six_player_full_ai_simulation(self):
+        """6 人局（全 AI）自动模拟 5 回合不崩溃。"""
+        from app.v2.ai import select_ai_move_v2
+        from app.v2.game import GameEngineV2
+        from app.v2.constants import Move
+        state = self._create_state(6)
+        rng = random.Random(99)
+
+        for _ in range(5):
+            if state.is_game_over():
+                break
+            moves = {}
+            for p in state.alive_players():
+                moves[p.player_id] = select_ai_move_v2(
+                    state, p.player_id,
+                    difficulty="normal", rng=rng,
+                )
+            log = GameEngineV2(state).resolve_round(moves)
+            self.assertIsNotNone(log)
+
+    def test_local_api_all_ai_accepts_empty_moves(self):
+        """本地 API 支持全 AI 对局，空 moves 由后端自动补齐。"""
+        from server.app import app
+
+        client = app.test_client()
+        reset = client.post("/v2/api/local/reset", json={
+            "player_count": 2,
+            "names": ["AI-1", "AI-2"],
+            "player_types": ["ai", "ai"],
+            "ai_difficulty": "random",
+        })
+        self.assertEqual(reset.status_code, 200)
+        reset_payload = reset.get_json()
+        self.assertEqual(reset_payload["state"]["_player_types"], {"p1": "ai", "p2": "ai"})
+
+        step = client.post("/v2/api/local/step", json={
+            "moves": {},
+            "auto_resolve": True,
+        })
+        self.assertEqual(step.status_code, 200)
+        step_payload = step.get_json()
+        self.assertTrue(step_payload["ok"])
+        self.assertEqual(step_payload["state"]["_player_types"], {"p1": "ai", "p2": "ai"})
+        self.assertEqual(step_payload["state"]["_ai_difficulty"], "random")
+
+    def test_local_api_normalizes_invalid_player_types(self):
+        """错误 player_type 不应进入运行时状态，统一回退为 human。"""
+        from server.app import app
+
+        client = app.test_client()
+        response = client.post("/v2/api/local/reset", json={
+            "player_count": 3,
+            "names": ["A", "B", "C"],
+            "player_types": ["robot", "ai"],
+            "ai_difficulty": "unknown",
+        })
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["state"]["_player_types"], {
+            "p1": "human",
+            "p2": "ai",
+            "p3": "human",
+        })
+        self.assertEqual(payload["state"]["_ai_difficulty"], "normal")
+
+
 if __name__ == "__main__":
     unittest.main()

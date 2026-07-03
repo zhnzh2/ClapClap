@@ -11,9 +11,13 @@ var v2SelectedMoves = {};            // {player_id: move_name}
 var v2FocusedPlayer = null;          // 当前键盘焦点 player_id
 var v2PlayerCount = 2;              // 准备阶段的玩家数量
 var v2PlayerNames = [];             // 准备阶段的玩家名称
+var v2PlayerTypes = [];             // 准备阶段的玩家类型 ["human"|"ai", ...]
+var v2AiDifficulty = "normal";      // AI 难度 "random" | "normal"
 var v2IsSetupPhase = true;          // 是否在准备阶段
 var v2EndShown = false;             // 结束卡片是否已显示
 var v2RoundSummaryShown = false;    // 回合总结是否已显示
+var v2HumanPlayerIds = [];          // 对局中的人类玩家 ID
+var v2AiPlayerIds = [];             // 对局中的 AI 玩家 ID
 
 /* ── 玩家颜色 ────────────────────────────────────────── */
 var V2_PLAYER_COLORS = [
@@ -26,7 +30,8 @@ var V2_SETTINGS_KEY = "clapclap_v2_ui_settings";
 var v2Settings = {
     autoResolve: false,         // 自动决策（默认关闭）
     showHistory: true,
-    collapseSettlementLog: true, // Step8: 结算日志默认折叠
+    collapseSettlementLog: true, // 结算日志默认折叠
+    compactMode: false,         // 紧凑出招区
 };
 
 /* ── 动作快捷键映射 ──────────────────────────────────── */

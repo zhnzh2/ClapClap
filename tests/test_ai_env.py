@@ -4,6 +4,7 @@ import random
 import tempfile
 import unittest
 from argparse import Namespace
+from pathlib import Path
 from unittest.mock import patch
 
 from app.ai.space import ACTION_SPACE_SIZE, get_action_space_fingerprint
@@ -282,6 +283,146 @@ class TestEvaluateAi(unittest.TestCase):
         self.assertEqual(result["truncated"], 0)
         self.assertGreaterEqual(result["win_rate"], 0.9)
         self.assertLessEqual(result["seat_win_rate_delta"], 0.2)
+
+
+# ═══════════════════════════════════════════════════════════════
+# 训练闭环测试（阶段 J）
+# ═══════════════════════════════════════════════════════════════
+
+class TestTrainingSmoke(unittest.TestCase):
+    """训练基础设施的 smoke 测试，不依赖训练库安装。"""
+
+    def test_dry_run_writes_valid_manifest(self):
+        """--dry-run 生成合法的 manifest.json。"""
+        import json
+        from training.train_maskable_ppo import write_manifest
+
+        with tempfile.TemporaryDirectory() as tmp:
+            args = _fake_args(output_dir=Path(tmp))
+            manifest = build_training_manifest(args)
+            manifest_path = write_manifest(Path(tmp), manifest)
+
+            self.assertTrue(manifest_path.exists())
+            loaded = json.loads(manifest_path.read_text(encoding="utf-8"))
+            self.assertEqual(loaded["manifest_version"], "clapclap-ai-model-manifest-v1")
+            self.assertEqual(loaded["status"], "dry_run")
+            self.assertIn("env_metadata", loaded)
+            self.assertIn("training", loaded)
+
+    def test_manifest_env_metadata_passes_validation(self):
+        """dry-run manifest 的 env_metadata 通过 validate_model_metadata。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            args = _fake_args(output_dir=Path(tmp))
+            manifest = build_training_manifest(args)
+            valid = validate_model_metadata(manifest["env_metadata"])
+            self.assertTrue(valid, "dry-run manifest 应通过元数据校验")
+
+    def test_observation_vector_field_order_stable(self):
+        """observation vector 字段顺序与文档一致。"""
+        from training.gym_env import (
+            OBSERVATION_VECTOR_SIZE,
+            PLAYER_FIELDS,
+            encode_observation_vector,
+        )
+
+        # 构造一个标准 observation
+        mask = [True] * 17
+        observation = {
+            "round_num": 1,
+            "self": {"hp": 1, "qi": 2, "shield": 0, "spark": 0, "battery": 0, "pickaxe": 0, "flash_used": 0},
+            "opponent": {"hp": 1, "qi": 1, "shield": 0, "spark": 0, "battery": 0, "pickaxe": 0, "flash_used": 0},
+            "legal_action_mask": mask,
+        }
+        vec = encode_observation_vector(observation, max_rounds=200)
+
+        self.assertEqual(len(vec), OBSERVATION_VECTOR_SIZE)
+        # 校验位置：index 0 = round_num
+        self.assertEqual(vec[0], 1.0 / 200.0)
+        # 位置 1~7 = self 字段（hp, qi, shield, spark, battery, pickaxe, flash_used）
+        self.assertEqual(vec[1], 1.0)  # hp/1
+        # 位置 8~14 = opponent 字段
+        # 位置 15~31 = legal_action_mask（17 位）
+        self.assertEqual(vec[15], 1.0)  # mask[0] = True
+
+    def test_observation_vector_with_different_max_rounds(self):
+        """不同 max_rounds 下的 round_num 归一化。"""
+        from training.gym_env import encode_observation_vector
+
+        mask = [True] * 17
+        obs = {
+            "round_num": 50,
+            "self": {"hp": 1, "qi": 0, "shield": 0, "spark": 0, "battery": 0, "pickaxe": 0, "flash_used": 0},
+            "opponent": {"hp": 1, "qi": 0, "shield": 0, "spark": 0, "battery": 0, "pickaxe": 0, "flash_used": 0},
+            "legal_action_mask": mask,
+        }
+        vec = encode_observation_vector(obs, max_rounds=200)
+        self.assertAlmostEqual(vec[0], 0.25, places=4)
+
+    def test_legal_action_mask_matches_gym_action_masks(self):
+        """ClapClapEnv 的 legal_action_mask 与 gym wrapper 一致。"""
+        try:
+            make_gymnasium_env(ai_player=1, seed=42)
+        except RuntimeError:
+            self.skipTest("训练依赖未安装")
+
+        env = make_gymnasium_env(ai_player=1, seed=42)
+        env.reset()
+        core_mask = env.core.legal_action_mask()
+        gym_mask = env.action_masks().tolist()
+        self.assertEqual(core_mask, gym_mask, "core mask 和 gym action_masks() 应一致")
+
+    def test_multi_env_instances_independent(self):
+        """多个 env 实例互不污染。"""
+        env1 = ClapClapEnv(ai_player=1, seed=1)
+        env2 = ClapClapEnv(ai_player=2, seed=2)
+
+        obs1 = env1.reset()
+        obs2 = env2.reset()
+
+        self.assertEqual(obs1["ai_player"], 1)
+        self.assertEqual(obs2["ai_player"], 2)
+        self.assertEqual(env1.state.round_num, 0)
+        self.assertEqual(env2.state.round_num, 0)
+
+    def test_gym_reset_randomize_seat(self):
+        """reset(options={"randomize_seat": True}) 随机切换 P1/P2。"""
+        try:
+            make_gymnasium_env(ai_player=1, seed=42)
+        except RuntimeError:
+            self.skipTest("训练依赖未安装")
+
+        env = make_gymnasium_env(ai_player=1, seed=42, randomize_seat=True)
+        seats: set[int] = set()
+        for _ in range(20):
+            _, info = env.reset(seed=42)
+            seats.add(info.get("metadata", {}).get("ai_player"))
+        self.assertGreater(len(seats), 0, "应至少有一个座位")
+
+    def test_training_deps_missing_gives_friendly_error(self):
+        """训练依赖缺失时给出友好错误而非崩溃。"""
+        from training.gym_env import _require_training_dependencies
+        try:
+            _require_training_dependencies()
+        except RuntimeError as e:
+            self.assertIn("not installed", str(e))
+            self.assertIn("requirements-train.txt", str(e))
+
+
+def _fake_args(output_dir: Path):
+    """构建测试用的 argparse Namespace。"""
+    import argparse
+    from datetime import datetime, timezone
+    args = argparse.Namespace()
+    args.output_dir = output_dir
+    args.model_version = "test-v0.0.0"
+    args.dry_run = True
+    args.seed = 20260630
+    args.total_timesteps = 1000
+    args.max_rounds = 100
+    args.history_window = 4
+    args.opponent_pool = "random"
+    args.opponent_weights = None
+    return args
 
 
 if __name__ == "__main__":

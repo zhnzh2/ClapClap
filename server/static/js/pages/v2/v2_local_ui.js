@@ -22,14 +22,31 @@ function renderSetupPhase() {
 
     grid.style.gridTemplateColumns = "repeat(" + cols + ", 1fr)";
 
+    // 初始化 playerTypes 数组
+    while (v2PlayerTypes.length < v2PlayerCount) v2PlayerTypes.push("human");
+    v2PlayerTypes.length = v2PlayerCount;
+
     var html = "";
     for (var i = 0; i < v2PlayerCount; i++) {
         var name = v2PlayerNames[i] || ("玩家" + (i + 1));
         var color = V2_PLAYER_COLORS[i];
+        var isAi = v2PlayerTypes[i] === "ai";
         html += '<div class="setup-player-card">';
         html += '<div class="setup-player-avatar" style="background:' + color + ';">' + (i + 1) + '</div>';
         html += '<div class="setup-player-number">玩家 ' + (i + 1) + '</div>';
         html += '<input type="text" id="setup-name-' + i + '" value="' + escHtml(name) + '" maxlength="10" placeholder="输入名称" />';
+        // 类型切换
+        html += '<div class="setup-player-type">';
+        html += '<button class="setup-type-btn' + (isAi ? '' : ' active') + '" id="setup-type-human-' + i + '" data-idx="' + i + '" data-type="human">👤 人类</button>';
+        html += '<button class="setup-type-btn' + (isAi ? ' active' : '') + '" id="setup-type-ai-' + i + '" data-idx="' + i + '" data-type="ai">🤖 AI</button>';
+        html += '</div>';
+        // AI 难度选择（仅 AI 玩家显示）
+        html += '<div class="setup-ai-difficulty" id="setup-ai-diff-' + i + '" style="display:' + (isAi ? '' : 'none') + ';">';
+        html += '<select id="setup-ai-diff-select-' + i + '">';
+        html += '<option value="normal"' + (v2AiDifficulty === "normal" ? " selected" : "") + '>普通 AI</option>';
+        html += '<option value="random"' + (v2AiDifficulty === "random" ? " selected" : "") + '>随机 AI</option>';
+        html += '</select>';
+        html += '</div>';
         html += '</div>';
     }
     grid.innerHTML = html;
@@ -40,6 +57,38 @@ function renderSetupPhase() {
             (function(idx) {
                 input.addEventListener("input", function() {
                     v2PlayerNames[idx] = this.value.trim() || ("玩家" + (idx + 1));
+                });
+            })(i2);
+        }
+
+        // 类型切换按钮
+        var humanBtn = document.getElementById("setup-type-human-" + i2);
+        var aiBtn = document.getElementById("setup-type-ai-" + i2);
+        if (humanBtn && aiBtn) {
+            (function(idx, hBtn, aBtn) {
+                hBtn.addEventListener("click", function() {
+                    v2PlayerTypes[idx] = "human";
+                    hBtn.classList.add("active");
+                    aBtn.classList.remove("active");
+                    var diffEl = document.getElementById("setup-ai-diff-" + idx);
+                    if (diffEl) diffEl.style.display = "none";
+                });
+                aBtn.addEventListener("click", function() {
+                    v2PlayerTypes[idx] = "ai";
+                    aBtn.classList.add("active");
+                    hBtn.classList.remove("active");
+                    var diffEl = document.getElementById("setup-ai-diff-" + idx);
+                    if (diffEl) diffEl.style.display = "";
+                });
+            })(i2, humanBtn, aiBtn);
+        }
+
+        // AI 难度选择
+        var diffSelect = document.getElementById("setup-ai-diff-select-" + i2);
+        if (diffSelect) {
+            (function(idx) {
+                diffSelect.addEventListener("change", function() {
+                    v2AiDifficulty = this.value;
                 });
             })(i2);
         }
@@ -112,10 +161,12 @@ function renderPlayerCards(players) {
         var isFocused = p.player_id === v2FocusedPlayer;
         var cls = "player-panel" + (isDead ? " dead" : "") + (isFocused ? " focused" : "");
 
-        html += '<div class="' + cls + '" data-player-id="' + p.player_id + '" title="点击切换焦点">';
+        var isAi = v2AiPlayerIds.indexOf(p.player_id) >= 0;
+        html += '<div class="' + cls + '" data-player-id="' + p.player_id + '" title="' + (isAi ? 'AI 玩家' : '点击切换焦点') + '">';
         html += '<div class="player-name">';
         html += '<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:' + color + ';"></span> ';
         html += escHtml(p.username);
+        if (isAi) html += ' <span class="ai-badge">🤖 AI</span>';
         if (isDead) html += ' <span class="danger-text">(已淘汰)</span>';
         html += '</div>';
 
@@ -207,13 +258,20 @@ function renderMoveSelectors(players, legalMoves, catalog) {
         return;
     }
 
-    // 确保焦点玩家有效
+    // 确保焦点玩家是人类玩家
+    var humanAlive = aliveOnly.filter(function(p) { return v2AiPlayerIds.indexOf(p.player_id) < 0; });
+    if (humanAlive.length === 0) humanAlive = aliveOnly; // 全是 AI 时回退
     if (!v2FocusedPlayer || !aliveOnly.some(function(p) { return p.player_id === v2FocusedPlayer; })) {
-        v2FocusedPlayer = aliveOnly[0].player_id;
+        v2FocusedPlayer = humanAlive[0].player_id;
+    }
+    // 如果焦点是 AI 且有人类存活，切换到第一个人类
+    if (v2AiPlayerIds.indexOf(v2FocusedPlayer) >= 0 && humanAlive.length > 0 && humanAlive !== aliveOnly) {
+        v2FocusedPlayer = humanAlive[0].player_id;
     }
 
     var focusedName = getPlayerName(v2FocusedPlayer, players);
-    document.getElementById("focused-player-label").textContent = "键盘焦点：" + focusedName + "（Tab 切换）";
+    var hasAi = v2AiPlayerIds.length > 0;
+    document.getElementById("focused-player-label").textContent = "键盘焦点：" + focusedName + "（Tab 切换）" + (hasAi ? "  |  🤖 AI 自动出招" : "");
 
     var allGroups = v2GetMoveGroups(catalog);
 
@@ -223,41 +281,55 @@ function renderMoveSelectors(players, legalMoves, catalog) {
         var pid = p.player_id;
         var color = V2_PLAYER_COLORS[i] || "#888";
         var isFocused = pid === v2FocusedPlayer;
-        var movesForPlayer = legalMoves[pid] || [];
+        var isAi = v2AiPlayerIds.indexOf(pid) >= 0;
+        var movesForPlayer = isAi ? [] : (legalMoves[pid] || []);
         var selectedMove = v2SelectedMoves[pid] || null;
 
-        html += '<div class="move-side' + (isFocused ? " focused" : "") + '" style="border-left:3px solid ' + color + ';">';
-        html += '<h3>' + escHtml(p.username) + '<span class="active-turn-tip">' + (selectedMove ? '已选' : '未选') + '</span></h3>';
-        html += '<div class="selector-selected">';
-        html += selectedMove ? ('<b>' + (V2_MOVE_LABELS[selectedMove] || selectedMove) + '</b><span class="muted"> · 再按同键或 Enter 提交</span>') : '<span class="muted">—</span>';
-        html += '</div>';
+        html += '<div class="move-side' + (isFocused ? " focused" : "") + (isAi ? " ai-player" : "") + '" style="border-left:3px solid ' + color + ';">';
+        html += '<h3>' + escHtml(p.username);
+        if (isAi) {
+            html += '<span class="ai-badge">🤖 AI</span>';
+        }
+        html += '<span class="active-turn-tip">' + (isAi ? '自动' : (selectedMove ? '已选' : '未选')) + '</span></h3>';
 
-        // 按类别输出
-        var catKeys = ["resource", "defense", "trick", "attack_qi", "attack_shield", "special"];
-        for (var c = 0; c < catKeys.length; c++) {
-            var cat = catKeys[c];
-            var items = allGroups[cat] || [];
-            var catMoves = items.filter(function(m) { return movesForPlayer.indexOf(m.name) !== -1; });
-            if (catMoves.length === 0) continue;
+        if (isAi) {
+            // AI 占位：显示难度和自动提示
+            html += '<div class="selector-selected ai-placeholder">';
+            html += '<span class="muted">🤖 AI 自动选择中...</span>';
+            html += '<div class="ai-difficulty-tag">难度：' + (v2AiDifficulty === "random" ? "随机" : "普通") + '</div>';
+            html += '</div>';
+        } else {
+            html += '<div class="selector-selected">';
+            html += selectedMove ? ('<b>' + (V2_MOVE_LABELS[selectedMove] || selectedMove) + '</b><span class="muted"> · 再按同键或 Enter 提交</span>') : '<span class="muted">—</span>';
+            html += '</div>';
 
-            html += '<div class="move-group-title">' + v2CategoryTitle(cat) + '</div>';
-            html += '<div class="move-grid">';
-            for (var m = 0; m < catMoves.length; m++) {
-                var mv = catMoves[m];
-                var isSelected = selectedMove === mv.name;
-                var hotkey = v2KeyForMove(mv.name);
-                html += '<div class="move-btn-wrap">';
-                html += '<button class="move-btn' + (isSelected ? " selected" : "") + '"';
-                html += ' data-player="' + pid + '" data-move="' + mv.name + '"';
-                if (isSelected) html += ' style="border-color:' + color + ';background:' + color + '15;color:' + color + ';"';
-                html += '>';
-                if (hotkey) html += '<span class="move-hotkey">' + hotkey + '</span>';
-                html += '<div class="move-label">' + (V2_MOVE_LABELS[mv.name] || mv.label) + '</div>';
-                html += '<div class="move-name">' + mv.label + '</div>';
-                html += '</button>';
+            // 按类别输出
+            var catKeys = ["resource", "defense", "trick", "attack_qi", "attack_shield", "special"];
+            for (var c = 0; c < catKeys.length; c++) {
+                var cat = catKeys[c];
+                var items = allGroups[cat] || [];
+                var catMoves = items.filter(function(m) { return movesForPlayer.indexOf(m.name) !== -1; });
+                if (catMoves.length === 0) continue;
+
+                html += '<div class="move-group-title">' + v2CategoryTitle(cat) + '</div>';
+                html += '<div class="move-grid">';
+                for (var m = 0; m < catMoves.length; m++) {
+                    var mv = catMoves[m];
+                    var isSelected = selectedMove === mv.name;
+                    var hotkey = v2KeyForMove(mv.name);
+                    html += '<div class="move-btn-wrap">';
+                    html += '<button class="move-btn' + (isSelected ? " selected" : "") + '"';
+                    html += ' data-player="' + pid + '" data-move="' + mv.name + '"';
+                    if (isSelected) html += ' style="border-color:' + color + ';background:' + color + '15;color:' + color + ';"';
+                    html += '>';
+                    if (hotkey) html += '<span class="move-hotkey">' + hotkey + '</span>';
+                    html += '<div class="move-label">' + (V2_MOVE_LABELS[mv.name] || mv.label) + '</div>';
+                    html += '<div class="move-name">' + mv.label + '</div>';
+                    html += '</button>';
+                    html += '</div>';
+                }
                 html += '</div>';
             }
-            html += '</div>';
         }
         html += '</div>';
     }

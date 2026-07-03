@@ -90,6 +90,8 @@ CURRENT_STATE_V2: GameStateV2 = GameStateV2()
 CURRENT_STATE_V2_LOCK = Lock()
 CURRENT_BATTLE_ID_V2: str | None = None
 CURRENT_ENGINE_V2 = None  # 持有当前引擎实例（用于步进式结算）
+CURRENT_V2_PLAYER_TYPES: dict[str, str] = {}  # {player_id: "human"|"ai"}
+CURRENT_V2_AI_DIFFICULTY: str = "normal"  # "random" | "normal"
 
 
 def run_periodic_cleanup() -> None:

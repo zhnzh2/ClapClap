@@ -11,12 +11,28 @@
 function initV2LocalPage() {
     v2LoadSettings();
 
+    // 应用紧凑模式
+    if (v2Settings.compactMode) {
+        document.body.classList.add("v2-compact-mode");
+    }
+
     // 自动决策复选框
     var autoCb = document.getElementById("auto-resolve-checkbox");
     if (autoCb) {
         autoCb.checked = v2Settings.autoResolve;
         autoCb.addEventListener("change", function() {
             v2Settings.autoResolve = this.checked;
+            v2SaveSettings();
+        });
+    }
+
+    // 紧凑模式复选框
+    var compactCb = document.getElementById("compact-mode-checkbox");
+    if (compactCb) {
+        compactCb.checked = v2Settings.compactMode;
+        compactCb.addEventListener("change", function() {
+            v2Settings.compactMode = this.checked;
+            document.body.classList.toggle("v2-compact-mode", this.checked);
             v2SaveSettings();
         });
     }
@@ -65,6 +81,8 @@ function initV2LocalPage() {
     // ── 初始化 ──
     v2PlayerCount = 2;
     v2PlayerNames = ["玩家1", "玩家2"];
+    v2PlayerTypes = ["human", "human"];
+    v2AiDifficulty = "normal";
     renderSetupPhase();
     document.getElementById("setup-phase").style.display = "";
     document.getElementById("battle-phase").style.display = "none";
@@ -84,6 +102,8 @@ async function startGame() {
     var result = await ApiUtils.apiPost("/v2/api/local/reset", {
         player_count: v2PlayerCount,
         names: v2PlayerNames,
+        player_types: v2PlayerTypes,
+        ai_difficulty: v2AiDifficulty,
     });
 
     if (!result.ok) { setMessage("创建对局失败：" + (result.error || "")); return; }
@@ -95,6 +115,20 @@ async function startGame() {
     v2RoundSummaryShown = false;
     v2IsSetupPhase = false;
 
+    // 解析 AI 信息
+    var playerTypes = result.data.state._player_types || {};
+    v2HumanPlayerIds = [];
+    v2AiPlayerIds = [];
+    for (var i = 0; i < v2PlayerCount; i++) {
+        var pid = "p" + (i + 1);
+        if (playerTypes[pid] === "ai") {
+            v2AiPlayerIds.push(pid);
+        } else {
+            v2HumanPlayerIds.push(pid);
+        }
+    }
+    v2AiDifficulty = result.data.state._ai_difficulty || "normal";
+
     document.getElementById("setup-phase").style.display = "none";
     document.getElementById("battle-phase").style.display = "";
     hideSettlementProgress();
@@ -103,7 +137,12 @@ async function startGame() {
     hideEndCard();
 
     renderV2State(result.data.state);
-    setMessage(result.data.message || "对局已创建，请为每位玩家选择动作。");
+    var aiCount = v2AiPlayerIds.length;
+    var msg = result.data.message || "对局已创建，请为每位玩家选择动作。";
+    if (aiCount > 0) {
+        msg += "（" + aiCount + " 名 AI 自动出招）";
+    }
+    setMessage(msg);
 }
 
 function confirmReset() {
@@ -149,16 +188,23 @@ async function submitMoves() {
 
     var alivePlayers = (v2LatestState.players || []).filter(function(p) { return p.status === "alive"; });
     var moves = {};
+    // 只收集人类玩家的动作，AI 由后端自动补齐
     for (var i = 0; i < alivePlayers.length; i++) {
         var pid = alivePlayers[i].player_id;
+        var isAi = v2AiPlayerIds.indexOf(pid) >= 0;
+        if (isAi) continue; // AI 由后端自动生成
         if (!v2SelectedMoves[pid]) { setMessage("请为 " + alivePlayers[i].username + " 选择动作。"); return; }
         moves[pid] = v2SelectedMoves[pid];
     }
 
+    // 如果全部是 AI，使用 auto_resolve
+    var useAutoResolve = v2Settings.autoResolve || v2HumanPlayerIds.length === 0
+        || (alivePlayers.every(function(p) { return v2AiPlayerIds.indexOf(p.player_id) >= 0; }));
+
     setMessage("正在提交动作并结算...");
     var result = await ApiUtils.apiPost("/v2/api/local/step", {
         moves: moves,
-        auto_resolve: v2Settings.autoResolve,
+        auto_resolve: useAutoResolve,
     });
 
     if (!result.ok) { setMessage("提交失败：" + (result.error || "")); return; }
@@ -322,6 +368,8 @@ function continueToNextRound() {
 
 function handleKeyboard(event) {
     if (event.target && ["INPUT", "TEXTAREA", "SELECT"].indexOf(event.target.tagName) !== -1) return;
+    // 弹窗打开时不触发动作快捷键
+    if (document.querySelector(".modal-mask.show")) return;
 
     var key = event.key;
 

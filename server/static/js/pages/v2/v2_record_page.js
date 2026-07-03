@@ -181,9 +181,42 @@
         }
 
         var html = '<span class="record-time">' + escHtml(timeStr) + '</span>'
-            + '<span class="record-result-badge ' + resultClass + '">' + escHtml(resultLabel) + '</span>';
+            + '<span class="record-result-badge ' + resultClass + '">' + escHtml(resultLabel) + '</span>'
+            + '<button class="battle-copy-btn" id="copy-battle-id-btn" title="复制对局 ID">📋 复制 ID</button>';
 
         metaEl.innerHTML = html;
+
+        // 绑定复制按钮
+        var copyBtn = document.getElementById("copy-battle-id-btn");
+        if (copyBtn) {
+            copyBtn.addEventListener("click", function (e) {
+                e.stopPropagation();
+                if (navigator.clipboard) {
+                    navigator.clipboard.writeText(battleId).then(function () {
+                        copyBtn.textContent = "✓ 已复制";
+                        setTimeout(function () { copyBtn.textContent = "📋 复制 ID"; }, 2000);
+                    });
+                }
+            });
+        }
+
+        // AI 元数据
+        if (battle.opponent_type === "ai" || battle.mode === "ai") {
+            var aiBar = document.createElement("div");
+            aiBar.className = "ai-meta-bar";
+            var aiParts = ["🤖 AI 对局"];
+            var diff = battle.ai_difficulty;
+            if (diff) aiParts.push("难度：" + (diff === "easy" ? "简单" : (diff === "hard" ? "困难" : "普通")));
+            var pt = battle.ai_policy_type;
+            if (pt) aiParts.push("策略：" + pt);
+            var mv = battle.ai_model_version;
+            if (mv) aiParts.push("模型：" + String(mv));
+            var fr = battle.ai_fallback_reason;
+            if (fr) aiParts.push("降级原因：" + String(fr));
+            if (battle.ai_seat) aiParts.push("AI 座位：" + String(battle.ai_seat));
+            aiBar.textContent = aiParts.join(" · ");
+            metaEl.parentNode.insertBefore(aiBar, metaEl.nextSibling);
+        }
 
         // 参与者 + 房间信息卡片（header 下方）
         renderParticipantBar();
@@ -829,7 +862,10 @@
         var key = String(pid);
         var participants = battle.participants || {};
         var info = participants[key];
-        if (info && info.username) return info.username;
+        if (info) {
+            if (info.status === "deleted") return "已注销用户";
+            if (info.username) return info.username;
+        }
         // try seat data
         var seats = battle.seats || [];
         for (var i = 0; i < seats.length; i++) {

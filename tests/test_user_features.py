@@ -465,6 +465,71 @@ class TestUserFeatures(unittest.TestCase):
         self.assertEqual(payload["battles"][0]["battle_id"], ai_battle_id)
         self.assertEqual(payload["battles"][0]["ai_policy_type"], "heuristic_fallback")
 
+    def test_user_battle_zone_summary_respects_filters(self):
+        player, token = self._register_and_login("zone-filter-player")
+        opponent, _ = self._register_and_login("zone-filter-opponent")
+
+        ai_battle_id = battle_recorder.create_battle(
+            {
+                "p1": {"username": player["username"], "uid": player["uid"]},
+                "p2": {"username": "ClapClap AI", "uid": -2},
+            },
+            rule_version="1.0",
+            mode="ai",
+        )
+        human_battle_id = battle_recorder.create_battle(
+            {
+                "p1": {"username": player["username"], "uid": player["uid"]},
+                "p2": {"username": opponent["username"], "uid": opponent["uid"]},
+            },
+            rule_version="1.0",
+            mode="local",
+        )
+        self.battle_ids.update({ai_battle_id, human_battle_id})
+        battle_recorder.set_battle_metadata(ai_battle_id, {
+            "opponent_type": "ai",
+            "ai_policy_type": "heuristic",
+            "ai_difficulty": "normal",
+        })
+
+        response = self.client.get(
+            f"/v1/api/user/{player['uid']}/battles?mode=ai",
+            headers={"X-Session-Token": token},
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+
+        self.assertEqual(payload["total"], 1)
+        self.assertEqual(payload["zone_summary"]["v1_ai"]["total"], 1)
+        self.assertEqual(payload["zone_summary"]["v1_human"]["total"], 0)
+        self.assertEqual(payload["zone_summary"]["v2_human"]["total"], 0)
+
+    def test_user_battle_days_filter_accepts_naive_start_time(self):
+        player, token = self._register_and_login("naive-date-player")
+
+        battle_id = battle_recorder.create_battle(
+            {
+                "p1": {"username": player["username"], "uid": player["uid"]},
+                "p2": {"username": "ClapClap AI", "uid": -2},
+            },
+            rule_version="1.0",
+            mode="ai",
+        )
+        self.battle_ids.add(battle_id)
+        battle_recorder.set_battle_metadata(battle_id, {
+            "opponent_type": "ai",
+            "ai_difficulty": "normal",
+            "start_time": datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
+        })
+
+        response = self.client.get(
+            f"/v1/api/user/{player['uid']}/battles?days=7",
+            headers={"X-Session-Token": token},
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["total"], 1)
+
     def test_user_can_download_filtered_ai_battles_with_training_samples(self):
         player, token = self._register_and_login("ai-export-player")
 

@@ -29,6 +29,7 @@ var V2_DEFAULT_UI_SETTINGS = {
     showHistory: false,
     showSettlementLog: false,
     compactPlayerCards: false,
+    compactMoves: false,
     showRoundSummaryPopup: false,
 };
 
@@ -505,6 +506,8 @@ function _bindBattleEvents() {
     // 全局键盘
     document.addEventListener("keydown", function (e) {
         if (e.target && e.target.closest("input, textarea, select")) return;
+        // 弹窗打开时不触发动作快捷键
+        if (document.querySelector(".modal-mask.show")) return;
 
         // Enter 提交动作 — 走 submitting 锁
         if (e.key === "Enter" && !document.getElementById("decision-modal-mask").classList.contains("show")) {
@@ -776,6 +779,7 @@ function _syncV2SettingsControls() {
         "v2-toggle-history": "showHistory",
         "v2-toggle-settlement-log": "showSettlementLog",
         "v2-toggle-compact-cards": "compactPlayerCards",
+        "v2-toggle-compact-moves": "compactMoves",
         "v2-toggle-round-summary": "showRoundSummaryPopup",
     };
     Object.keys(map).forEach(function (id) {
@@ -797,6 +801,7 @@ function _applyV2UiSettings() {
     _setHiddenBySetting("settlement-card", !v2UiSettings.showSettlementLog);
     _setHiddenBySetting("right-panel", !v2UiSettings.showChat && !v2UiSettings.showHistory);
     document.body.classList.toggle("v2-compact-cards", !!v2UiSettings.compactPlayerCards);
+    document.body.classList.toggle("v2-compact-mode", !!v2UiSettings.compactMoves);
     document.body.classList.toggle("v2-no-side-panel", !v2UiSettings.showChat && !v2UiSettings.showHistory);
     _syncV2SettingsControls();
 }

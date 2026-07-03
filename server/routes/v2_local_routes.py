@@ -8,6 +8,7 @@ ClapClap 2.0 本地模拟对战 API。
 
 from flask import Blueprint, jsonify, request
 
+from app.v2.ai import get_legal_move_names_v2_ai, select_ai_move_v2
 from app.v2.constants import Move
 from app.v2.constants import (
     DECISION_TYPE_CONFLICT_RESOLVE,
@@ -47,6 +48,24 @@ def _build_initial_state(player_count: int, names: list[str]) -> GameStateV2:
             username=name,
         ))
     return GameStateV2(players=players, max_players=player_count)
+
+
+def _append_local_payload_meta(payload: dict) -> dict:
+    """给 v2 本地状态补充前端需要的运行时元信息。"""
+    payload["_engine_active"] = runtime.CURRENT_ENGINE_V2 is not None
+    payload["_player_types"] = dict(runtime.CURRENT_V2_PLAYER_TYPES)
+    payload["_ai_difficulty"] = runtime.CURRENT_V2_AI_DIFFICULTY
+    return payload
+
+
+def _normalize_player_types(raw_types: list, player_count: int) -> list[str]:
+    """规范化玩家类型，避免错误值进入运行时状态。"""
+    player_types = []
+    for value in raw_types[:player_count]:
+        player_types.append("ai" if value == "ai" else "human")
+    while len(player_types) < player_count:
+        player_types.append("human")
+    return player_types
 
 
 def _auto_advance(engine: GameEngineV2, result) -> dict:
@@ -126,11 +145,7 @@ def get_state():
     """获取当前 v2 对局状态。"""
     with runtime.CURRENT_STATE_V2_LOCK:
         payload = get_game_state_v2_payload(runtime.CURRENT_STATE_V2, include_history=True)
-        # 附加当前结算阶段信息
-        if runtime.CURRENT_ENGINE_V2 is not None:
-            payload["_engine_active"] = True
-        else:
-            payload["_engine_active"] = False
+        _append_local_payload_meta(payload)
     return jsonify({"ok": True, "state": payload})
 
 
@@ -149,6 +164,8 @@ def reset_game():
     data = request.get_json(silent=True) or {}
     player_count = data.get("player_count", 2)
     names = data.get("names", [])
+    player_types = data.get("player_types", [])
+    ai_difficulty = data.get("ai_difficulty", "normal")
 
     if not isinstance(player_count, int) or player_count < 2 or player_count > 6:
         return jsonify({"ok": False, "error": "player_count 必须在 2~6 之间。"}), 400
@@ -156,16 +173,39 @@ def reset_game():
     if not isinstance(names, list):
         names = []
 
+    if not isinstance(player_types, list):
+        player_types = []
+
+    player_types = _normalize_player_types(player_types, player_count)
+
+    # 校验 ai_difficulty
+    if ai_difficulty not in ("random", "normal"):
+        ai_difficulty = "normal"
+
+    human_count = sum(1 for t in player_types if t == "human")
+
     with runtime.CURRENT_STATE_V2_LOCK:
         runtime.CURRENT_STATE_V2 = _build_initial_state(player_count, names)
         runtime.CURRENT_BATTLE_ID_V2 = None
         runtime.CURRENT_ENGINE_V2 = None
+        # 存储 player_types
+        runtime.CURRENT_V2_PLAYER_TYPES = {}
+        for i in range(player_count):
+            pid = f"p{i + 1}"
+            runtime.CURRENT_V2_PLAYER_TYPES[pid] = player_types[i]
+        runtime.CURRENT_V2_AI_DIFFICULTY = ai_difficulty
         payload = get_game_state_v2_payload(runtime.CURRENT_STATE_V2, include_history=True)
-        payload["_engine_active"] = False
+        _append_local_payload_meta(payload)
 
+    ai_count = sum(1 for t in player_types if t == "ai")
+    msg = f"对局已创建，{player_count} 名玩家就位"
+    if ai_count > 0:
+        msg += f"（{human_count} 人类 + {ai_count} AI，难度：{ai_difficulty}）"
+    else:
+        msg += "。"
     return jsonify({
         "ok": True,
-        "message": f"对局已创建，{player_count} 名玩家就位。",
+        "message": msg,
         "state": payload,
     })
 
@@ -186,8 +226,8 @@ def step_game():
     moves_raw = data.get("moves", {})
     auto_resolve = data.get("auto_resolve", False)
 
-    if not isinstance(moves_raw, dict) or len(moves_raw) == 0:
-        return jsonify({"ok": False, "error": "moves 不能为空。"}), 400
+    if not isinstance(moves_raw, dict):
+        return jsonify({"ok": False, "error": "moves 必须是字典。"}), 400
 
     with runtime.CURRENT_STATE_V2_LOCK:
         state = runtime.CURRENT_STATE_V2
@@ -203,8 +243,36 @@ def step_game():
             except KeyError:
                 return jsonify({"ok": False, "error": f"未知动作名: {move_name}"}), 400
 
-        # ── 验证所有存活玩家都提交了 ──
+        # ── AI 玩家自动生成动作 ──
         alive_ids = {p.player_id for p in state.alive_players()}
+        ai_player_ids = {
+            pid for pid in alive_ids
+            if runtime.CURRENT_V2_PLAYER_TYPES.get(pid) == "ai"
+        }
+        if not moves_raw and alive_ids != ai_player_ids:
+            return jsonify({"ok": False, "error": "moves 不能为空。"}), 400
+        for pid in ai_player_ids:
+            if pid not in moves:
+                try:
+                    ai_move = select_ai_move_v2(
+                        state, pid,
+                        difficulty=runtime.CURRENT_V2_AI_DIFFICULTY,
+                    )
+                    moves[pid] = ai_move
+                except Exception:
+                    # AI 选择失败，fallback 到 QI
+                    player = state.get_player(pid)
+                    if player and GameEngineV2.can_afford(player, Move.QI):
+                        moves[pid] = Move.QI
+                    elif player:
+                        # 尝试任何合法动作
+                        legal = get_legal_move_names_v2_ai(state, pid)
+                        if legal:
+                            moves[pid] = Move[legal[0]]
+                        else:
+                            moves[pid] = Move.QI
+
+        # ── 验证所有存活玩家都提交了 ──
         submitted_ids = set(moves.keys())
         if alive_ids != submitted_ids:
             missing = alive_ids - submitted_ids
@@ -249,7 +317,7 @@ def step_game():
             runtime.CURRENT_ENGINE_V2 = None
 
         payload = get_game_state_v2_payload(state, include_history=True)
-        payload["_engine_active"] = runtime.CURRENT_ENGINE_V2 is not None
+        _append_local_payload_meta(payload)
 
     return jsonify({
         "ok": True,
@@ -300,12 +368,44 @@ def submit_decision():
             runtime.CURRENT_ENGINE_V2 = None
 
         payload = get_game_state_v2_payload(runtime.CURRENT_STATE_V2, include_history=True)
-        payload["_engine_active"] = runtime.CURRENT_ENGINE_V2 is not None
+        _append_local_payload_meta(payload)
 
     return jsonify({
         "ok": True,
         "settlement": result.to_dict() if hasattr(result, 'to_dict') else result,
         "state": payload,
+    })
+
+
+# ═══════════════════════════════════════════════════════════════
+# AI 动作预览（前端可选调用）
+# ═══════════════════════════════════════════════════════════════
+
+@v2_local_bp.get("/v2/api/local/ai-moves")
+def get_ai_moves_preview():
+    """获取所有 AI 玩家本回合的预览动作（不提交，仅用于前端展示）。"""
+    with runtime.CURRENT_STATE_V2_LOCK:
+        state = runtime.CURRENT_STATE_V2
+        ai_moves = {}
+        for pid, ptype in runtime.CURRENT_V2_PLAYER_TYPES.items():
+            if ptype != "ai":
+                continue
+            player = state.get_player(pid)
+            if player is None or not player.is_alive():
+                continue
+            try:
+                move = select_ai_move_v2(
+                    state, pid,
+                    difficulty=runtime.CURRENT_V2_AI_DIFFICULTY,
+                )
+                ai_moves[pid] = move.name
+            except Exception:
+                ai_moves[pid] = Move.QI.name
+
+    return jsonify({
+        "ok": True,
+        "ai_moves": ai_moves,
+        "ai_difficulty": runtime.CURRENT_V2_AI_DIFFICULTY,
     })
 
 
@@ -319,16 +419,18 @@ def _handle_settlement_complete(state: GameStateV2) -> None:
 
     # ── 创建对局记录（首次回合时）──
     if rt.CURRENT_BATTLE_ID_V2 is None:
-        from app.battle_recorder import create_battle
+        from app.battle_recorder import create_battle, set_battle_metadata
         participants = {}
         seats = []
         for p in state.players:
+            ptype = rt.CURRENT_V2_PLAYER_TYPES.get(p.player_id, "human")
             participants[p.player_id] = {
                 "username": p.username,
                 "uid": -1,  # 本地模式
                 "seat_index": p.seat_index,
                 "player_id": p.player_id,
                 "is_host": False,
+                "player_type": ptype,
             }
             seats.append({
                 "seat_index": p.seat_index,
@@ -336,6 +438,7 @@ def _handle_settlement_complete(state: GameStateV2) -> None:
                 "username": p.username,
                 "uid": -1,
                 "is_host": False,
+                "player_type": ptype,
             })
         rt.CURRENT_BATTLE_ID_V2 = create_battle(
             participants,
@@ -347,6 +450,14 @@ def _handle_settlement_complete(state: GameStateV2) -> None:
                 "max_players": state.max_players,
             },
         )
+        # 记录 AI 元数据
+        ai_count = sum(1 for t in rt.CURRENT_V2_PLAYER_TYPES.values() if t == "ai")
+        if ai_count > 0:
+            set_battle_metadata(rt.CURRENT_BATTLE_ID_V2, {
+                "ai_player_count": ai_count,
+                "ai_difficulty": rt.CURRENT_V2_AI_DIFFICULTY,
+                "ai_player_ids": [pid for pid, t in rt.CURRENT_V2_PLAYER_TYPES.items() if t == "ai"],
+            })
 
     # ── 记录回合 ──
     if state.history:
