@@ -121,7 +121,7 @@ def select_move(
         controlled_player: 1 或 2，表示 AI 控制 P1 还是 P2。
         rng: random.Random 实例，用于可复现的随机决策。
         config: 可选配置字典。当前支持的键:
-            - difficulty: "easy" | "normal" | "hard"（默认 "easy"）
+            - difficulty: "easy" | "normal" | "hard" | "random"（默认 "easy"）
 
     返回:
         Move: AI 选择的动作，保证对 controlled_player 合法。
@@ -144,7 +144,7 @@ def select_move(
         )
 
     # 2. 根据难度选择策略
-    if difficulty == "easy":
+    if difficulty == "easy" or difficulty == "random":
         return _random_strategy(legal_indices, rng)
 
     if difficulty == "normal":

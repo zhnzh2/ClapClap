@@ -21,7 +21,7 @@ from app.v1.game import GameEngine
 from app.v1.models import GameState
 
 Difficulty = Literal["easy", "normal", "hard"]
-PolicyType = Literal["easy", "normal", "hard", "model"]
+PolicyType = Literal["easy", "normal", "hard", "random", "model"]
 DIFFICULTIES: tuple[Difficulty, ...] = ("easy", "normal", "hard")
 DEFAULT_MATRIX: tuple[tuple[Difficulty, Difficulty], ...] = (
     ("easy", "easy"),
@@ -34,6 +34,7 @@ MODEL_MATRIX: tuple[tuple[PolicyType, PolicyType], ...] = (
     ("model", "easy"),
     ("model", "normal"),
     ("model", "hard"),
+    ("model", "random"),
 )
 
 
@@ -63,6 +64,7 @@ class EvaluationResult:
     inference_calls: int = 0
     total_inference_ms: float = 0.0
     max_inference_ms: float = 0.0
+    fallback_count: int = 0
 
     @property
     def win_rate(self) -> float:
@@ -121,6 +123,17 @@ class EvaluationResult:
         return round(self.opponent_final_shield_total / self.games, 2) if self.games else 0.0
 
     @property
+    def double_lose_rate(self) -> float:
+        """双方同时死亡（winner=0）的比率，等价于 draw_rate。"""
+        return self.draw_rate
+
+    @property
+    def fallback_rate(self) -> float:
+        if not self.inference_calls:
+            return 0.0
+        return round(self.fallback_count / self.inference_calls, 4)
+
+    @property
     def average_inference_ms(self) -> float:
         if not self.inference_calls:
             return 0.0
@@ -158,6 +171,7 @@ class ModelEvaluator:
         self.info = ModelEvalInfo()
         self._model: object | None = None
         self._loaded = False
+        self.fallback_count: int = 0
         self._load()
 
     # ── 公开属性 ────────────────────────────────────────────────
@@ -171,8 +185,9 @@ class ModelEvaluator:
     def select_move(
         self, state: GameState, player: int, rng: random.Random
     ) -> tuple[object, float]:
-        """返回 ``(move, elapsed_ms)``。未加载时回退 heuristic-hard。"""
+        """返回 ``(move, elapsed_ms)``。未加载或推理失败时回退 heuristic-hard。"""
         if not self.is_loaded:
+            self.fallback_count += 1
             return self._heuristic_fallback(state, player, rng)
 
         import numpy as np
@@ -195,8 +210,10 @@ class ModelEvaluator:
 
             move = get_move_by_index(action_int)
             if not mask[action_int]:
+                self.fallback_count += 1
                 return self._heuristic_fallback(state, player, rng)
         except Exception:
+            self.fallback_count += 1
             return self._heuristic_fallback(state, player, rng)
 
         elapsed_ms = (time.perf_counter() - t0) * 1000
@@ -362,6 +379,7 @@ def play_game(
             if ai_player == 2 and not latest.p2_valid:
                 illegal_moves += 1
 
+    fallback_count = model.fallback_count if model is not None else 0
     opponent_player = 2 if ai_player == 1 else 1
     ai_final = _player_state(state, ai_player)
     opponent_final = _player_state(state, opponent_player)
@@ -375,6 +393,7 @@ def play_game(
         "ai_final": ai_final.to_dict(),
         "opponent_final": opponent_final.to_dict(),
         "inference_times_ms": inference_times_ms,
+        "fallback_count": fallback_count,
         "rounds_log": rounds_log,
     }
 
@@ -428,6 +447,7 @@ def evaluate(
         action_counts.update(counts)
         result.ai_flash_uses += game["ai_flash_uses"]
         result.ai_pickaxe_actions += game["ai_pickaxe_actions"]
+        result.fallback_count += game.get("fallback_count", 0)
         result.inference_calls += len(game["inference_times_ms"])
         result.total_inference_ms += sum(game["inference_times_ms"])
         if game["inference_times_ms"]:
@@ -485,6 +505,9 @@ def evaluate(
     payload["average_opponent_final_shield"] = result.average_opponent_final_shield
     payload["average_inference_ms"] = result.average_inference_ms
     payload["max_inference_ms"] = round(result.max_inference_ms, 4)
+    payload["fallback_count"] = result.fallback_count
+    payload["fallback_rate"] = result.fallback_rate
+    payload["double_lose_rate"] = result.double_lose_rate
     payload["action_counts"] = dict(sorted(action_counts.items()))
     if collect_logs:
         payload["game_logs"] = game_logs
@@ -521,11 +544,15 @@ def evaluate_matrix(
             "win_rate": result["win_rate"],
             "loss_rate": result["loss_rate"],
             "draw_rate": result["draw_rate"],
+            "double_lose_rate": result["double_lose_rate"],
             "truncated_rate": result["truncated_rate"],
             "average_rounds": result["average_rounds"],
             "illegal_moves": result["illegal_moves"],
+            "fallback_count": result["fallback_count"],
+            "fallback_rate": result["fallback_rate"],
             "p1_win_rate": result["p1_win_rate"],
             "p2_win_rate": result["p2_win_rate"],
+            "seat_win_rate_delta": result["seat_win_rate_delta"],
         }
         results.append(result)
 
@@ -548,6 +575,12 @@ def evaluate_matrix(
             "is_loaded": model.is_loaded,
             "load_error": model.info.load_error,
         }
+        # ── 晋级判定 ──
+        from scripts.promote_ai_model import DEFAULT_THRESHOLDS, check_thresholds
+        passed, failures = check_thresholds(report)
+        report["passed_promotion"] = passed
+        report["promotion_failures"] = failures
+        report["promotion_thresholds"] = dict(DEFAULT_THRESHOLDS)
     return report
 
 
@@ -578,6 +611,9 @@ def enforce_thresholds(
     *,
     min_win_rate: float | None,
     max_truncated_rate: float | None,
+    max_seat_win_rate_delta: float | None = None,
+    max_action_concentration: float | None = None,
+    max_double_loss_rate: float | None = None,
 ) -> list[str]:
     failures: list[str] = []
     results = report.get("results", [report])
@@ -591,6 +627,34 @@ def enforce_thresholds(
             failures.append(
                 f"{label}: truncated_rate={result['truncated_rate']} > {max_truncated_rate}"
             )
+        # P1/P2 胜率差
+        if max_seat_win_rate_delta is not None:
+            delta = result.get("seat_win_rate_delta", abs(
+                result.get("p1_win_rate", 0) - result.get("p2_win_rate", 0)
+            ))
+            if delta > max_seat_win_rate_delta:
+                failures.append(
+                    f"{label}: seat_win_rate_delta={delta:.4f} > {max_seat_win_rate_delta}"
+                )
+        # 双败率
+        if max_double_loss_rate is not None:
+            dlr = result.get("double_lose_rate", result.get("draw_rate", 0))
+            if dlr > max_double_loss_rate:
+                failures.append(
+                    f"{label}: double_lose_rate={dlr:.4f} > {max_double_loss_rate}"
+                )
+        # 动作分布极端坍缩
+        if max_action_concentration is not None:
+            action_counts = result.get("action_counts", {})
+            if action_counts:
+                total = sum(action_counts.values())
+                max_ratio = max(action_counts.values()) / total if total > 0 else 0
+                if max_ratio > max_action_concentration:
+                    top_action = max(action_counts, key=action_counts.get)
+                    failures.append(
+                        f"{label}: action_concentration={max_ratio:.4f} "
+                        f"(action={top_action}) > {max_action_concentration}"
+                    )
     return failures
 
 
@@ -598,10 +662,10 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Evaluate ClapClap 1.0 AI policies.")
     parser.add_argument("--games", type=int, default=100)
     parser.add_argument(
-        "--ai", choices=["easy", "normal", "hard", "model"], default="normal"
+        "--ai", choices=["easy", "normal", "hard", "random", "model"], default="normal"
     )
     parser.add_argument(
-        "--opponent", choices=["easy", "normal", "hard", "model"], default="easy"
+        "--opponent", choices=["easy", "normal", "hard", "random", "model"], default="easy"
     )
     parser.add_argument("--seed", type=int, default=20260629)
     parser.add_argument("--max-rounds", type=int, default=200)
@@ -622,8 +686,16 @@ def main() -> None:
     parser.add_argument(
         "--summary", action="store_true", help="Print a compact table instead of JSON."
     )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Validate configuration and model loadability without running games.",
+    )
     parser.add_argument("--min-win-rate", type=float)
     parser.add_argument("--max-truncated-rate", type=float)
+    parser.add_argument("--max-seat-delta", type=float)
+    parser.add_argument("--max-action-concentration", type=float)
+    parser.add_argument("--max-double-loss-rate", type=float)
     args = parser.parse_args()
 
     if args.games <= 0:
@@ -642,6 +714,42 @@ def main() -> None:
             )
         else:
             print(f"[model] 加载失败: {model.info.load_error}，将回退 heuristic hard")
+
+    # ── dry-run ───────────────────────────────────────────────
+    if args.dry_run:
+        matchups = MODEL_MATRIX if model is not None else DEFAULT_MATRIX
+        total_games = len(matchups) * args.games if args.matrix else args.games
+        dry_report: dict = {
+            "report_type": "clapclap_ai_dry_run",
+            "matrix_mode": args.matrix,
+            "games": args.games,
+            "seed": args.seed,
+            "max_rounds": args.max_rounds,
+            "matchups": [
+                {"ai": ai, "opponent": opp}
+                for ai, opp in (matchups if args.matrix else [(args.ai, args.opponent)])
+            ],
+            "total_matchups": len(matchups) if args.matrix else 1,
+            "total_games": total_games,
+            "estimated_time_minutes": round(total_games * 0.05 / 60, 1),
+        }
+        if model is not None:
+            dry_report["model"] = {
+                "model_dir": str(args.model_dir.resolve()),
+                "is_loaded": model.is_loaded,
+                "model_version": model.info.model_version,
+                "load_error": model.info.load_error,
+            }
+        if args.output:
+            args.output.parent.mkdir(parents=True, exist_ok=True)
+            args.output.write_text(
+                json.dumps(dry_report, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+            print(f"[dry-run] 报告已写入: {args.output}")
+        else:
+            print(json.dumps(dry_report, ensure_ascii=False, indent=2))
+        return
 
     # ── 评估 ─────────────────────────────────────────────────
     if args.matrix:
@@ -682,6 +790,9 @@ def main() -> None:
         report,
         min_win_rate=args.min_win_rate,
         max_truncated_rate=args.max_truncated_rate,
+        max_seat_win_rate_delta=args.max_seat_delta,
+        max_action_concentration=args.max_action_concentration,
+        max_double_loss_rate=args.max_double_loss_rate,
     )
 
     if args.summary:

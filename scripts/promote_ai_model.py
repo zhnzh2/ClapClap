@@ -41,8 +41,11 @@ DEFAULT_THRESHOLDS: dict[str, Any] = {
     "max_truncated_rate": 0.05,
     "model_vs_easy_min_win_rate": 0.94,       # 不低于 normal baseline
     "model_vs_normal_min_win_rate": 0.60,       # 必须明显强于 normal
+    "model_vs_random_min_win_rate": 0.85,       # 必须显著高于随机（随机期望胜率 ≈50%）
     "max_seat_win_rate_delta": 0.30,            # P1/P2 胜率差
-    "max_double_loss_rate": 0.05,               # 双败率（同时输 normal 和 easy 的局比例）
+    "max_double_loss_rate": 0.05,               # 双败率（双方同时死亡 ratio）
+    "max_action_concentration": 0.90,            # 单一动作最大占比
+    "max_fallback_rate": 0.10,                  # 模型推理回退率上限
 }
 
 DEPLOY_DIR = Path("models/ai/v1/deploy")
@@ -105,13 +108,54 @@ def check_thresholds(
                 f"model_vs_normal win_rate={wr:.4f} (min={t['model_vs_normal_min_win_rate']})"
             )
 
-    # 5. P1/P2 胜率差
+    # 5. model_vs_random 胜率
+    vs_random = _get_matrix_entry(report, "model_vs_random")
+    if vs_random:
+        wr = vs_random.get("win_rate", 0)
+        if wr < t["model_vs_random_min_win_rate"]:
+            failures.append(
+                f"model_vs_random win_rate={wr:.4f} (min={t['model_vs_random_min_win_rate']})"
+            )
+
+    # 6. P1/P2 胜率差
     for r in results:
         label = f"{r.get('ai_difficulty', '?')}_vs_{r.get('opponent_difficulty', '?')}"
         delta = abs(r.get("p1_win_rate", 0) - r.get("p2_win_rate", 0))
         if delta > t["max_seat_win_rate_delta"]:
             failures.append(
                 f"{label} seat_win_rate_delta={delta:.4f} (max={t['max_seat_win_rate_delta']})"
+            )
+
+    # 7. 双败率
+    for r in results:
+        label = f"{r.get('ai_difficulty', '?')}_vs_{r.get('opponent_difficulty', '?')}"
+        dlr = r.get("double_lose_rate", r.get("draw_rate", 0))
+        if dlr > t["max_double_loss_rate"]:
+            failures.append(
+                f"{label} double_lose_rate={dlr:.4f} (max={t['max_double_loss_rate']})"
+            )
+
+    # 8. 动作分布极端坍缩
+    for r in results:
+        action_counts = r.get("action_counts", {})
+        if action_counts:
+            total = sum(action_counts.values())
+            max_ratio = max(action_counts.values()) / total if total > 0 else 0
+            if max_ratio > t["max_action_concentration"]:
+                top_action = max(action_counts, key=action_counts.get)
+                label = f"{r.get('ai_difficulty', '?')}_vs_{r.get('opponent_difficulty', '?')}"
+                failures.append(
+                    f"{label} action_concentration={max_ratio:.4f} "
+                    f"(action={top_action}) > {t['max_action_concentration']}"
+                )
+
+    # 9. fallback_rate 检查
+    for r in results:
+        fallback_rate = r.get("fallback_rate", 0)
+        if fallback_rate > t["max_fallback_rate"]:
+            label = f"{r.get('ai_difficulty', '?')}_vs_{r.get('opponent_difficulty', '?')}"
+            failures.append(
+                f"{label} fallback_rate={fallback_rate:.4f} (max={t['max_fallback_rate']})"
             )
 
     return len(failures) == 0, failures
