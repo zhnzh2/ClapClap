@@ -20,7 +20,7 @@ var aiLastMoveName = null;
 var aiPolicyType = null;
 var aiInferenceMs = null;
 var aiBattleStarted = false;
-var aiModelKey = "clapfish1";
+var aiModelKey = "clapfish2";
 
 var aiModelLabels = {
     clapfish1: "ClapFish1",
@@ -120,7 +120,7 @@ function aiPolicyTypeLabel(policyType) {
 }
 
 function aiModelLabel(modelKey) {
-    return aiModelLabels[modelKey] || "ClapFish1";
+    return aiModelLabels[modelKey] || "ClapFish2";
 }
 
 function aiEntrySelectionText() {
@@ -437,6 +437,8 @@ function aiRenderMoveButtons(containerId, legalMoves, catalog, selectedMove, sel
             btn.title = aiMoveDescriptions[item.name] || "";
 
             var legal = legalMoves.indexOf(item.name) !== -1;
+            btn.disabled = !legal;
+            btn.setAttribute("aria-disabled", legal ? "false" : "true");
             if (!legal) btn.classList.add("disabled");
             if (selectedMove === item.name) {
                 btn.classList.add("selected");
@@ -877,13 +879,13 @@ function aiInitPage() {
 
     aiSetDifficulty("normal");
     aiSetHumanSeat("p1");
-    aiSetModelKey("clapfish1");
+    aiSetModelKey("clapfish2");
     aiSyncSettingInputs();
     aiShowEntryPage();
 }
 
 if (!window.SessionUtils || !window.SessionUtils.isLoggedIn()) {
-    window.location.href = "/v1/login?expired=1";
+    window.location.href = "/v1/login";
 } else {
     aiInitPage();
 }

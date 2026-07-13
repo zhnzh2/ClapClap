@@ -16,7 +16,9 @@ from __future__ import annotations
 import copy
 import random
 import unittest
+from uuid import uuid4
 
+from app import users
 from app.ai.engine import (
     get_legal_action_mask,
     get_legal_moves_list,
@@ -1135,6 +1137,13 @@ class TestV2AIMixedBattle(unittest.TestCase):
         self._orig_battle_id = rt.CURRENT_BATTLE_ID_V2
         self._orig_player_types = dict(rt.CURRENT_V2_PLAYER_TYPES)
         self._orig_ai_difficulty = rt.CURRENT_V2_AI_DIFFICULTY
+        username = f"v2-local-{uuid4().hex[:8]}"
+        registered = users.register(username, "test1234", verified="1")
+        self.assertTrue(registered["ok"], registered)
+        self._user_id = registered["user"]["uid"]
+        logged_in = users.login(username, "test1234")
+        self.assertTrue(logged_in["ok"], logged_in)
+        self._headers = {"X-Session-Token": logged_in["session_token"]}
 
     def tearDown(self):
         import server.runtime as rt
@@ -1146,6 +1155,7 @@ class TestV2AIMixedBattle(unittest.TestCase):
         rt.CURRENT_BATTLE_ID_V2 = self._orig_battle_id
         rt.CURRENT_V2_PLAYER_TYPES = self._orig_player_types
         rt.CURRENT_V2_AI_DIFFICULTY = self._orig_ai_difficulty
+        users.delete_user(self._user_id)
 
     def _create_state(self, player_count: int) -> tuple:
         from app.v2.models import GameStateV2, PlayerStateV2
@@ -1225,7 +1235,7 @@ class TestV2AIMixedBattle(unittest.TestCase):
             "names": ["AI-1", "AI-2"],
             "player_types": ["ai", "ai"],
             "ai_difficulty": "random",
-        })
+        }, headers=self._headers)
         self.assertEqual(reset.status_code, 200)
         reset_payload = reset.get_json()
         self.assertEqual(reset_payload["state"]["_player_types"], {"p1": "ai", "p2": "ai"})
@@ -1233,7 +1243,7 @@ class TestV2AIMixedBattle(unittest.TestCase):
         step = client.post("/v2/api/local/step", json={
             "moves": {},
             "auto_resolve": True,
-        })
+        }, headers=self._headers)
         self.assertEqual(step.status_code, 200)
         step_payload = step.get_json()
         self.assertTrue(step_payload["ok"])
@@ -1250,7 +1260,7 @@ class TestV2AIMixedBattle(unittest.TestCase):
             "names": ["A", "B", "C"],
             "player_types": ["robot", "ai"],
             "ai_difficulty": "unknown",
-        })
+        }, headers=self._headers)
         self.assertEqual(response.status_code, 200)
         payload = response.get_json()
         self.assertEqual(payload["state"]["_player_types"], {
@@ -1259,6 +1269,61 @@ class TestV2AIMixedBattle(unittest.TestCase):
             "p3": "human",
         })
         self.assertEqual(payload["state"]["_ai_difficulty"], "normal")
+
+    def test_local_v2_api_requires_authentication(self):
+        """2.0 本地对局接口必须拒绝未登录访问。"""
+        from server.app import app
+
+        client = app.test_client()
+        self.assertEqual(client.get("/v2/api/local/state").status_code, 401)
+        self.assertEqual(
+            client.post("/v2/api/local/reset", json={"player_count": 2}).status_code,
+            401,
+        )
+
+    def test_local_v2_state_isolated_and_restorable_per_user(self):
+        """2.0 本地状态按 UID 隔离，并可通过 state 接口恢复。"""
+        from server.app import app
+
+        client = app.test_client()
+        reset = client.post(
+            "/v2/api/local/reset",
+            json={"player_count": 2, "names": ["A", "B"]},
+            headers=self._headers,
+        )
+        self.assertEqual(reset.status_code, 200)
+        step = client.post(
+            "/v2/api/local/step",
+            json={
+                "moves": {"p1": "QI", "p2": "SHIELD"},
+                "auto_resolve": True,
+            },
+            headers=self._headers,
+        )
+        self.assertEqual(step.status_code, 200)
+
+        restored = client.get(
+            "/v2/api/local/state",
+            headers=self._headers,
+        ).get_json()["state"]
+        self.assertTrue(restored["_initialized"])
+        self.assertEqual(restored["round_num"], 1)
+        self.assertEqual(restored["players"][0]["qi"], 1)
+
+        second_name = f"v2-local-second-{uuid4().hex[:8]}"
+        second = users.register(second_name, "test1234", verified="1")
+        self.assertTrue(second["ok"], second)
+        try:
+            second_login = users.login(second_name, "test1234")
+            second_headers = {"X-Session-Token": second_login["session_token"]}
+            isolated = client.get(
+                "/v2/api/local/state",
+                headers=second_headers,
+            ).get_json()["state"]
+            self.assertFalse(isolated["_initialized"])
+            self.assertEqual(isolated["round_num"], 0)
+        finally:
+            users.delete_user(second["user"]["uid"])
 
 
 if __name__ == "__main__":

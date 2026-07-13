@@ -184,6 +184,8 @@ def test_promote_dry_run_success(tmp_path: Path):
                 "p2_win_rate": 0.94,
                 "double_lose_rate": 0.0,
                 "fallback_rate": 0.0,
+                "timeout_rate": 0.0,
+                "p95_inference_ms": 2.0,
                 "action_counts": {"SHIELD": 100, "GI": 30, "FIRE": 20},
             },
             {
@@ -196,12 +198,44 @@ def test_promote_dry_run_success(tmp_path: Path):
                 "p2_win_rate": 0.63,
                 "double_lose_rate": 0.0,
                 "fallback_rate": 0.0,
+                "timeout_rate": 0.0,
+                "p95_inference_ms": 2.0,
                 "action_counts": {"SHIELD": 80, "GI": 40},
+            },
+            {
+                "ai_difficulty": "model",
+                "opponent_difficulty": "hard",
+                "win_rate": 0.70,
+                "illegal_moves": 0,
+                "truncated_rate": 0.0,
+                "p1_win_rate": 0.72,
+                "p2_win_rate": 0.68,
+                "double_lose_rate": 0.0,
+                "fallback_rate": 0.0,
+                "timeout_rate": 0.0,
+                "p95_inference_ms": 2.0,
+                "action_counts": {"SHIELD": 70, "QI": 30, "FIRE": 20},
+            },
+            {
+                "ai_difficulty": "model",
+                "opponent_difficulty": "random",
+                "win_rate": 0.90,
+                "illegal_moves": 0,
+                "truncated_rate": 0.0,
+                "p1_win_rate": 0.91,
+                "p2_win_rate": 0.89,
+                "double_lose_rate": 0.0,
+                "fallback_rate": 0.0,
+                "timeout_rate": 0.0,
+                "p95_inference_ms": 2.0,
+                "action_counts": {"SHIELD": 60, "QI": 30, "FIRE": 20},
             },
         ],
         "matrix": {
             "model_vs_easy": {"win_rate": 0.95},
             "model_vs_normal": {"win_rate": 0.65},
+            "model_vs_hard": {"win_rate": 0.70},
+            "model_vs_random": {"win_rate": 0.90},
         },
     }
 
@@ -213,7 +247,7 @@ def test_promote_dry_run_success(tmp_path: Path):
         deploy_manifest = json.loads(
             (DEPLOY_DIR / "manifest.json").read_text(encoding="utf-8")
         )
-        # 确认未被测试模型覆盖（真实 deploy 模型应该是 ClapFish1）
+        # 确认未被测试模型覆盖。
         assert deploy_manifest.get("model_version") != "good_model_v1"
 
 
@@ -283,10 +317,14 @@ def test_single_eval_report_has_new_fields():
     )
     assert "fallback_count" in result
     assert "fallback_rate" in result
+    assert "timeout_count" in result
+    assert "timeout_rate" in result
+    assert "p95_inference_ms" in result
     assert "double_lose_rate" in result
     # heuristic 策略不应有 fallback
     assert result["fallback_count"] == 0
     assert result["fallback_rate"] == 0.0
+    assert result["timeout_rate"] == 0.0
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -356,7 +394,59 @@ def test_dry_run_with_model(tmp_path: Path):
     assert result.returncode == 0
 
     report = json.loads(output.read_text(encoding="utf-8"))
+    expected_manifest = json.loads((deploy / "manifest.json").read_text(encoding="utf-8"))
     assert report["report_type"] == "clapclap_ai_dry_run"
     assert "model" in report
     assert report["model"]["is_loaded"] is True
-    assert report["model"]["model_version"] == "ClapFish1"
+    assert report["model"]["model_version"] == expected_manifest["model_version"]
+
+
+def test_thresholds_reject_weak_hard_collapsed_fallback_and_slow_model():
+    """hard、动作坍缩、fallback、超时和 P95 都必须真正阻止晋级。"""
+    from scripts.promote_ai_model import check_thresholds
+
+    def result(opponent: str, win_rate: float) -> dict:
+        return {
+            "ai_difficulty": "model",
+            "opponent_difficulty": opponent,
+            "win_rate": win_rate,
+            "illegal_moves": 0,
+            "truncated_rate": 0.0,
+            "p1_win_rate": win_rate,
+            "p2_win_rate": win_rate,
+            "double_lose_rate": 0.0,
+            "fallback_rate": 0.0,
+            "timeout_rate": 0.0,
+            "p95_inference_ms": 2.0,
+            "action_counts": {"QI": 60, "SHIELD": 40},
+        }
+
+    results = [
+        result("easy", 0.96),
+        result("normal", 0.70),
+        result("hard", 0.10),
+        result("random", 0.90),
+    ]
+    results[2].update({
+        "fallback_rate": 0.02,
+        "timeout_rate": 0.02,
+        "p95_inference_ms": 150.0,
+        "action_counts": {"SHIELD": 99, "QI": 1},
+    })
+    report = {
+        "report_type": "clapclap_ai_matrix",
+        "results": results,
+        "matrix": {
+            f"model_vs_{item['opponent_difficulty']}": {"win_rate": item["win_rate"]}
+            for item in results
+        },
+    }
+
+    passed, failures = check_thresholds(report)
+    assert not passed
+    raw = "\n".join(failures)
+    assert "model_vs_hard win_rate" in raw
+    assert "action_concentration" in raw
+    assert "fallback_rate" in raw
+    assert "timeout_rate" in raw
+    assert "p95_inference_ms" in raw

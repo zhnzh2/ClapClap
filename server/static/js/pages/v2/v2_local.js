@@ -8,7 +8,7 @@
    初始化
    ═══════════════════════════════════════════════════════════════ */
 
-function initV2LocalPage() {
+async function initV2LocalPage() {
     v2LoadSettings();
 
     // 应用紧凑模式
@@ -86,6 +86,62 @@ function initV2LocalPage() {
     renderSetupPhase();
     document.getElementById("setup-phase").style.display = "";
     document.getElementById("battle-phase").style.display = "none";
+    await restoreV2LocalGame();
+}
+
+function applyV2RuntimeMeta(state) {
+    var players = state.players || [];
+    var playerTypes = state._player_types || {};
+    v2PlayerCount = players.length || 2;
+    v2PlayerNames = players.map(function(p) { return p.username || p.player_id; });
+    v2PlayerTypes = [];
+    v2HumanPlayerIds = [];
+    v2AiPlayerIds = [];
+
+    for (var i = 0; i < players.length; i++) {
+        var pid = players[i].player_id;
+        var playerType = playerTypes[pid] === "ai" ? "ai" : "human";
+        v2PlayerTypes.push(playerType);
+        if (playerType === "ai") v2AiPlayerIds.push(pid);
+        else v2HumanPlayerIds.push(pid);
+    }
+    v2AiDifficulty = state._ai_difficulty || "normal";
+}
+
+async function restoreV2LocalGame() {
+    var result = await ApiUtils.apiGet("/v2/api/local/state");
+    if (!result.ok) {
+        setMessage("恢复对局失败：" + (result.error || "请刷新后重试。"));
+        return;
+    }
+
+    var state = result.data.state;
+    if (!state || !state._initialized) return;
+
+    applyV2RuntimeMeta(state);
+    v2LatestState = state;
+    v2SelectedMoves = {};
+    v2IsSetupPhase = false;
+    v2FocusedPlayer = v2HumanPlayerIds[0] ||
+        ((state.players && state.players[0]) ? state.players[0].player_id : null);
+
+    document.getElementById("setup-phase").style.display = "none";
+    document.getElementById("battle-phase").style.display = "";
+    hideSettlementProgress();
+    hideDecisionArea();
+    hideRoundSummaryCard();
+    hideEndCard();
+    renderV2State(state);
+
+    if (state._pending_settlement && state._pending_settlement.action === "request_decision") {
+        handleSettlementResult(state._pending_settlement);
+        setMessage("已恢复当前对局，请继续完成本回合决策。");
+    } else if (state.is_game_over) {
+        renderEndCard(state);
+        setMessage("已恢复已结束的对局。");
+    } else {
+        setMessage("已恢复当前对局。");
+    }
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -116,18 +172,7 @@ async function startGame() {
     v2IsSetupPhase = false;
 
     // 解析 AI 信息
-    var playerTypes = result.data.state._player_types || {};
-    v2HumanPlayerIds = [];
-    v2AiPlayerIds = [];
-    for (var i = 0; i < v2PlayerCount; i++) {
-        var pid = "p" + (i + 1);
-        if (playerTypes[pid] === "ai") {
-            v2AiPlayerIds.push(pid);
-        } else {
-            v2HumanPlayerIds.push(pid);
-        }
-    }
-    v2AiDifficulty = result.data.state._ai_difficulty || "normal";
+    applyV2RuntimeMeta(result.data.state);
 
     document.getElementById("setup-phase").style.display = "none";
     document.getElementById("battle-phase").style.display = "";
@@ -160,6 +205,12 @@ function confirmReset() {
 }
 
 async function resetToSetup() {
+    var clearResult = await ApiUtils.apiPost("/v2/api/local/clear");
+    if (!clearResult.ok) {
+        setMessage("返回准备阶段失败：" + (clearResult.error || "请重试。"));
+        return;
+    }
+
     v2SelectedMoves = {};
     v2SettlementResult = null;
     v2EndShown = false;
@@ -492,7 +543,7 @@ function setMessage(msg) {
    ═══════════════════════════════════════════════════════════════ */
 
 if (!window.SessionUtils || !window.SessionUtils.isLoggedIn()) {
-    window.location.href = "/v2/login?expired=1";
+    window.location.href = "/v2/login";
 } else {
     initV2LocalPage();
 }

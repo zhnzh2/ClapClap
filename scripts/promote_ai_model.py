@@ -41,12 +41,22 @@ DEFAULT_THRESHOLDS: dict[str, Any] = {
     "max_truncated_rate": 0.05,
     "model_vs_easy_min_win_rate": 0.94,       # 不低于 normal baseline
     "model_vs_normal_min_win_rate": 0.60,       # 必须明显强于 normal
+    "model_vs_hard_min_win_rate": 0.60,         # 不能再放过明显弱于 hard 的模型
     "model_vs_random_min_win_rate": 0.85,       # 必须显著高于随机（随机期望胜率 ≈50%）
     "max_seat_win_rate_delta": 0.30,            # P1/P2 胜率差
     "max_double_loss_rate": 0.05,               # 双败率（双方同时死亡 ratio）
-    "max_action_concentration": 0.90,            # 单一动作最大占比
-    "max_fallback_rate": 0.10,                  # 模型推理回退率上限
+    "max_action_concentration": 0.85,            # 单一动作最大占比
+    "max_fallback_rate": 0.0,                   # 晋级评估不允许模型推理降级
+    "max_timeout_rate": 0.01,                   # 超时调用占比上限
+    "max_p95_inference_ms": 100.0,              # 与生产默认超时保持一致
 }
+
+REQUIRED_MATCHUPS = (
+    "model_vs_easy",
+    "model_vs_normal",
+    "model_vs_hard",
+    "model_vs_random",
+)
 
 DEPLOY_DIR = Path("models/ai/v1/deploy")
 ARCHIVE_DIR = Path("models/ai/v1/archive")
@@ -71,10 +81,27 @@ def check_thresholds(
     thresholds: dict[str, Any] | None = None,
 ) -> tuple[bool, list[str]]:
     """返回 ``(passed, reasons)``。"""
+    seed_reports = report.get("seed_reports")
+    if isinstance(seed_reports, list) and seed_reports:
+        failures: list[str] = []
+        for seed_report in seed_reports:
+            passed, seed_failures = check_thresholds(seed_report, thresholds)
+            if not passed:
+                seed = seed_report.get("seed", "unknown")
+                failures.extend(f"seed={seed}: {reason}" for reason in seed_failures)
+        return len(failures) == 0, failures
+
     t = {**DEFAULT_THRESHOLDS, **(thresholds or {})}
     failures: list[str] = []
 
     results = report.get("results", [report])
+
+    # 晋级报告必须包含完整基线矩阵，不能再因缺少 hard/random 而跳过检查。
+    missing_matchups = [
+        key for key in REQUIRED_MATCHUPS if _get_matrix_entry(report, key) is None
+    ]
+    if missing_matchups:
+        failures.append("missing_matchups=" + ",".join(missing_matchups))
 
     # 1. 全局 illegal_moves == 0
     total_illegal = sum(r.get("illegal_moves", 0) for r in results)
@@ -108,7 +135,17 @@ def check_thresholds(
                 f"model_vs_normal win_rate={wr:.4f} (min={t['model_vs_normal_min_win_rate']})"
             )
 
-    # 5. model_vs_random 胜率
+    # 5. model_vs_hard 胜率
+    vs_hard = _get_matrix_entry(report, "model_vs_hard")
+    if vs_hard:
+        wr = vs_hard.get("win_rate", 0)
+        if wr < t["model_vs_hard_min_win_rate"]:
+            failures.append(
+                f"model_vs_hard win_rate={wr:.4f} "
+                f"(min={t['model_vs_hard_min_win_rate']})"
+            )
+
+    # 6. model_vs_random 胜率
     vs_random = _get_matrix_entry(report, "model_vs_random")
     if vs_random:
         wr = vs_random.get("win_rate", 0)
@@ -117,7 +154,7 @@ def check_thresholds(
                 f"model_vs_random win_rate={wr:.4f} (min={t['model_vs_random_min_win_rate']})"
             )
 
-    # 6. P1/P2 胜率差
+    # 7. P1/P2 胜率差
     for r in results:
         label = f"{r.get('ai_difficulty', '?')}_vs_{r.get('opponent_difficulty', '?')}"
         delta = abs(r.get("p1_win_rate", 0) - r.get("p2_win_rate", 0))
@@ -126,7 +163,7 @@ def check_thresholds(
                 f"{label} seat_win_rate_delta={delta:.4f} (max={t['max_seat_win_rate_delta']})"
             )
 
-    # 7. 双败率
+    # 8. 双败率
     for r in results:
         label = f"{r.get('ai_difficulty', '?')}_vs_{r.get('opponent_difficulty', '?')}"
         dlr = r.get("double_lose_rate", r.get("draw_rate", 0))
@@ -135,7 +172,7 @@ def check_thresholds(
                 f"{label} double_lose_rate={dlr:.4f} (max={t['max_double_loss_rate']})"
             )
 
-    # 8. 动作分布极端坍缩
+    # 9. 动作分布极端坍缩
     for r in results:
         action_counts = r.get("action_counts", {})
         if action_counts:
@@ -149,13 +186,28 @@ def check_thresholds(
                     f"(action={top_action}) > {t['max_action_concentration']}"
                 )
 
-    # 9. fallback_rate 检查
+    # 10. fallback_rate、超时率和 P95 推理耗时检查
     for r in results:
+        label = f"{r.get('ai_difficulty', '?')}_vs_{r.get('opponent_difficulty', '?')}"
         fallback_rate = r.get("fallback_rate", 0)
         if fallback_rate > t["max_fallback_rate"]:
-            label = f"{r.get('ai_difficulty', '?')}_vs_{r.get('opponent_difficulty', '?')}"
             failures.append(
                 f"{label} fallback_rate={fallback_rate:.4f} (max={t['max_fallback_rate']})"
+            )
+        timeout_rate = r.get("timeout_rate")
+        if timeout_rate is None:
+            failures.append(f"{label} timeout_rate missing")
+        elif timeout_rate > t["max_timeout_rate"]:
+            failures.append(
+                f"{label} timeout_rate={timeout_rate:.4f} (max={t['max_timeout_rate']})"
+            )
+        p95_ms = r.get("p95_inference_ms")
+        if p95_ms is None:
+            failures.append(f"{label} p95_inference_ms missing")
+        elif p95_ms > t["max_p95_inference_ms"]:
+            failures.append(
+                f"{label} p95_inference_ms={p95_ms:.4f} "
+                f"(max={t['max_p95_inference_ms']})"
             )
 
     return len(failures) == 0, failures
@@ -274,7 +326,8 @@ def main() -> None:
     parser.add_argument(
         "--eval-report",
         type=Path,
-        help="Path to a JSON evaluation report from evaluate_ai.py.",
+        nargs="+",
+        help="One or more JSON evaluation reports from evaluate_ai.py.",
     )
     parser.add_argument(
         "--auto-eval",
@@ -310,9 +363,20 @@ def main() -> None:
     # ── 获取评估报告 ────────────────────────────────────────
     eval_report: dict | None = None
     if args.eval_report:
-        if not args.eval_report.exists():
-            raise SystemExit(f"评估报告不存在: {args.eval_report}")
-        eval_report = json.loads(args.eval_report.read_text(encoding="utf-8"))
+        reports: list[dict] = []
+        for report_path in args.eval_report:
+            if not report_path.exists():
+                raise SystemExit(f"评估报告不存在: {report_path}")
+            reports.append(json.loads(report_path.read_text(encoding="utf-8")))
+        if len(reports) == 1:
+            eval_report = reports[0]
+        else:
+            eval_report = {
+                "report_type": "clapclap_ai_multi_seed",
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "seeds": [report.get("seed") for report in reports],
+                "seed_reports": reports,
+            }
     elif args.auto_eval:
         print("[promote] 自动运行评估矩阵...")
         from scripts.evaluate_ai import ModelEvaluator, evaluate_matrix

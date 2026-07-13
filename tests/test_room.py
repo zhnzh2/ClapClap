@@ -77,10 +77,9 @@ class TestRoomAndLocalApi(unittest.TestCase):
         return room_id, created["player_token"], joined["player_token"]
 
     def test_local_api_uses_shared_state_safely(self):
-        with runtime.CURRENT_STATE_LOCK:
-            runtime.CURRENT_STATE = runtime.CURRENT_STATE.__class__()
+        headers = self.auth_headers_for("Local")
 
-        reset = self.client.post("/v1/api/local/reset").get_json()
+        reset = self.client.post("/v1/api/local/reset", headers=headers).get_json()
         self.assertTrue(reset["ok"], reset)
         self.assertEqual(reset["state"]["round_num"], 0)
 
@@ -88,18 +87,20 @@ class TestRoomAndLocalApi(unittest.TestCase):
             result = self.client.post(
                 "/v1/api/local/step",
                 json={"p1_move": "QI", "p2_move": "QI"},
+                headers=headers,
             ).get_json()
             self.assertTrue(result["ok"], result)
 
-        state = self.client.get("/v1/api/local/state").get_json()
+        state = self.client.get("/v1/api/local/state", headers=headers).get_json()
         self.assertEqual(state["round_num"], 3)
 
-        api_state = self.client.get("/v1/api/local/state").get_json()
+        api_state = self.client.get("/v1/api/local/state", headers=headers).get_json()
         self.assertEqual(api_state["round_num"], 3)
 
         api_step = self.client.post(
             "/v1/api/local/step",
             json={"p1_move": "QI", "p2_move": "QI"},
+            headers=headers,
         ).get_json()
         self.assertTrue(api_step["ok"], api_step)
 

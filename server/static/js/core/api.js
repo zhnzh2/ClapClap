@@ -1,14 +1,20 @@
 (function () {
     async function parseJsonResponse(response) {
+        var text = "";
         try {
-            return await response.json();
+            text = await response.text();
         } catch (error) {
-            try {
-                const text = await response.clone().text();
-                return text ? { ok: false, error: text } : null;
-            } catch (_ignored) {
-                return null;
-            }
+            return null;
+        }
+
+        if (!text) {
+            return null;
+        }
+
+        try {
+            return JSON.parse(text);
+        } catch (_ignored) {
+            return { ok: false, error: text };
         }
     }
 
@@ -37,6 +43,20 @@
         return headers;
     }
 
+    function handleExpiredSession(response, data) {
+        if (response.status !== 401 || !window.SessionUtils) {
+            return;
+        }
+        var token = window.SessionUtils.getSessionToken();
+        var redirect = data && data.redirect;
+        if (!token || !redirect) {
+            return;
+        }
+        window.SessionUtils.clearSession();
+        var separator = redirect.indexOf("?") === -1 ? "?" : "&";
+        window.location.href = redirect + separator + "expired=1";
+    }
+
     async function apiGet(url) {
         var headers = _authHeaders();
         const response = await fetch(url, {
@@ -44,6 +64,7 @@
             headers: headers
         });
         const data = await parseJsonResponse(response);
+        handleExpiredSession(response, data);
         return normalizeApiResult(response, data);
     }
 
@@ -56,6 +77,7 @@
             body: JSON.stringify(payload)
         });
         const data = await parseJsonResponse(response);
+        handleExpiredSession(response, data);
         return normalizeApiResult(response, data);
     }
 

@@ -24,47 +24,43 @@ import server.runtime as runtime
 class TestAiApi(unittest.TestCase):
     """6.5 API 测试"""
 
-    @classmethod
-    def setUpClass(cls):
-        # 注册一个测试专用用户，整个测试类共用
+    def setUp(self):
+        # 每个测试单独创建用户，避免 Session 和数据目录跨测试复用。
         unique = f"ai-tester-{uuid4().hex[:8]}"
         reg = users.register(unique, "test1234", verified="1")
         if reg["ok"]:
-            cls._test_uid = reg["user"]["uid"]
-            cls._test_username = unique
+            self._test_uid = reg["user"]["uid"]
+            self._test_username = unique
             login = users.login(unique, "test1234")
-            cls._token = login.get("session_token", "")
+            self._token = login.get("session_token", "")
         else:
-            cls._test_uid = -1
-            cls._token = ""
+            self._test_uid = -1
+            self._token = ""
 
         second_unique = f"ai-tester-{uuid4().hex[:8]}"
         second_reg = users.register(second_unique, "test1234", verified="1")
         if second_reg["ok"]:
-            cls._second_uid = second_reg["user"]["uid"]
-            cls._second_username = second_unique
+            self._second_uid = second_reg["user"]["uid"]
+            self._second_username = second_unique
             second_login = users.login(second_unique, "test1234")
-            cls._second_token = second_login.get("session_token", "")
+            self._second_token = second_login.get("session_token", "")
         else:
-            cls._second_uid = -1
-            cls._second_username = ""
-            cls._second_token = ""
+            self._second_uid = -1
+            self._second_username = ""
+            self._second_token = ""
 
-    @classmethod
-    def tearDownClass(cls):
-        # 清理测试用户
-        if cls._test_uid >= 0:
-            users.delete_user(cls._test_uid)
-        if cls._second_uid >= 0:
-            users.delete_user(cls._second_uid)
-
-    def setUp(self):
         self.client = app.test_client()
         self.headers = {"X-Session-Token": self._token}
         self.second_headers = {"X-Session-Token": self._second_token}
         # 每个测试前重置 AI session store
         with runtime.AI_STATE_LOCK:
             runtime.clear_ai_sessions()
+
+    def tearDown(self):
+        if self._test_uid >= 0:
+            users.delete_user(self._test_uid)
+        if self._second_uid >= 0:
+            users.delete_user(self._second_uid)
 
     def _current_ai_session(self):
         session_key = runtime.get_ai_session_key(
@@ -527,7 +523,10 @@ class TestAiApi(unittest.TestCase):
         ai_state = self.client.get("/api/ai/state", headers=self.headers).get_json()
 
         # 本地模式状态应保持初始
-        local_state = self.client.get("/v1/api/local/state").get_json()
+        local_state = self.client.get(
+            "/v1/api/local/state",
+            headers=self.headers,
+        ).get_json()
 
         self.assertNotEqual(ai_state["round_num"], local_state["round_num"],
                             "AI 状态和本地模式状态应独立")

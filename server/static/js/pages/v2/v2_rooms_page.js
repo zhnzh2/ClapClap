@@ -6,7 +6,7 @@
     "use strict";
 
     if (!window.SessionUtils || !window.SessionUtils.isLoggedIn()) {
-        window.location.href = "/v2/login?expired=1";
+        window.location.href = "/v2/login";
         return;
     }
 
@@ -28,6 +28,8 @@
         joinPanel.style.display = "none";
         createEntry.classList.toggle("active", !isOpen);
         joinEntry.classList.remove("active");
+        createEntry.setAttribute("aria-expanded", isOpen ? "false" : "true");
+        joinEntry.setAttribute("aria-expanded", "false");
     });
 
     joinEntry.addEventListener("click", function () {
@@ -36,6 +38,8 @@
         createPanel.style.display = "none";
         joinEntry.classList.toggle("active", !isOpen);
         createEntry.classList.remove("active");
+        joinEntry.setAttribute("aria-expanded", isOpen ? "false" : "true");
+        createEntry.setAttribute("aria-expanded", "false");
         if (!isOpen) loadPublicRooms();
     });
 

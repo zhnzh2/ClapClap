@@ -338,7 +338,7 @@ function initLocalPage() {
 }
 
 if (!window.SessionUtils || !window.SessionUtils.isLoggedIn()) {
-    window.location.href = "/v1/login?expired=1";
+    window.location.href = "/v1/login";
 } else {
     initLocalPage();
 }

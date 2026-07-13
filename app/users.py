@@ -562,6 +562,20 @@ def delete_user(uid: int) -> bool:
         except Exception:
             pass
 
+    # 清理该 UID 对应的进程内 AI / 本地模拟对局，避免注销后残留到 TTL。
+    try:
+        import server.runtime as runtime
+
+        session_key = f"uid:{uid}"
+        with runtime.AI_STATE_LOCK:
+            runtime.AI_SESSIONS.pop(session_key, None)
+        with runtime.CURRENT_STATE_LOCK:
+            runtime.LOCAL_SESSIONS.pop(session_key, None)
+        with runtime.CURRENT_STATE_V2_LOCK:
+            runtime.LOCAL_V2_SESSIONS.pop(session_key, None)
+    except Exception:
+        pass
+
     return deleted
 
 

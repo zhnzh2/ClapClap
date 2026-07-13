@@ -77,6 +77,9 @@ body {
 }
 
 .entry-card {
+    width: 100%;
+    font: inherit;
+    color: inherit;
     background: var(--card);
     border-radius: 16px;
     padding: 28px 24px;
@@ -85,6 +88,11 @@ body {
     border: 2px solid transparent;
     box-shadow: 0 2px 8px rgba(0,0,0,0.04);
     transition: border-color 0.2s, box-shadow 0.2s, transform 0.15s;
+}
+
+.entry-card:focus-visible {
+    outline: 3px solid rgba(37, 99, 235, 0.28);
+    outline-offset: 3px;
 }
 
 .entry-card:hover {

@@ -46,7 +46,8 @@
     function initAccountButton() {
         var user = window.SessionUtils ? window.SessionUtils.getSessionUser() : null;
         if (!user) {
-            window.location.href = "/v2/login?expired=1";
+            var hasToken = window.SessionUtils && window.SessionUtils.getSessionToken();
+            window.location.href = hasToken ? "/v2/login?expired=1" : "/v2/login";
             return false;
         }
         currentUser = user;

@@ -33,20 +33,21 @@ from app.v1.constants import Move
 from app.v1.models import GameState
 
 DEFAULT_MODEL_DIR = Path("models/ai/v1/deploy")
-DEFAULT_AI_MODEL_KEY = "clapfish1"
+DEFAULT_AI_MODEL_KEY = "clapfish2"
 AI_MODEL_OPTIONS: tuple[dict[str, object], ...] = (
     {
         "key": "clapfish1",
         "slot": 1,
         "label": "ClapFish1",
-        "model_dir": Path("models/ai/v1/deploy"),
+        "model_dir": Path("models/ai/v1/archive"),
+        "archive_pattern": "ClapFish1_*",
         "enabled": True,
     },
     {
         "key": "clapfish2",
         "slot": 2,
         "label": "ClapFish2",
-        "model_dir": Path("models/ai/v1/dev"),
+        "model_dir": Path("models/ai/v1/deploy"),
         "enabled": True,
     },
 )
@@ -124,10 +125,21 @@ def _model_option(model_key: str | None) -> dict:
 
 
 def _model_dir_from_env(model_key: str | None = None) -> Path:
+    option = _model_option(model_key)
     configured = os.environ.get("CLAPCLAP_AI_MODEL_DIR")
     if configured and normalize_model_key(model_key) == DEFAULT_AI_MODEL_KEY:
         return Path(configured)
-    return Path(_model_option(model_key)["model_dir"])
+    model_dir = Path(option["model_dir"])
+    archive_pattern = option.get("archive_pattern")
+    if archive_pattern:
+        candidates = sorted(
+            (path for path in model_dir.glob(str(archive_pattern)) if path.is_dir()),
+            key=lambda path: path.name,
+            reverse=True,
+        )
+        if candidates:
+            return candidates[0]
+    return model_dir
 
 
 def _inference_timeout_ms() -> int:

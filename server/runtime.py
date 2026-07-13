@@ -11,6 +11,20 @@ from app.users import cleanup_unverified_accounts
 CURRENT_STATE = GameState()
 CURRENT_STATE_LOCK = Lock()
 CURRENT_BATTLE_ID: str | None = None
+LOCAL_SESSION_TTL_SECONDS = 60 * 60 * 6
+
+
+@dataclass
+class LocalSession:
+    state: GameState = field(default_factory=GameState)
+    battle_id: str | None = None
+    updated_at: float = field(default_factory=time.time)
+
+    def touch(self) -> None:
+        self.updated_at = time.time()
+
+
+LOCAL_SESSIONS: dict[str, LocalSession] = {}
 
 # ── AI 对战独立状态 ──
 # 不能复用 CURRENT_STATE，否则会和 /local 本地双人模式串局。
@@ -94,12 +108,89 @@ CURRENT_V2_PLAYER_TYPES: dict[str, str] = {}  # {player_id: "human"|"ai"}
 CURRENT_V2_AI_DIFFICULTY: str = "normal"  # "random" | "normal"
 
 
+@dataclass
+class LocalV2Session:
+    state: GameStateV2 = field(default_factory=GameStateV2)
+    battle_id: str | None = None
+    engine: object | None = None
+    player_types: dict[str, str] = field(default_factory=dict)
+    ai_difficulty: str = "normal"
+    initialized: bool = False
+    pending_settlement: dict | None = None
+    updated_at: float = field(default_factory=time.time)
+
+    def touch(self) -> None:
+        self.updated_at = time.time()
+
+
+LOCAL_V2_SESSIONS: dict[str, LocalV2Session] = {}
+
+
+def get_local_session_key(user: dict) -> str:
+    """返回本地模拟对局的用户隔离键。"""
+    return get_ai_session_key(user)
+
+
+def _cleanup_session_map(session_map: dict, now: float | None = None) -> int:
+    if now is None:
+        now = time.time()
+    expired = [
+        key for key, session in session_map.items()
+        if now - session.updated_at > LOCAL_SESSION_TTL_SECONDS
+    ]
+    for key in expired:
+        session_map.pop(key, None)
+    return len(expired)
+
+
+def get_local_session(session_key: str) -> LocalSession:
+    _cleanup_session_map(LOCAL_SESSIONS)
+    session = LOCAL_SESSIONS.get(session_key)
+    if session is None:
+        session = LocalSession()
+        LOCAL_SESSIONS[session_key] = session
+    session.touch()
+    return session
+
+
+def reset_local_session(session_key: str) -> LocalSession:
+    session = LocalSession()
+    LOCAL_SESSIONS[session_key] = session
+    return session
+
+
+def get_local_v2_session(session_key: str) -> LocalV2Session:
+    _cleanup_session_map(LOCAL_V2_SESSIONS)
+    session = LOCAL_V2_SESSIONS.get(session_key)
+    if session is None:
+        session = LocalV2Session()
+        LOCAL_V2_SESSIONS[session_key] = session
+    session.touch()
+    return session
+
+
+def reset_local_v2_session(session_key: str) -> LocalV2Session:
+    session = LocalV2Session()
+    LOCAL_V2_SESSIONS[session_key] = session
+    return session
+
+
+def clear_local_sessions() -> None:
+    """清理所有本地模拟对局状态，供测试隔离和进程维护使用。"""
+    LOCAL_SESSIONS.clear()
+    LOCAL_V2_SESSIONS.clear()
+
+
 def run_periodic_cleanup() -> None:
     deleted_rooms = cleanup_expired_rooms()
     match_cleanup = cleanup_expired_match_state()
     deleted_users = cleanup_unverified_accounts()
     with AI_STATE_LOCK:
         deleted_ai_sessions = cleanup_ai_sessions()
+    with CURRENT_STATE_LOCK:
+        deleted_local_sessions = _cleanup_session_map(LOCAL_SESSIONS)
+    with CURRENT_STATE_V2_LOCK:
+        deleted_local_v2_sessions = _cleanup_session_map(LOCAL_V2_SESSIONS)
 
     if deleted_rooms:
         print("[cleanup] deleted rooms:", deleted_rooms)
@@ -112,4 +203,8 @@ def run_periodic_cleanup() -> None:
 
     if deleted_ai_sessions:
         print("[cleanup] deleted AI sessions:", deleted_ai_sessions)
-
+    if deleted_local_sessions or deleted_local_v2_sessions:
+        print(
+            "[cleanup] deleted local sessions:",
+            deleted_local_sessions + deleted_local_v2_sessions,
+        )

@@ -33,9 +33,9 @@ def _find_free_port():
         return s.getsockname()[1]
 
 
-@pytest.fixture(scope="session")
-def server():
-    """启动 Flask 开发服务器（session 级别，所有测试共享）。"""
+@pytest.fixture
+def server(tmp_path):
+    """为当前 E2E 测试启动独立数据目录的 Flask 开发服务器。"""
     if not _is_playwright_available():
         pytest.skip("Playwright 未安装。运行: pip install playwright && playwright install chromium")
 
@@ -45,6 +45,7 @@ def server():
 
     env = os.environ.copy()
     env.setdefault("FLASK_DEBUG", "0")
+    env["DATA_DIR"] = str(tmp_path / "e2e-data")
 
     server_dir = Path(__file__).resolve().parent.parent.parent / "server"
     proc = subprocess.Popen(

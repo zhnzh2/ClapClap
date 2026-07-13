@@ -1,26 +1,31 @@
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, g, jsonify, request
 
 from app.v1.game import GameEngine
 from app.v1.state_api import get_game_state_payload, parse_move_name
 from app.battle_recorder import create_battle, record_round, end_battle
+from server.auth_middleware import require_auth
 import server.runtime as runtime
 
 local_bp = Blueprint("local", __name__)
 
 
 @local_bp.get("/v1/api/local/state")
+@require_auth
 def get_state():
+    session_key = runtime.get_local_session_key(g.current_user)
     with runtime.CURRENT_STATE_LOCK:
-        payload = get_game_state_payload(runtime.CURRENT_STATE, include_history=True)
+        session = runtime.get_local_session(session_key)
+        payload = get_game_state_payload(session.state, include_history=True)
     return jsonify(payload)
 
 
 @local_bp.post("/v1/api/local/reset")
+@require_auth
 def reset_game():
+    session_key = runtime.get_local_session_key(g.current_user)
     with runtime.CURRENT_STATE_LOCK:
-        runtime.CURRENT_STATE = runtime.CURRENT_STATE.__class__()
-        runtime.CURRENT_BATTLE_ID = None
-        payload = get_game_state_payload(runtime.CURRENT_STATE, include_history=True)
+        session = runtime.reset_local_session(session_key)
+        payload = get_game_state_payload(session.state, include_history=True)
     return jsonify(
         {
             "ok": True,
@@ -31,6 +36,7 @@ def reset_game():
 
 
 @local_bp.post("/v1/api/local/step")
+@require_auth
 def step_game():
     data = request.get_json(silent=True)
     if data is None:
@@ -63,13 +69,15 @@ def step_game():
             }
         ), 400
 
+    session_key = runtime.get_local_session_key(g.current_user)
     with runtime.CURRENT_STATE_LOCK:
-        GameEngine.resolve_round(runtime.CURRENT_STATE, p1_move, p2_move)
+        session = runtime.get_local_session(session_key)
+        GameEngine.resolve_round(session.state, p1_move, p2_move)
 
         # ── 对局记录 ──────────────────────────────
         # 本地模式使用特殊参与者标识
-        if runtime.CURRENT_BATTLE_ID is None:
-            runtime.CURRENT_BATTLE_ID = create_battle(
+        if session.battle_id is None:
+            session.battle_id = create_battle(
                 {
                     "p1": {"username": "本地玩家1", "uid": -1},
                     "p2": {"username": "本地玩家2", "uid": -1},
@@ -77,15 +85,16 @@ def step_game():
             )
 
         # 记录本回合
-        if runtime.CURRENT_STATE.history:
-            latest_log = runtime.CURRENT_STATE.history[-1]
-            record_round(runtime.CURRENT_BATTLE_ID, latest_log.to_dict())
+        if session.state.history:
+            latest_log = session.state.history[-1]
+            record_round(session.battle_id, latest_log.to_dict())
 
         # 游戏结束则标记对局结束
-        if runtime.CURRENT_STATE.winner is not None:
-            end_battle(runtime.CURRENT_BATTLE_ID, runtime.CURRENT_STATE.winner)
+        if session.state.winner is not None:
+            end_battle(session.battle_id, session.state.winner)
 
-        payload = get_game_state_payload(runtime.CURRENT_STATE, include_history=True)
+        session.touch()
+        payload = get_game_state_payload(session.state, include_history=True)
 
     return jsonify(
         {

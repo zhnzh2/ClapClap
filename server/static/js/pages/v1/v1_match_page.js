@@ -242,7 +242,8 @@ window.initMatchPage = function () {
             var name = sessionUser ? sessionUser.username : "";
             if (!name) {
                 setMatchMessage("登录信息丢失，请重新登录。", "error");
-                window.location.href = "/v1/login?expired=1";
+                var hasToken = window.SessionUtils && window.SessionUtils.getSessionToken();
+                window.location.href = hasToken ? "/v1/login?expired=1" : "/v1/login";
                 return;
             }
             setPlayerName(name);

@@ -67,6 +67,18 @@ def test_root_redirects_to_v1_and_auth_redirects_stay_versioned():
     assert v2_api_response.get_json()["redirect"] == "/v2/login"
 
 
+def test_v2_rooms_interactive_nodes_load_before_page_controller():
+    """房间页控制器执行前，密码弹窗和入口按钮必须已经进入 DOM。"""
+    template = Path("server/templates/v2/rooms.html").read_text(encoding="utf-8")
+
+    controller_index = template.index("js/pages/v2/v2_rooms_page.js")
+    assert template.index('id="password-modal-mask"') < controller_index
+    assert template.index('id="password-submit-btn"') < controller_index
+    assert template.index('id="password-cancel-btn"') < controller_index
+    assert '<button type="button" class="entry-card" id="create-entry-card"' in template
+    assert '<button type="button" class="entry-card" id="join-entry-card"' in template
+
+
 def test_release_data_validator_accepts_legacy_v1_and_full_v2_records():
     root = _make_test_data_root()
     try:

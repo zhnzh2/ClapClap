@@ -22,7 +22,7 @@
 
     function init() {
         if (!window.SessionUtils || !window.SessionUtils.isLoggedIn()) {
-            window.location.href = "/v2/login?expired=1";
+            window.location.href = "/v2/login";
             return;
         }
 

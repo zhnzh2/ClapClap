@@ -150,15 +150,8 @@ python server/app.py
 http://127.0.0.1:5000/
 ```
 
-首次启动会初始化 `data/`，并确保管理员账号存在。
-
-默认管理员账号：
-
-| 用户名 | 密码 |
-| --- | --- |
-| `zhnzh` | `207101` |
-
-正式部署前建议修改默认密码或替换初始化逻辑。
+首次启动会初始化 `data/`，并确保管理员账号 `zhnzh`（UID=0）存在。
+管理员初始密码从后端环境变量 `CLAPCLAP_ADMIN_PASSWORD` 读取；未设置时会生成一次性随机密码并只在服务器启动日志中输出。项目不存在可直接登录生产环境的固定默认密码。
 
 ## AI 对战和训练
 
@@ -172,7 +165,14 @@ http://127.0.0.1:5000/
 
 - 简单：随机合法动作
 - 普通：启发式策略
-- 困难：进入对战前检查部署模型；模型不可用时自动降级为保守启发式
+- 困难：进入对战前检查所选模型；模型不可用时自动降级为保守启发式
+
+当前模型槽位：
+
+- `ClapFish2`：当前生产 deploy 模型，也是默认选择。
+- `ClapFish1`：历史模型，已归档但仍可在网页模型槽位 1 中用于对战和对比。
+
+ClapFish2 在 3 个 seed、每个 matchup 200 局的晋级评估中，对 normal、hard 和 ClapFish1 均为 100% 胜率；对 easy 为 96.0%～98.5%，对 random 为 94.5%～96.5%。三轮评估均为 0 非法动作、0 fallback、0 超时，P95 推理时间低于 2ms。评估结果只代表当前规则和对手集合，不等同于对所有真人策略都能保持相同胜率。
 
 AI 不重新实现规则。训练环境和推理都必须通过 `app/v1/game.py` 的规则引擎，不能复制一份规则逻辑。
 
@@ -185,9 +185,13 @@ pip install -r requirements-train.txt
 训练和评估相关入口：
 
 ```powershell
-python scripts/evaluate_ai.py --matrix
+python scripts/evaluate_ai.py --model-dir models/ai/v1/dev --matrix --games 200 --seed 20260630 --output reports/ai_eval/candidate.json
+python scripts/evaluate_ai.py --model-dir models/ai/v1/dev --opponent-model-dir models/ai/v1/deploy --matrix --games 200 --seed 20260701 --output reports/ai_eval/candidate_seed2.json
+python scripts/promote_ai_model.py --model-dir models/ai/v1/dev --eval-report reports/ai_eval/candidate.json reports/ai_eval/candidate_seed2.json --dry-run
 python -m training.human_ai_samples exports/a.zip exports/b.zip -o training/data/human_ai_samples.jsonl
 ```
+
+晋级会逐个检查每份 seed 报告，要求报告完整包含 easy、normal、hard、random，并检查 hard 最低胜率、P1/P2 差异、非法动作、截断、双败、动作集中度、fallback、超时率和 P95 推理耗时。正式执行 promote 前应始终先运行 `--dry-run`。
 
 ## 欢迎贡献 AI 训练数据
 
@@ -236,6 +240,8 @@ python -m pytest -q tests/test_ai_routes.py tests/test_ai_rules.py tests/test_ai
 python -m pytest
 ```
 
+pytest 会为每个测试创建独立 `DATA_DIR`，并在测试前后清理 AI session、v1/v2 房间、匹配队列、登录限流和 v2 Socket 身份，避免全局状态与真实 `data/` 相互污染。
+
 运行完整检查：
 
 ```powershell
@@ -274,6 +280,7 @@ data/
 | `BACKUP_INTERVAL_MINUTES` | 自动备份间隔，单位分钟 |
 | `CLAPCLAP_AI_MODEL_DIR` | 1.0 AI 部署模型目录，默认 `models/ai/v1/deploy` |
 | `CLAPCLAP_AI_INFERENCE_TIMEOUT_MS` | AI 推理超时，默认 100ms |
+| `CLAPCLAP_ADMIN_PASSWORD` | 首次创建 UID=0 管理员时使用的初始密码；生产环境必须设置 |
 
 如果备份变量未配置，备份功能会自动禁用。
 

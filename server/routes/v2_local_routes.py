@@ -6,7 +6,7 @@ ClapClap 2.0 本地模拟对战 API。
   - 对局阶段：提交动作、步进结算、提交决策
 """
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, g, jsonify, request
 
 from app.v2.ai import get_legal_move_names_v2_ai, select_ai_move_v2
 from app.v2.constants import Move
@@ -27,6 +27,7 @@ from app.v2.models import (
     SpeedLayerEvent,
 )
 from app.v2.state_api import get_game_state_v2_payload
+from server.auth_middleware import require_auth
 import server.runtime as runtime
 
 v2_local_bp = Blueprint("v2_local", __name__)
@@ -50,12 +51,19 @@ def _build_initial_state(player_count: int, names: list[str]) -> GameStateV2:
     return GameStateV2(players=players, max_players=player_count)
 
 
-def _append_local_payload_meta(payload: dict) -> dict:
+def _append_local_payload_meta(payload: dict, session: runtime.LocalV2Session) -> dict:
     """给 v2 本地状态补充前端需要的运行时元信息。"""
-    payload["_engine_active"] = runtime.CURRENT_ENGINE_V2 is not None
-    payload["_player_types"] = dict(runtime.CURRENT_V2_PLAYER_TYPES)
-    payload["_ai_difficulty"] = runtime.CURRENT_V2_AI_DIFFICULTY
+    payload["_engine_active"] = session.engine is not None
+    payload["_player_types"] = dict(session.player_types)
+    payload["_ai_difficulty"] = session.ai_difficulty
+    payload["_initialized"] = session.initialized
+    payload["_pending_settlement"] = session.pending_settlement
     return payload
+
+
+def _get_local_v2_session() -> runtime.LocalV2Session:
+    session_key = runtime.get_local_session_key(g.current_user)
+    return runtime.get_local_v2_session(session_key)
 
 
 def _normalize_player_types(raw_types: list, player_count: int) -> list[str]:
@@ -141,11 +149,13 @@ def _auto_advance(engine: GameEngineV2, result) -> dict:
 # ═══════════════════════════════════════════════════════════════
 
 @v2_local_bp.get("/v2/api/local/state")
+@require_auth
 def get_state():
     """获取当前 v2 对局状态。"""
     with runtime.CURRENT_STATE_V2_LOCK:
-        payload = get_game_state_v2_payload(runtime.CURRENT_STATE_V2, include_history=True)
-        _append_local_payload_meta(payload)
+        session = _get_local_v2_session()
+        payload = get_game_state_v2_payload(session.state, include_history=True)
+        _append_local_payload_meta(payload, session)
     return jsonify({"ok": True, "state": payload})
 
 
@@ -153,7 +163,19 @@ def get_state():
 # 重置/开始新对局
 # ═══════════════════════════════════════════════════════════════
 
+
+@v2_local_bp.post("/v2/api/local/clear")
+@require_auth
+def clear_game():
+    """放弃当前对局并回到准备阶段。"""
+    session_key = runtime.get_local_session_key(g.current_user)
+    with runtime.CURRENT_STATE_V2_LOCK:
+        runtime.reset_local_v2_session(session_key)
+    return jsonify({"ok": True, "message": "已返回准备阶段。"})
+
+
 @v2_local_bp.post("/v2/api/local/reset")
+@require_auth
 def reset_game():
     """创建新对局。
 
@@ -184,18 +206,18 @@ def reset_game():
 
     human_count = sum(1 for t in player_types if t == "human")
 
+    session_key = runtime.get_local_session_key(g.current_user)
     with runtime.CURRENT_STATE_V2_LOCK:
-        runtime.CURRENT_STATE_V2 = _build_initial_state(player_count, names)
-        runtime.CURRENT_BATTLE_ID_V2 = None
-        runtime.CURRENT_ENGINE_V2 = None
+        session = runtime.reset_local_v2_session(session_key)
+        session.state = _build_initial_state(player_count, names)
+        session.initialized = True
         # 存储 player_types
-        runtime.CURRENT_V2_PLAYER_TYPES = {}
         for i in range(player_count):
             pid = f"p{i + 1}"
-            runtime.CURRENT_V2_PLAYER_TYPES[pid] = player_types[i]
-        runtime.CURRENT_V2_AI_DIFFICULTY = ai_difficulty
-        payload = get_game_state_v2_payload(runtime.CURRENT_STATE_V2, include_history=True)
-        _append_local_payload_meta(payload)
+            session.player_types[pid] = player_types[i]
+        session.ai_difficulty = ai_difficulty
+        payload = get_game_state_v2_payload(session.state, include_history=True)
+        _append_local_payload_meta(payload, session)
 
     ai_count = sum(1 for t in player_types if t == "ai")
     msg = f"对局已创建，{player_count} 名玩家就位"
@@ -215,6 +237,7 @@ def reset_game():
 # ═══════════════════════════════════════════════════════════════
 
 @v2_local_bp.post("/v2/api/local/step")
+@require_auth
 def step_game():
     """提交所有玩家的动作，开始步进式结算。
 
@@ -230,7 +253,11 @@ def step_game():
         return jsonify({"ok": False, "error": "moves 必须是字典。"}), 400
 
     with runtime.CURRENT_STATE_V2_LOCK:
-        state = runtime.CURRENT_STATE_V2
+        session = _get_local_v2_session()
+        state = session.state
+
+        if not session.initialized:
+            return jsonify({"ok": False, "error": "当前还没有创建对局，请先完成准备设置。"}), 400
 
         if state.is_game_over():
             return jsonify({"ok": False, "error": "对局已结束，请重新开始。"}), 400
@@ -247,7 +274,7 @@ def step_game():
         alive_ids = {p.player_id for p in state.alive_players()}
         ai_player_ids = {
             pid for pid in alive_ids
-            if runtime.CURRENT_V2_PLAYER_TYPES.get(pid) == "ai"
+            if session.player_types.get(pid) == "ai"
         }
         if not moves_raw and alive_ids != ai_player_ids:
             return jsonify({"ok": False, "error": "moves 不能为空。"}), 400
@@ -256,7 +283,7 @@ def step_game():
                 try:
                     ai_move = select_ai_move_v2(
                         state, pid,
-                        difficulty=runtime.CURRENT_V2_AI_DIFFICULTY,
+                        difficulty=session.ai_difficulty,
                     )
                     moves[pid] = ai_move
                 except Exception:
@@ -305,7 +332,7 @@ def step_game():
             return jsonify({"ok": False, "error": f"引擎结算异常: {exc}"}), 500
 
         # ── 保存引擎引用 ──
-        runtime.CURRENT_ENGINE_V2 = engine
+        session.engine = engine
 
         # ── 自动推进（如不需要决策或 auto_resolve 为 true）──
         if auto_resolve or result.action != STEP_ACTION_REQUEST_DECISION:
@@ -313,11 +340,17 @@ def step_game():
 
         # ── 回合完成后处理 ──
         if result.action in (STEP_ACTION_ROUND_COMPLETE, STEP_ACTION_GAME_OVER):
-            _handle_settlement_complete(state)
-            runtime.CURRENT_ENGINE_V2 = None
+            _handle_settlement_complete(state, session)
+            session.engine = None
+            session.pending_settlement = None
+        else:
+            session.pending_settlement = (
+                result.to_dict() if hasattr(result, "to_dict") else result
+            )
 
         payload = get_game_state_v2_payload(state, include_history=True)
-        _append_local_payload_meta(payload)
+        session.touch()
+        _append_local_payload_meta(payload, session)
 
     return jsonify({
         "ok": True,
@@ -331,6 +364,7 @@ def step_game():
 # ═══════════════════════════════════════════════════════════════
 
 @v2_local_bp.post("/v2/api/local/decision")
+@require_auth
 def submit_decision():
     """提交决策，继续结算。
 
@@ -346,7 +380,8 @@ def submit_decision():
         return jsonify({"ok": False, "error": "decisions 必须是字典。"}), 400
 
     with runtime.CURRENT_STATE_V2_LOCK:
-        engine = runtime.CURRENT_ENGINE_V2
+        session = _get_local_v2_session()
+        engine = session.engine
         if engine is None:
             return jsonify({"ok": False, "error": "当前没有进行中的结算。请先提交动作。"}), 400
 
@@ -355,7 +390,8 @@ def submit_decision():
         except Exception as exc:
             import traceback
             traceback.print_exc()
-            runtime.CURRENT_ENGINE_V2 = None
+            session.engine = None
+            session.pending_settlement = None
             return jsonify({"ok": False, "error": f"决策处理异常: {exc}"}), 500
 
         # ── 自动推进 ──
@@ -364,11 +400,17 @@ def submit_decision():
 
         # ── 完成处理 ──
         if result.action in (STEP_ACTION_ROUND_COMPLETE, STEP_ACTION_GAME_OVER):
-            _handle_settlement_complete(runtime.CURRENT_STATE_V2)
-            runtime.CURRENT_ENGINE_V2 = None
+            _handle_settlement_complete(session.state, session)
+            session.engine = None
+            session.pending_settlement = None
+        else:
+            session.pending_settlement = (
+                result.to_dict() if hasattr(result, "to_dict") else result
+            )
 
-        payload = get_game_state_v2_payload(runtime.CURRENT_STATE_V2, include_history=True)
-        _append_local_payload_meta(payload)
+        payload = get_game_state_v2_payload(session.state, include_history=True)
+        session.touch()
+        _append_local_payload_meta(payload, session)
 
     return jsonify({
         "ok": True,
@@ -382,12 +424,14 @@ def submit_decision():
 # ═══════════════════════════════════════════════════════════════
 
 @v2_local_bp.get("/v2/api/local/ai-moves")
+@require_auth
 def get_ai_moves_preview():
     """获取所有 AI 玩家本回合的预览动作（不提交，仅用于前端展示）。"""
     with runtime.CURRENT_STATE_V2_LOCK:
-        state = runtime.CURRENT_STATE_V2
+        session = _get_local_v2_session()
+        state = session.state
         ai_moves = {}
-        for pid, ptype in runtime.CURRENT_V2_PLAYER_TYPES.items():
+        for pid, ptype in session.player_types.items():
             if ptype != "ai":
                 continue
             player = state.get_player(pid)
@@ -396,7 +440,7 @@ def get_ai_moves_preview():
             try:
                 move = select_ai_move_v2(
                     state, pid,
-                    difficulty=runtime.CURRENT_V2_AI_DIFFICULTY,
+                    difficulty=session.ai_difficulty,
                 )
                 ai_moves[pid] = move.name
             except Exception:
@@ -405,7 +449,7 @@ def get_ai_moves_preview():
     return jsonify({
         "ok": True,
         "ai_moves": ai_moves,
-        "ai_difficulty": runtime.CURRENT_V2_AI_DIFFICULTY,
+        "ai_difficulty": session.ai_difficulty,
     })
 
 
@@ -413,17 +457,18 @@ def get_ai_moves_preview():
 # 结算完成后的处理
 # ═══════════════════════════════════════════════════════════════
 
-def _handle_settlement_complete(state: GameStateV2) -> None:
+def _handle_settlement_complete(
+    state: GameStateV2,
+    session: runtime.LocalV2Session,
+) -> None:
     """回合/对局完成后记录对局。"""
-    import server.runtime as rt
-
     # ── 创建对局记录（首次回合时）──
-    if rt.CURRENT_BATTLE_ID_V2 is None:
+    if session.battle_id is None:
         from app.battle_recorder import create_battle, set_battle_metadata
         participants = {}
         seats = []
         for p in state.players:
-            ptype = rt.CURRENT_V2_PLAYER_TYPES.get(p.player_id, "human")
+            ptype = session.player_types.get(p.player_id, "human")
             participants[p.player_id] = {
                 "username": p.username,
                 "uid": -1,  # 本地模式
@@ -440,7 +485,7 @@ def _handle_settlement_complete(state: GameStateV2) -> None:
                 "is_host": False,
                 "player_type": ptype,
             })
-        rt.CURRENT_BATTLE_ID_V2 = create_battle(
+        session.battle_id = create_battle(
             participants,
             rule_version="2.0",
             mode="local",
@@ -451,21 +496,21 @@ def _handle_settlement_complete(state: GameStateV2) -> None:
             },
         )
         # 记录 AI 元数据
-        ai_count = sum(1 for t in rt.CURRENT_V2_PLAYER_TYPES.values() if t == "ai")
+        ai_count = sum(1 for t in session.player_types.values() if t == "ai")
         if ai_count > 0:
-            set_battle_metadata(rt.CURRENT_BATTLE_ID_V2, {
+            set_battle_metadata(session.battle_id, {
                 "ai_player_count": ai_count,
-                "ai_difficulty": rt.CURRENT_V2_AI_DIFFICULTY,
-                "ai_player_ids": [pid for pid, t in rt.CURRENT_V2_PLAYER_TYPES.items() if t == "ai"],
+                "ai_difficulty": session.ai_difficulty,
+                "ai_player_ids": [pid for pid, t in session.player_types.items() if t == "ai"],
             })
 
     # ── 记录回合 ──
     if state.history:
         from app.battle_recorder import record_round
         latest_log = state.history[-1]
-        record_round(rt.CURRENT_BATTLE_ID_V2, latest_log.to_dict())
+        record_round(session.battle_id, latest_log.to_dict())
 
     # ── 对局结束标记 ──
     if state.is_game_over():
         from app.battle_recorder import end_battle
-        end_battle(rt.CURRENT_BATTLE_ID_V2, state.winner)
+        end_battle(session.battle_id, state.winner)

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import random
 import time
 from collections import Counter
@@ -65,6 +66,8 @@ class EvaluationResult:
     total_inference_ms: float = 0.0
     max_inference_ms: float = 0.0
     fallback_count: int = 0
+    timeout_count: int = 0
+    inference_samples_ms: list[float] = field(default_factory=list, repr=False)
 
     @property
     def win_rate(self) -> float:
@@ -139,6 +142,20 @@ class EvaluationResult:
             return 0.0
         return round(self.total_inference_ms / self.inference_calls, 4)
 
+    @property
+    def p95_inference_ms(self) -> float:
+        if not self.inference_samples_ms:
+            return 0.0
+        ordered = sorted(self.inference_samples_ms)
+        index = max(0, min(len(ordered) - 1, (95 * len(ordered) + 99) // 100 - 1))
+        return round(ordered[index], 4)
+
+    @property
+    def timeout_rate(self) -> float:
+        if not self.inference_calls:
+            return 0.0
+        return round(self.timeout_count / self.inference_calls, 4)
+
 
 # ---------------------------------------------------------------------------
 # 模型评估器
@@ -165,13 +182,22 @@ class ModelEvaluator:
     并回退到 heuristic hard，评估报告会记录失败原因。
     """
 
-    def __init__(self, model_dir: Path, max_rounds: int):
+    def __init__(
+        self,
+        model_dir: Path,
+        max_rounds: int,
+        inference_timeout_ms: float | None = None,
+    ):
         self.model_dir = model_dir
         self.max_rounds = max_rounds
         self.info = ModelEvalInfo()
         self._model: object | None = None
         self._loaded = False
         self.fallback_count: int = 0
+        self.timeout_count: int = 0
+        self.inference_timeout_ms = inference_timeout_ms or float(
+            os.environ.get("CLAPCLAP_AI_INFERENCE_TIMEOUT_MS", "100")
+        )
         self._load()
 
     # ── 公开属性 ────────────────────────────────────────────────
@@ -217,6 +243,8 @@ class ModelEvaluator:
             return self._heuristic_fallback(state, player, rng)
 
         elapsed_ms = (time.perf_counter() - t0) * 1000
+        if elapsed_ms > self.inference_timeout_ms:
+            self.timeout_count += 1
         return move, elapsed_ms
 
     # ── 内部 ────────────────────────────────────────────────────
@@ -321,6 +349,7 @@ def play_game(
     max_rounds: int,
     collect_log: bool = False,
     model: ModelEvaluator | None = None,
+    opponent_model: ModelEvaluator | None = None,
 ) -> dict:
     state = GameState()
     action_counts: Counter = Counter()
@@ -329,6 +358,9 @@ def play_game(
     ai_pickaxe_actions = 0
     inference_times_ms: list[float] = []
     rounds_log: list[dict] = []
+
+    fallback_start = model.fallback_count if model is not None else 0
+    timeout_start = model.timeout_count if model is not None else 0
 
     while state.winner is None and state.round_num < max_rounds:
         round_start = state.copy()
@@ -342,7 +374,11 @@ def play_game(
             round_start, ai_player, ai_difficulty, rng, model=model
         )
         opponent_move, _ = _choose_move(
-            round_start, opponent_player, opponent_difficulty, rng, model=model
+            round_start,
+            opponent_player,
+            opponent_difficulty,
+            rng,
+            model=opponent_model if opponent_difficulty == "model" else model,
         )
         inference_times_ms.append(ai_elapsed_ms)
 
@@ -379,7 +415,12 @@ def play_game(
             if ai_player == 2 and not latest.p2_valid:
                 illegal_moves += 1
 
-    fallback_count = model.fallback_count if model is not None else 0
+    fallback_count = (
+        model.fallback_count - fallback_start if model is not None else 0
+    )
+    timeout_count = (
+        model.timeout_count - timeout_start if model is not None else 0
+    )
     opponent_player = 2 if ai_player == 1 else 1
     ai_final = _player_state(state, ai_player)
     opponent_final = _player_state(state, opponent_player)
@@ -394,6 +435,7 @@ def play_game(
         "opponent_final": opponent_final.to_dict(),
         "inference_times_ms": inference_times_ms,
         "fallback_count": fallback_count,
+        "timeout_count": timeout_count,
         "rounds_log": rounds_log,
     }
 
@@ -407,6 +449,7 @@ def evaluate(
     max_rounds: int,
     collect_logs: bool = False,
     model: ModelEvaluator | None = None,
+    opponent_model: ModelEvaluator | None = None,
 ) -> dict:
     if games <= 0:
         raise ValueError("games must be greater than 0")
@@ -437,6 +480,7 @@ def evaluate(
             max_rounds=max_rounds,
             collect_log=collect_logs,
             model=model,
+            opponent_model=opponent_model,
         )
         winner = game["winner"]
         rounds = game["rounds"]
@@ -448,8 +492,10 @@ def evaluate(
         result.ai_flash_uses += game["ai_flash_uses"]
         result.ai_pickaxe_actions += game["ai_pickaxe_actions"]
         result.fallback_count += game.get("fallback_count", 0)
+        result.timeout_count += game.get("timeout_count", 0)
         result.inference_calls += len(game["inference_times_ms"])
         result.total_inference_ms += sum(game["inference_times_ms"])
+        result.inference_samples_ms.extend(game["inference_times_ms"])
         if game["inference_times_ms"]:
             result.max_inference_ms = max(result.max_inference_ms, max(game["inference_times_ms"]))
 
@@ -489,6 +535,7 @@ def evaluate(
             })
 
     payload = asdict(result)
+    payload.pop("inference_samples_ms", None)
     payload["win_rate"] = result.win_rate
     payload["loss_rate"] = result.loss_rate
     payload["draw_rate"] = result.draw_rate
@@ -505,8 +552,11 @@ def evaluate(
     payload["average_opponent_final_shield"] = result.average_opponent_final_shield
     payload["average_inference_ms"] = result.average_inference_ms
     payload["max_inference_ms"] = round(result.max_inference_ms, 4)
+    payload["p95_inference_ms"] = result.p95_inference_ms
     payload["fallback_count"] = result.fallback_count
     payload["fallback_rate"] = result.fallback_rate
+    payload["timeout_count"] = result.timeout_count
+    payload["timeout_rate"] = result.timeout_rate
     payload["double_lose_rate"] = result.double_lose_rate
     payload["action_counts"] = dict(sorted(action_counts.items()))
     if collect_logs:
@@ -522,9 +572,12 @@ def evaluate_matrix(
     matchups: tuple[tuple[str, str], ...] | None = None,
     collect_logs: bool = False,
     model: ModelEvaluator | None = None,
+    opponent_model: ModelEvaluator | None = None,
 ) -> dict:
     if matchups is None:
         matchups = MODEL_MATRIX if model is not None else DEFAULT_MATRIX
+        if model is not None and opponent_model is not None:
+            matchups = (*matchups, ("model", "model"))
 
     results: list[dict] = []
     matrix: dict[str, dict] = {}
@@ -538,8 +591,13 @@ def evaluate_matrix(
             max_rounds=max_rounds,
             collect_logs=collect_logs,
             model=model,
+            opponent_model=opponent_model,
         )
-        key = f"{ai_difficulty}_vs_{opponent_difficulty}"
+        key = (
+            "model_vs_historical"
+            if ai_difficulty == "model" and opponent_difficulty == "model"
+            else f"{ai_difficulty}_vs_{opponent_difficulty}"
+        )
         matrix[key] = {
             "win_rate": result["win_rate"],
             "loss_rate": result["loss_rate"],
@@ -550,6 +608,11 @@ def evaluate_matrix(
             "illegal_moves": result["illegal_moves"],
             "fallback_count": result["fallback_count"],
             "fallback_rate": result["fallback_rate"],
+            "timeout_count": result["timeout_count"],
+            "timeout_rate": result["timeout_rate"],
+            "average_inference_ms": result["average_inference_ms"],
+            "p95_inference_ms": result["p95_inference_ms"],
+            "max_inference_ms": result["max_inference_ms"],
             "p1_win_rate": result["p1_win_rate"],
             "p2_win_rate": result["p2_win_rate"],
             "seat_win_rate_delta": result["seat_win_rate_delta"],
@@ -575,6 +638,13 @@ def evaluate_matrix(
             "is_loaded": model.is_loaded,
             "load_error": model.info.load_error,
         }
+        if opponent_model is not None:
+            report["historical_model_info"] = {
+                "model_version": opponent_model.info.model_version,
+                "manifest_path": opponent_model.info.manifest_path,
+                "is_loaded": opponent_model.is_loaded,
+                "load_error": opponent_model.info.load_error,
+            }
         # ── 晋级判定 ──
         from scripts.promote_ai_model import DEFAULT_THRESHOLDS, check_thresholds
         passed, failures = check_thresholds(report)
@@ -679,6 +749,11 @@ def main() -> None:
         type=Path,
         help="Evaluate a trained model (directory containing manifest.json + weights).",
     )
+    parser.add_argument(
+        "--opponent-model-dir",
+        type=Path,
+        help="Optional historical model used for candidate-vs-historical evaluation.",
+    )
     parser.add_argument("--output", type=Path, help="Write JSON report to this path.")
     parser.add_argument(
         "--log-games", type=Path, help="Write detailed game logs as JSONL."
@@ -715,9 +790,21 @@ def main() -> None:
         else:
             print(f"[model] 加载失败: {model.info.load_error}，将回退 heuristic hard")
 
+    opponent_model: ModelEvaluator | None = None
+    if args.opponent_model_dir:
+        opponent_model = ModelEvaluator(
+            args.opponent_model_dir.resolve(), max_rounds=args.max_rounds
+        )
+        if not opponent_model.is_loaded:
+            raise SystemExit(
+                f"历史模型加载失败: {opponent_model.info.load_error}"
+            )
+
     # ── dry-run ───────────────────────────────────────────────
     if args.dry_run:
         matchups = MODEL_MATRIX if model is not None else DEFAULT_MATRIX
+        if model is not None and opponent_model is not None:
+            matchups = (*matchups, ("model", "model"))
         total_games = len(matchups) * args.games if args.matrix else args.games
         dry_report: dict = {
             "report_type": "clapclap_ai_dry_run",
@@ -759,6 +846,7 @@ def main() -> None:
             max_rounds=args.max_rounds,
             collect_logs=bool(args.log_games),
             model=model,
+            opponent_model=opponent_model,
         )
     else:
         report = evaluate(
@@ -769,6 +857,7 @@ def main() -> None:
             max_rounds=args.max_rounds,
             collect_logs=bool(args.log_games),
             model=model,
+            opponent_model=opponent_model,
         )
 
     if args.log_games:
